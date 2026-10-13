@@ -12,6 +12,10 @@ Same models, same weights, same per-stage computations; only *what is resident o
   all video frames on GPU (fp32, 1008^2)  video frames on CPU, moved to GPU one at a time
   MoGe-2 resident for the whole run       MoGe-2 loaded for the single cam-intrinsics call, then freed
 
+Every model is constructed under utils.skip_init.skip_random_init(): its random weight initialisation (overwritten by
+the checkpoint right after) is skipped. scripts/eval/check_skip_init.py verifies, per model, that all parameters and
+buffers after loading are identical to a normal build; no lite stage draws random numbers after construction.
+
 SAM3's tracker enters a process-wide bf16 autocast when it is built (sam3_tracking_predictor.py), so in
 offline_app.py every later GPU op outside on_4d_generation (including the ViTDet detection) runs under bf16.
 Detection runs before SAM3 is built here, so it gets the same bf16 autocast explicitly.
@@ -39,6 +43,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import offline_app as oa  # noqa: E402  (sets sys.path for models/*)
+from utils.skip_init import skip_random_init  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
 
 CAPTURE = {"detection": [], "hmr_batches": [], "faces": None, "timing": {}, "stages": {}}
@@ -79,7 +84,8 @@ class StagedFOV:
 
     def get_cam_intrinsics(self, img, **kw):
         from models.sam_3d_body.tools.build_fov_estimator import FOVEstimator
-        est = FOVEstimator(name="moge2", device=self.device, path=self.path)
+        with skip_random_init():
+            est = FOVEstimator(name="moge2", device=self.device, path=self.path)
         try:
             return est.get_cam_intrinsics(img, **kw)
         finally:
@@ -92,7 +98,8 @@ def build_sam3_tracker(ckpt_path):
     In the video model the tracker borrows detector.backbone (vision + text); the tracker only ever calls
     backbone.forward_image, so the vision part is enough. strict=True: every tracker weight must be present."""
     from models.sam3.sam3.model_builder import build_tracker
-    tracker = build_tracker(apply_temporal_disambiguation=True, with_backbone=True)
+    with skip_random_init():
+        tracker = build_tracker(apply_temporal_disambiguation=True, with_backbone=True)
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
     if "model" in ckpt and isinstance(ckpt["model"], dict):
         ckpt = ckpt["model"]
@@ -110,7 +117,8 @@ def detect_first_frame(cfg, input_video):
     Returns (starting_frame_idx, boxes, width, height, image_list or None)."""
     from models.sam_3d_body.tools.build_detector import HumanDetector
     from models.sam_3d_body.sam_3d_body.data.utils.io import load_image
-    det = HumanDetector(name="vitdet", device=torch.device("cuda"), path=cfg.sam_3d_body["detector_path"])
+    with skip_random_init():
+        det = HumanDetector(name="vitdet", device=torch.device("cuda"), path=cfg.sam_3d_body["detector_path"])
 
     def run(img_bgr):
         boxes = det.run_human_detection(img_bgr, det_cat_id=0, bbox_thr=0.6, nms_thr=0.3,
@@ -156,6 +164,7 @@ def build_app(cfg, output_dir):
         "detection_resolution": cfg.completion.get("detection_resolution", [256, 512]),
         "completion_resolution": cfg.completion.get("completion_resolution", [512, 1024]),
         "smpl_export": cfg.runtime.get("smpl_export", False),
+        "async_save": True,      # save batch b (CPU / OpenGL) while the GPU runs batch b+1
         "bboxes": None,
     }
     app.OUTPUT_DIR = output_dir
@@ -220,8 +229,9 @@ def inference_lite(args):
     # 3. HMR (SAM-3D-Body; MoGe-2 only for the single intrinsics call inside on_4d_generation)
     with Stage("hmr_load"):
         dev = torch.device("cuda")
-        model, model_cfg = oa.load_sam_3d_body(cfg.sam_3d_body["ckpt_path"], device=dev,
-                                               mhr_path=cfg.sam_3d_body["mhr_path"])
+        with skip_random_init():
+            model, model_cfg = oa.load_sam_3d_body(cfg.sam_3d_body["ckpt_path"], device=dev,
+                                                   mhr_path=cfg.sam_3d_body["mhr_path"])
         app.sam3_3d_body_model = oa.SAM3DBodyEstimator(
             sam_3d_body_model=model, model_cfg=model_cfg, human_detector=None, human_segmentor=None,
             fov_estimator=StagedFOV(cfg.sam_3d_body["fov_path"], dev))

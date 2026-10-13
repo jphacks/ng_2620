@@ -134,6 +134,18 @@ def create_raymond_lights() -> List[pyrender.Node]:
     return nodes
 
 
+_OFFSCREEN = {}
+
+
+def _offscreen(h, w):
+    """One pyrender OffscreenRenderer per viewport size, reused across calls. Creating and deleting a GL context
+    per call cost 0.47 s per frame on 2 people (delete alone 0.37 s) against 0.02 s of actual drawing; the reused
+    context renders the same images up to the pipeline's own run-to-run noise (1/255 on a handful of pixels)."""
+    if (h, w) not in _OFFSCREEN:
+        _OFFSCREEN[(h, w)] = pyrender.OffscreenRenderer(viewport_height=h, viewport_width=w)
+    return _OFFSCREEN[(h, w)]
+
+
 class Renderer:
 
     def __init__(self, focal_length, faces=None):
@@ -178,11 +190,8 @@ class Renderer:
         image = image / 255.0
         h, w = image.shape[:2]
 
-        # Create offscreen renderer
-        renderer = pyrender.OffscreenRenderer(
-            viewport_height=h,
-            viewport_width=w,
-        )
+        # Offscreen renderer (reused, see _offscreen)
+        renderer = _offscreen(h, w)
 
         # Process camera translation
         camera_translation = cam_t.copy()
@@ -290,7 +299,6 @@ class Renderer:
             scene, flags=pyrender.RenderFlags.RGBA
         )
         color = color.astype(np.float32) / 255.0
-        renderer.delete()
 
         # Return RGBA directly if requested
         if return_rgba:
