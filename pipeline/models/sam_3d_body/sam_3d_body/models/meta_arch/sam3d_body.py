@@ -1663,6 +1663,8 @@ class SAM3DBody(BaseModel):
                 ...
             ] = 0  # pred_pose_raw is not valid anymore
             pose_output["mhr"]["mhr_model_params"] = mhr_model_params
+            # keep the joint rotations in sync with the re-run forward (pred_global_rots was the pre-refinement pose)
+            pose_output["mhr"]["joint_global_rots"] = joint_global_rots
 
         ########################################################
         # Project to 2D
@@ -2253,6 +2255,8 @@ class SAM3DBody(BaseModel):
                 ...
             ] = 0  # pred_pose_raw is not valid anymore
             pose_output["mhr"]["mhr_model_params"] = mhr_model_params
+            # keep the joint rotations in sync with the re-run forward (pred_global_rots was the pre-refinement pose)
+            pose_output["mhr"]["joint_global_rots"] = joint_global_rots
 
         ########################################################
         # Project to 2D

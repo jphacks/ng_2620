@@ -242,6 +242,34 @@ def save_mesh_results(
             json.dump(focal_length, f, indent=4)
 
 
+def save_skeleton_results(
+    outputs: List[Dict[str, Any]],
+    save_dir: str,
+    image_path: str,
+    id_current: List,
+):
+    """Save the MHR skeleton of each person (the bones the mesh is skinned from), keyed by object id like the meshes.
+
+    joint_rots   (127,3,3)  global joint rotations in MHR model space (Y up, the person faces +Z), not camera-flipped
+    joint_coords (127,3)    joint positions in camera coords without cam_t (same axes as pred_vertices)
+    keypoints_3d (70,3)     MHR70 keypoints, same axes as joint_coords
+    cam_t (3,), focal ()    camera-space position = joint_coords + cam_t; principal point = image centre
+    """
+    if outputs is None:
+        return
+    for pid, person_output in enumerate(outputs):
+        d = f"{save_dir}/{id_current[pid]}"
+        os.makedirs(d, exist_ok=True)
+        np.savez(
+            f"{d}/{os.path.basename(image_path)[:-4]}.npz",
+            joint_rots=np.asarray(person_output["pred_global_rots"], np.float32),
+            joint_coords=np.asarray(person_output["pred_joint_coords"], np.float32),
+            keypoints_3d=np.asarray(person_output["pred_keypoints_3d"], np.float32),
+            cam_t=np.asarray(person_output["pred_cam_t"], np.float32),
+            focal=np.float32(np.asarray(person_output["focal_length"]).reshape(-1)[0]),
+        )
+
+
 def display_results_grid(
     images: List[np.ndarray], titles: List[str], figsize_per_image: tuple = (6, 6)
 ):

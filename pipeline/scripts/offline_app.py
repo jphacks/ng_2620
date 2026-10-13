@@ -31,7 +31,7 @@ from omegaconf import OmegaConf
 from utils import draw_point_marker, mask_painter, images_to_mp4, DAVIS_PALETTE, jpg_folder_to_mp4, is_super_long_or_wide, keep_largest_component, is_skinny_mask, bbox_from_mask, gpu_profile, resize_mask_with_unique_label
 
 from models.sam_3d_body.sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
-from models.sam_3d_body.notebook.utils import process_image_with_mask, save_mesh_results
+from models.sam_3d_body.notebook.utils import process_image_with_mask, save_mesh_results, save_skeleton_results
 from models.sam_3d_body.tools.vis_utils import visualize_sample_together, visualize_sample
 from models.diffusion_vas.demo import init_amodal_segmentation_model, init_rgb_model, init_depth_model, load_and_transform_masks, load_and_transform_rgbs, rgb_to_depth
 
@@ -477,6 +477,13 @@ class OfflineApp:
                     faces=self.sam3_3d_body_model.faces, 
                     save_dir=f"{self.OUTPUT_DIR}/mesh_4d_individual",
                     focal_dir = f"{self.OUTPUT_DIR}/focal_4d_individual",
+                    image_path=image_path,
+                    id_current=id_current,
+                )
+                # save the skeleton (bones the mesh is skinned from) for avatar retargeting
+                save_skeleton_results(
+                    outputs=mask_output,
+                    save_dir=f"{self.OUTPUT_DIR}/skeleton_4d_individual",
                     image_path=image_path,
                     id_current=id_current,
                 )

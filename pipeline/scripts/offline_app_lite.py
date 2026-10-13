@@ -20,6 +20,9 @@ usage (repo root):
   .venv/Scripts/python.exe -u scripts/offline_app_lite.py --input_video <frames dir | .mp4> --output_dir <dir>
       [--capture <pkl>]   per-frame HMR outputs + stage timings, same format as scripts/eval/run_profiled.py
       [--offload_state]   keep SAM3's per-frame tracking memory on CPU (long videos)
+      [--avatar_out <dir>] then replace the targets with the VRM avatar (scripts/avatar_app.py, fusion v2 occlusion)
+                           in a fresh process, so that none of this process's GPU memory is held
+      [--vrm <file>]       avatar for --avatar_out (default: avatar_app.py's)
 """
 import argparse
 import gc
@@ -234,6 +237,8 @@ if __name__ == "__main__":
     p.add_argument("--output_dir", required=True)
     p.add_argument("--capture", default=None)
     p.add_argument("--offload_state", action="store_true")
+    p.add_argument("--avatar_out", default=None)
+    p.add_argument("--vrm", default=None)
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
@@ -251,3 +256,8 @@ if __name__ == "__main__":
         with open(args.capture, "wb") as f:
             pickle.dump(CAPTURE, f)
         print(f"[CAPTURE] saved {args.capture}")
+    if args.avatar_out:
+        import subprocess
+        cmd = [sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatar_app.py"),
+               "--pipeline_out", args.output_dir, "--out", args.avatar_out] + (["--vrm", args.vrm] if args.vrm else [])
+        sys.exit(subprocess.call(cmd))
