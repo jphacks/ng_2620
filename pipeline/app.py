@@ -1006,7 +1006,7 @@ def on_4d_generation(video_path: str):
             rend_img_list = visualize_sample(img, mask_output, sam3_3d_body_model.faces, id_current)
             for ri, rend_img in enumerate(rend_img_list):
                 cv2.imwrite(
-                    f"{OUTPUT_DIR}/rendered_frames_individual/{ri+1}/{os.path.basename(image_path)[:-4]}_{ri+1}.jpg",
+                    f"{OUTPUT_DIR}/rendered_frames_individual/{id_current[ri]}/{os.path.basename(image_path)[:-4]}_{id_current[ri]}.jpg",
                     rend_img.astype(np.uint8),
                 )
             # save mesh for individual person

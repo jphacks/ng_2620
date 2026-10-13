@@ -46,6 +46,10 @@ runtime:
   # Output directory for renders / meshes / results
   output_dir: ./outputs
 
+  # People tracked and meshed: the N largest boxes on the first frame with a person.
+  # Everyone else stays part of the scene (background / objects in front of the targets).
+  max_targets: 2
+
 # ---------------------------------------------------------------------------
 # Occlusion-aware Completion (Diffusion-VAS + Depth Anything)
 # ---------------------------------------------------------------------------

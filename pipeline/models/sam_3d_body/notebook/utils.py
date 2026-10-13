@@ -233,11 +233,12 @@ def save_mesh_results(
         tmesh = renderer.vertices_to_trimesh(
             person_output["pred_vertices"], person_output["pred_cam_t"], color
         )
-        mesh_path = f"{save_dir}/{pid+1}/{os.path.basename(image_path)[:-4]}.ply"
+        # folder = object id (not the position in this frame's list, which shifts when a lower id is absent)
+        mesh_path = f"{save_dir}/{id_current[pid]}/{os.path.basename(image_path)[:-4]}.ply"
         tmesh.export(mesh_path)
 
         focal_length = {'focal_length': person_output["focal_length"].item(), 'camera': [float(x) for x in person_output['pred_cam_t']]}
-        with open(f"{focal_dir}/{pid+1}/{os.path.basename(image_path)[:-4]}.json", "w") as f:
+        with open(f"{focal_dir}/{id_current[pid]}/{os.path.basename(image_path)[:-4]}.json", "w") as f:
             json.dump(focal_length, f, indent=4)
 
 
@@ -431,10 +432,13 @@ def process_image_with_mask(estimator, image_path: str, mask_path: str, idx_path
             no_occ_kps_batch = None
             _occ_kps_batch = None
 
+        # shape/scale is fixed per object: every call below runs one object as hid 0 (id_batch [[1]]), so a
+        # shared dict would give every person the shape of whichever object happened to be processed first
+        obj_shape_scale = mhr_shape_scale_dict.setdefault(obj_id, {})
         if len(no_occ_image_batch) > 0:
-            no_occ_outputs = estimator.process_frames(no_occ_image_batch, bboxes=no_occ_bbox_batch, masks=no_occ_mask_batch, id_batch=[[1] for idb in range(len(no_occ_image_batch))], idx_path={}, idx_dict={}, mhr_shape_scale_dict=mhr_shape_scale_dict, kps_batch=no_occ_kps_batch, occ_dict=None, use_mask=True, kps_id=kps_id, cam_int=cam_int)
+            no_occ_outputs = estimator.process_frames(no_occ_image_batch, bboxes=no_occ_bbox_batch, masks=no_occ_mask_batch, id_batch=[[1] for idb in range(len(no_occ_image_batch))], idx_path={}, idx_dict={}, mhr_shape_scale_dict=obj_shape_scale, kps_batch=no_occ_kps_batch, occ_dict=None, use_mask=True, kps_id=kps_id, cam_int=cam_int)
         if len(_occ_image_batch) > 0:
-            _occ_outputs = estimator.process_frames(_occ_image_batch, bboxes=_occ_bbox_batch, masks=_occ_mask_batch, id_batch=[[1] for idb in range(len(_occ_image_batch))], idx_path={}, idx_dict={}, mhr_shape_scale_dict=mhr_shape_scale_dict, kps_batch=_occ_kps_batch, occ_dict=None, use_mask=True, kps_id=kps_id, _occ_image_batch_ori=_occ_image_batch_ori, cam_int=cam_int)
+            _occ_outputs = estimator.process_frames(_occ_image_batch, bboxes=_occ_bbox_batch, masks=_occ_mask_batch, id_batch=[[1] for idb in range(len(_occ_image_batch))], idx_path={}, idx_dict={}, mhr_shape_scale_dict=obj_shape_scale, kps_batch=_occ_kps_batch, occ_dict=None, use_mask=True, kps_id=kps_id, _occ_image_batch_ori=_occ_image_batch_ori, cam_int=cam_int)
         
         oid_outputs = []
         ia, ib = 0, 0

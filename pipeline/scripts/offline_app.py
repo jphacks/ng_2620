@@ -468,7 +468,7 @@ class OfflineApp:
                 rend_img_list = visualize_sample(img, mask_output, self.sam3_3d_body_model.faces, id_current)
                 for ri, rend_img in enumerate(rend_img_list):
                     cv2.imwrite(
-                        f"{self.OUTPUT_DIR}/rendered_frames_individual/{ri+1}/{os.path.basename(image_path)[:-4]}_{ri+1}.jpg",
+                        f"{self.OUTPUT_DIR}/rendered_frames_individual/{id_current[ri]}/{os.path.basename(image_path)[:-4]}_{id_current[ri]}.jpg",
                         rend_img.astype(np.uint8),
                     )
                 # save mesh for individual person
@@ -487,9 +487,21 @@ class OfflineApp:
         return out_4d_path
 
 
+def select_targets(boxes, max_targets):
+    """Indices of the people to track and mesh: the max_targets largest boxes (area), in detection order.
+    Everyone else is left to the scene (background / objects in front of the targets)."""
+    if max_targets is None or len(boxes) <= max_targets:
+        return list(range(len(boxes)))
+    area = [(b[2] - b[0]) * (b[3] - b[1]) for b in boxes]
+    keep = sorted(range(len(boxes)), key=lambda i: -area[i])[:max_targets]
+    print(f"[TARGETS] {len(boxes)} people detected, meshing the {max_targets} largest: boxes {sorted(keep)}")
+    return sorted(keep)
+
+
 def inference(args):
     # init configs and cover with cmd options
     predictor = OfflineApp()
+    max_targets = predictor.CONFIG.runtime.get('max_targets', 2)
     if args.output_dir is not None:
         predictor.OUTPUT_DIR = args.output_dir
         os.makedirs(predictor.OUTPUT_DIR, exist_ok=True)
@@ -504,7 +516,8 @@ def inference(args):
             outputs = predictor.sam3_3d_body_model.process_one_image(image, bbox_thr=0.6,)
             if len(outputs) > 0:
                 break
-        
+        outputs = [outputs[i] for i in select_targets([o['bbox'] for o in outputs], max_targets)]
+
         inference_state = predictor.predictor.init_state(video_path=args.input_video)
         predictor.predictor.clear_all_points_in_video(inference_state)
         predictor.RUNTIME['inference_state'] = inference_state
@@ -535,6 +548,7 @@ def inference(args):
             if len(outputs) > 0:
                 break
             starting_frame_idx += 1
+        outputs = [outputs[i] for i in select_targets([o['bbox'] for o in outputs], max_targets)]
 
         inference_state = predictor.predictor.init_state(video_path=image_list)
         predictor.predictor.clear_all_points_in_video(inference_state)
