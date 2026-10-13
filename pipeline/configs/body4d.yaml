@@ -1,41 +1,69 @@
 # ============================================================================
-# Configuration for SAM-Body4D
+# Configuration Template for SAM-Body4D
+#
+# This is a runtime config template used by the setup script.
+# The setup script will replace `C:\VScodeFiles\checkpoints` with the user-specified
+# checkpoint directory and generate `configs/body4d.yaml`.
+#
 # NOTE:
 #   All checkpoint paths below are relative to `paths.ckpt_root`.
-#   To relocate checkpoints, you only need to modify `ckpt_root`
-#   and the rest will update automatically.
+#   To relocate checkpoints, you only need to change `ckpt_root`.
 # ============================================================================
 
 paths:
-  # Set your global checkpoint root directory here
-  ckpt_root: "path to global checkpoint root"
+  # Global root directory for all checkpoints (filled by setup script)
+  ckpt_root: "C:/VScodeFiles/checkpoints"
 
+# ---------------------------------------------------------------------------
+# SAM3
+# ---------------------------------------------------------------------------
 sam3:
-  # download: https://huggingface.co/facebook/sam3
+  # Requires prior access approval on Hugging Face
   ckpt_path: ${paths.ckpt_root}/sam3/sam3.pt
 
+# ---------------------------------------------------------------------------
+# SAM-3D-Body
+# ---------------------------------------------------------------------------
 sam_3d_body:
-  # download (ckpt_path & mhr_path): https://huggingface.co/facebook/sam-3d-body-dinov3
+  # Requires prior access approval on Hugging Face
   ckpt_path: ${paths.ckpt_root}/sam-3d-body-dinov3/model.ckpt
   mhr_path: ${paths.ckpt_root}/sam-3d-body-dinov3/assets/mhr_model.pt
-  # download (fov_path): https://huggingface.co/Ruicheng/moge-2-vitl-normal
+
+  # MoGe (surface normal / FoV prior)
   fov_path: ${paths.ckpt_root}/moge-2-vitl-normal/model.pt
-  batch_size: 64
+
+  # Number of frames processed in parallel
+  batch_size: 16
+
+  # Optional external detector / segmentor (leave empty to use defaults)
   detector_path: ""
   segmentor_path: ""
 
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
 runtime:
+  # Output directory for renders / meshes / results
   output_dir: ./outputs
 
+# ---------------------------------------------------------------------------
+# Occlusion-aware Completion (Diffusion-VAS + Depth Anything)
+# ---------------------------------------------------------------------------
 completion:
-  enable: true
-  detection_resolution: [256, 512]
+  # Enable occlusion-aware completion module (slower but more robust)
+  enable: false
+
+  # Resolution used for detection and completion
+  detection_resolution: [512, 1024]
   completion_resolution: [512, 1024]
-  # download (xxx_mask & xxx_rgb): https://github.com/Kaihua-Chen/diffusion-vas?tab=readme-ov-file#download-checkpoints
+
+  # Diffusion-VAS checkpoints (directories)
   model_path_mask: ${paths.ckpt_root}/diffusion-vas-amodal-segmentation
   model_path_rgb:  ${paths.ckpt_root}/diffusion-vas-content-completion
-  # download (depth anything v2): https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth?download=true
-  model_path_depth: ${paths.ckpt_root}/depth_anything_v2_vitl.pth
 
+  # Depth Anything v2
+  model_path_depth: ${paths.ckpt_root}/depth_anything_v2_vitl.pth
   depth_encoder: vitl
+
+  # Maximum length of continuous occlusion (in frames)
   max_occ_len: 25

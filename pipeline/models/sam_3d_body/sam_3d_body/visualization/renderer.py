@@ -1,8 +1,10 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import os
+import sys
 
-if "PYOPENGL_PLATFORM" not in os.environ:
+# EGL is Linux-only; on Windows/macOS pyrender needs PYOPENGL_PLATFORM unset (pyglet backend)
+if "PYOPENGL_PLATFORM" not in os.environ and sys.platform.startswith("linux"):
     os.environ["PYOPENGL_PLATFORM"] = "egl"
 from typing import List, Optional
 
