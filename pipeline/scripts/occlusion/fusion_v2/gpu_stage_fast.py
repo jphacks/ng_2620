@@ -15,7 +15,9 @@ The frozen gpu_stage.py stays the reference; this module changes only where the 
   4. VRAM: the 'person' concept prompt is the same text in every frame, so its text encoding is computed once (under
      the same autocast and inference mode as Sam3Processor.set_text_prompt) and the text encoder (1.32 GB of the
      3.2 GB of SAM3 weights) is moved off the GPU before the frame loop.
-  5. model construction skips the random weight init that the checkpoint overwrites (utils/skip_init.py; all
+  5. the mask decoder computes the image-side part of its first block once per image instead of once per prompt
+     (_predict_masks_shared; bit-identical).
+  6. model construction skips the random weight init that the checkpoint overwrites (utils/skip_init.py; all
      parameters and buffers verified identical by scripts/eval/check_skip_init.py).
 Verified identical to gpu_stage.run_gpu (frozen): scripts/eval/check_fusion_fast.py.
 """
@@ -23,6 +25,7 @@ import math
 import os
 import sys
 import time
+import types
 
 import cv2
 import numpy as np
@@ -35,6 +38,96 @@ from utils.skip_init import skip_random_init  # noqa: E402
 from gpu_stage import STRIDE_IN, STRIDE_V, STRIDE_OUT, DIL, IOU_T, STAB_T, DEDUP, MIN_PX, grid_points, load_cands  # noqa: E402,F401
 
 POINT_BATCH = 128   # points per mask-decoder call (frozen value)
+
+
+# Shared image side of the mask decoder. With expand_image_embeddings, every prompt of a batch carries the same image
+# embedding, positional encoding and no-mask dense embedding; the first two-way block reads only these on the image
+# side before the image->token attention mixes in the prompts. So its image-side work (src + dense, keys + pe, the
+# token->image k/v projections, the image->token q projection) is computed once for the image and broadcast to the
+# batch (13% of _predict_gpu). Every output is bit-identical to MaskDecoder.predict_masks (logits, iou: checked on
+# every batch size 1..128 and 33 batches over a clip, and end to end by scripts/eval/check_fusion_fast.py).
+
+
+def _attn(A, q, k, v, qp=None, kp=None, vp=None):
+    """Attention.forward with optional precomputed projections (non-fa3, eval)."""
+    import torch.nn.functional as F
+    q = A.q_proj(q) if qp is None else qp
+    k = A.k_proj(k) if kp is None else kp
+    v = A.v_proj(v) if vp is None else vp
+    q, k, v = (A._separate_heads(x, A.num_heads) for x in (q, k, v))
+    out = F.scaled_dot_product_attention(q, k, v, dropout_p=0.0)
+    return A.out_proj(A._recombine_heads(out))
+
+
+def _transformer_shared(tr, img1, pe1, point_embedding):
+    """TwoWayTransformer.forward for B prompts on one image: img1 / pe1 (1, C, h, w) are the same for every prompt."""
+    B = point_embedding.shape[0]
+    keys1 = img1.flatten(2).permute(0, 2, 1)
+    pe = pe1.flatten(2).permute(0, 2, 1)
+    queries = point_embedding
+    L = tr.layers[0]
+    assert L.skip_first_layer_pe
+    queries = L.norm1(L.self_attn(q=queries, k=queries, v=queries))
+    q = queries + point_embedding
+    k1 = keys1 + pe
+    t2i = L.cross_attn_token_to_image
+    queries = L.norm2(queries + _attn(t2i, q, None, None, kp=t2i.k_proj(k1).expand(B, -1, -1),
+                                      vp=t2i.v_proj(keys1).expand(B, -1, -1)))
+    queries = L.norm3(queries + L.mlp(queries))
+    q = queries + point_embedding
+    i2t = L.cross_attn_image_to_token
+    keys = L.norm4(keys1 + _attn(i2t, None, q, queries, qp=i2t.q_proj(k1).expand(B, -1, -1)))
+    key_pe = pe.expand(B, -1, -1)
+    for layer in tr.layers[1:]:
+        queries, keys = layer(queries=queries, keys=keys, query_pe=point_embedding, key_pe=key_pe)
+    q = queries + point_embedding
+    k = keys + key_pe
+    queries = tr.norm_final_attn(queries + tr.final_attn_token_to_image(q=q, k=k, v=keys))
+    return queries, keys
+
+
+def _predict_masks_shared(self, image_embeddings, image_pe, sparse_prompt_embeddings, dense_prompt_embeddings,
+                          repeat_image, high_res_features=None):
+    """MaskDecoder.predict_masks, line for line, with _transformer_shared. A single prompt (repeat_image False) takes
+    the original method: there the image embedding is used in its own memory layout, and the results differ."""
+    import torch
+    if not repeat_image:
+        return type(self).predict_masks(self, image_embeddings, image_pe, sparse_prompt_embeddings,
+                                        dense_prompt_embeddings, repeat_image, high_res_features)
+    s = 0
+    if self.pred_obj_scores:
+        output_tokens = torch.cat([self.obj_score_token.weight, self.iou_token.weight, self.mask_tokens.weight], 0)
+        s = 1
+    else:
+        output_tokens = torch.cat([self.iou_token.weight, self.mask_tokens.weight], 0)
+    output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
+    tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
+    assert image_embeddings.size(0) == 1 and image_pe.size(0) == 1
+    d = dense_prompt_embeddings
+    assert d.stride(0) == 0 or d.size(0) == 1          # the no-mask embedding, the same for every prompt
+    src1 = image_embeddings.contiguous() + d[:1]
+    b, (c, h, w) = tokens.shape[0], src1.shape[1:]
+    hs, src = _transformer_shared(self.transformer, src1, image_pe.contiguous(), tokens)
+    iou_token_out = hs[:, s, :]
+    mask_tokens_out = hs[:, s + 1:(s + 1 + self.num_mask_tokens), :]
+    src = src.transpose(1, 2).view(b, c, h, w)
+    if not self.use_high_res_features:
+        upscaled_embedding = self.output_upscaling(src)
+    else:
+        dc1, ln1, act1, dc2, act2 = self.output_upscaling
+        feat_s0, feat_s1 = high_res_features
+        upscaled_embedding = act1(ln1(dc1(src) + feat_s1))
+        upscaled_embedding = act2(dc2(upscaled_embedding) + feat_s0)
+    hyper_in = torch.stack([self.output_hypernetworks_mlps[i](mask_tokens_out[:, i, :])
+                            for i in range(self.num_mask_tokens)], dim=1)
+    b, c, h, w = upscaled_embedding.shape
+    masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
+    iou_pred = self.iou_prediction_head(iou_token_out)
+    if self.pred_obj_scores:
+        object_score_logits = self.pred_obj_score_head(hs[:, 0, :])
+    else:
+        object_score_logits = 10.0 * iou_pred.new_ones(iou_pred.shape[0], 1)
+    return masks, iou_pred, mask_tokens_out, object_score_logits
 
 
 def _mask_counts(m):
@@ -145,11 +238,16 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
     os.makedirs(cache, exist_ok=True)
     T, H, W = len(run), run.H, run.W
     mode = _cands_mode(points, compile_decoder)
-    if os.path.exists(f"{cache}/moge.npz") and "masked" not in np.load(f"{cache}/moge.npz").files:
+    # np.load keeps the file open until closed, and Windows cannot rename an open file: read, close, then replace
+    masked = True
+    if os.path.exists(f"{cache}/moge.npz"):
+        with np.load(f"{cache}/moge.npz") as z:
+            masked = "masked" in z.files
+    if not masked:
         os.replace(f"{cache}/moge.npz", f"{cache}/moge_unmasked.npz")   # cache from an older version: recompute
     if os.path.exists(f"{cache}/cands.npz"):
-        c = np.load(f"{cache}/cands.npz")
-        old = str(c["mode"]) if "mode" in c.files else "full"            # caches before the modes: full grid
+        with np.load(f"{cache}/cands.npz") as c:
+            old = str(c["mode"]) if "mode" in c.files else "full"        # caches before the modes: full grid
         if old != mode:                                                  # other mode: recompute candidates
             os.replace(f"{cache}/cands.npz", f"{cache}/cands_{old.replace('+', '_')}.npz")
             if os.path.exists(f"{cache}/evidence.pkl"):
@@ -192,8 +290,9 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
             # Keep POINT_BATCH and all arithmetic unchanged; broadcast the shared
             # image/position inputs instead of copying them for each point.
             model.inst_interactive_predictor.model.sam_mask_decoder.expand_image_embeddings = True
+            dec = model.inst_interactive_predictor.model.sam_mask_decoder
+            dec.predict_masks = types.MethodType(_predict_masks_shared, dec)   # same values, image side once
             if compile_decoder:   # fixed shapes: every batch is padded to POINT_BATCH points (_prompt_points)
-                dec = model.inst_interactive_predictor.model.sam_mask_decoder
                 dec.forward = torch.compile(dec.forward, dynamic=False)
             proc = Sam3Processor(model, confidence_threshold=0.3)
             with torch.autocast("cuda", dtype=torch.bfloat16), torch.inference_mode():

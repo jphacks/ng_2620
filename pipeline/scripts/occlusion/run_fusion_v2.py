@@ -10,7 +10,8 @@ Stages: prep (CPU) -> gpu_stage (MoGe-2 depth, class-agnostic SAM3 candidates, S
 -> fusion decision + rendering (CPU). All parameters: fusion.P (frozen defaults).
 
 The GPU stage and the evidence run through gpu_stage_fast / evidence_fast, which produce bit-identical caches and
-evidence with less time and VRAM (see their docstrings); --reference runs the frozen gpu_stage / evidence instead.
+evidence with less time and VRAM (see their docstrings), and shared_cache memoizes the cache loads and ground masks that
+the CPU stages repeat; --reference runs the frozen gpu_stage / evidence instead.
 By default the SAM3 point prompts are coarse-to-fine (--points c2f: ~2.8x fewer decoder calls, not bit-identical; same
 F1 pass count on dev 18 and the held-out test4, LEDGER 2026-10-14); --points full keeps the frozen grid.
 """
@@ -29,12 +30,15 @@ import gpu_stage_fast  # noqa: E402
 import evidence  # noqa: E402
 import evidence_fast  # noqa: E402
 import fusion  # noqa: E402
+import shared_cache  # noqa: E402
 
 
 def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="c2f", compile_decoder=False):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
     (ignored with reference=True)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
+    if not reference:
+        shared_cache.install()   # evidence / render / AvatarHider share cache loads and ground masks (same values)
     t0 = time.time()
     run = Run(pipeline_out, name)
     cache = os.path.join(out_dir, "_r3cache", run.name)

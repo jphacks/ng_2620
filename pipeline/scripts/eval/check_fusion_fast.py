@@ -30,7 +30,8 @@ def same_npz(a, b):
     ok = True
     for f in ("moge.npz", "cands.npz", "person.npz"):
         A, B = np.load(f"{a}/{f}"), np.load(f"{b}/{f}")
-        for k in sorted(set(A.files) | set(B.files)):
+        # "mode" (which point grid made the candidates) exists only in gpu_stage_fast's cache
+        for k in sorted((set(A.files) | set(B.files)) - {"mode"}):
             eq = k in A.files and k in B.files and A[k].shape == B[k].shape and np.array_equal(A[k], B[k])
             if not eq:
                 print(f"  DIFFERENT {f}:{k}")
