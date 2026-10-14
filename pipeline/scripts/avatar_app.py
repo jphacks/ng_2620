@@ -104,7 +104,9 @@ def main(a):
         from run_fusion_v2 import run_fusion
         t0 = time.perf_counter()
         fus = run_fusion(run.pout, os.path.join(a.out, "occlusion"), run.name, save=False,
-                         reference=getattr(a, "fusion_reference", False))
+                         reference=getattr(a, "fusion_reference", False),
+                         points=getattr(a, "fusion_points", "c2f"),
+                         compile_decoder=getattr(a, "fusion_compile_decoder", False))
         stats["fusion_s"] = round(time.perf_counter() - t0, 1)
 
     # 2. avatars (retarget + render are done per frame below)
@@ -132,7 +134,7 @@ def main(a):
         from avatar.removal import clean_plates
         t0 = time.perf_counter()
         pm = [np.isin(run.mask(i), pids) for i in range(n)]
-        plates, _, rs = clean_plates(frames, pm, fps=a.fps)
+        plates, _, rs = clean_plates(frames, pm, fps=a.fps, workers=getattr(a, "removal_workers", 4))
         stats.update({f"removal_{k}": v for k, v in rs.items()})
         stats["removal_s"] = round(time.perf_counter() - t0, 1)
 
@@ -232,10 +234,16 @@ if __name__ == "__main__":
     ap.add_argument("--name", default=None, help="run name (default: the parent folder of pipeline_out)")
     ap.add_argument("--fps", type=float, default=30.0, help="video frame rate (spring-bone time step, output mp4)")
     ap.add_argument("--ssaa", type=int, default=2)
+    ap.add_argument("--removal_workers", type=int, default=4,
+                    help="CPU workers for independent clean-plate frames (1 for sequential processing)")
     ap.add_argument("--no_occlusion", action="store_true")
     ap.add_argument("--no_removal", action="store_true")
     ap.add_argument("--no_spring", action="store_true")
     ap.add_argument("--no_ik", action="store_true")
     ap.add_argument("--fusion_reference", action="store_true",
                     help="run fusion v2's frozen gpu_stage / evidence instead of the bit-identical fast ones")
+    ap.add_argument("--fusion_points", choices=["full", "c2f"], default="c2f",
+                    help="fusion v2 SAM3 point prompts: coarse-to-fine (default; faster, not bit-identical) or the frozen grid")
+    ap.add_argument("--fusion_compile_decoder", action="store_true",
+                    help="torch.compile the SAM mask decoder in fusion v2 (faster, not bit-identical)")
     main(ap.parse_args())

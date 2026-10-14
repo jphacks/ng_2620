@@ -61,9 +61,17 @@ def _homography(ga, gb, pa, init=None, min_match=25):
 
 
 def clean_plates(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15, span_sec=7.5, stride_sec=8 / 30,
-                 log=print):
+                 log=print, workers=1):
     """frames: list of BGR uint8; person_masks: list of bool (H,W), the targets' visible masks.
-    -> (list of BGR uint8 frames with the targets erased, list of bool hole masks, stats)."""
+    -> (list of BGR uint8 frames with the targets erased, list of bool hole masks, stats).
+
+    Adjacent homographies remain sequential. Once C is complete, frames only read
+    shared inputs and can be filled independently; results retain frame order.
+    workers bounds simultaneous per-frame temporary arrays. OpenCV's process-wide
+    thread setting is left untouched.
+    """
+    if workers < 1:
+        raise ValueError("workers must be at least 1")
     n = len(frames)
     H, W = frames[0].shape[:2]
     k_hole = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilate, dilate))
@@ -82,13 +90,11 @@ def clean_plates(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15, sp
 
     span = max(1, int(round(span_sec * fps)))
     stride = max(1, int(round(stride_sec * fps)))
-    out, filled_by_plate, filled_by_inpaint = [], 0, 0
-    for t in range(n):
+    def fill_frame(t):
         hole = holes[t]
         img = frames[t].copy()
         if not hole.any():
-            out.append(img)
-            continue
+            return img, 0, 0
         ys, xs = np.nonzero(hole)
         cands = [u for u in range(max(0, t - span), min(n, t + span + 1), stride) if u != t]
         vals = np.zeros((len(cands), len(ys), 3), np.uint8)
@@ -112,9 +118,22 @@ def clean_plates(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15, sp
         rest[ys[~ok], xs[~ok]] = 255
         if rest.any():
             img = cv2.inpaint(img, rest, 5, cv2.INPAINT_TELEA)
-        filled_by_plate += int(ok.sum())
-        filled_by_inpaint += int((~ok).sum())
-        out.append(img)
+        return img, int(ok.sum()), int((~ok).sum())
+
+    out, filled_by_plate, filled_by_inpaint = [], 0, 0
+    def collect(results):
+        nonlocal filled_by_plate, filled_by_inpaint
+        for img, plate_count, inpaint_count in results:
+            out.append(img)
+            filled_by_plate += plate_count
+            filled_by_inpaint += inpaint_count
+
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(workers, n)) as pool:
+            collect(pool.map(fill_frame, range(n)))
+    else:
+        collect(map(fill_frame, range(n)))
     tot = max(filled_by_plate + filled_by_inpaint, 1)
     stats = {"hole_px": tot, "clean_plate_%": round(100 * filled_by_plate / tot, 1),
              "inpaint_%": round(100 * filled_by_inpaint / tot, 1)}

@@ -37,6 +37,18 @@ from gpu_stage import STRIDE_IN, STRIDE_V, STRIDE_OUT, DIL, IOU_T, STAB_T, DEDUP
 POINT_BATCH = 128   # points per mask-decoder call (frozen value)
 
 
+def _mask_counts(m):
+    """Exact integer pixel counts without a full-resolution int64 temporary.
+
+    Each count is bounded by H*W. Keep the original int64 numpy interface and
+    fall back to int64 accumulation if a mask could overflow signed int32.
+    """
+    import torch
+    dtype = torch.int32 if m.shape[-2] * m.shape[-1] <= 2**31 - 1 else torch.int64
+    return torch.stack([(m > value).sum((1, 2), dtype=dtype)
+                        for value in (1.0, -1.0, 0.0)]).to(torch.int64).cpu().numpy()
+
+
 def _predict_gpu(model, st, coords, labels):
     """Sam3Image.predict_inst + SAM3InteractiveImagePredictor.predict, minus the numpy conversion.
     -> (mask logits float32 (n*3, H, W) on the GPU, iou numpy float32 (n*3,))."""
@@ -87,12 +99,61 @@ def _dedup_gpu(cands, half, chunk=1 << 16):
     return sel
 
 
-def run_gpu(run, cache, owner="R3_fusion"):
+C2F_STRIDE = 16   # coarse grid of the "c2f" mode, in every region
+
+
+def _prompt_points(model, st, pts, src, H, W, keep, half, cover=None, pad=False):
+    """The frozen per-batch prompt + filter, appending (score, CPU bool mask, from_visible) to keep and the 2x
+    downsampled GPU masks to half. cover (GPU bool H x W): OR-ed with every mask that passes the filter.
+    pad: repeat the last point up to POINT_BATCH (fixed shapes for the compiled decoder; the extra outputs are dropped)."""
     import torch
+    for s in range(0, len(pts), POINT_BATCH):
+        c = pts[s:s + POINT_BATCH]
+        n = len(c)
+        if pad and n < POINT_BATCH:
+            c = np.concatenate([c, np.repeat(c[-1:], POINT_BATCH - n, 0)])
+        with torch.no_grad():
+            m, iou = _predict_gpu(model, st, c[:, None, :], np.ones((len(c), 1)))
+            m, iou = m[:3 * n], iou[:3 * n]
+            cnt = _mask_counts(m)
+        hi, lo, area = cnt[0], cnt[1], cnt[2]
+        sv = np.repeat(src[s:s + POINT_BATCH], 3)
+        stab = hi / np.maximum(lo, 1)
+        ok = (iou >= IOU_T) & (stab >= STAB_T) & (area >= MIN_PX) & (area <= 0.5 * H * W)
+        idx = np.nonzero(ok)[0]
+        if len(idx):
+            mk = m[torch.as_tensor(idx, device=m.device)] > 0
+            if cover is not None:
+                cover |= mk.any(0)
+            mk_cpu = mk.cpu().numpy()
+            for j, k in enumerate(idx):
+                keep.append((float(iou[k] * stab[k]), mk_cpu[j], bool(sv[k])))
+                half.append(mk[j, ::2, ::2].reshape(-1))
+        del m
+
+
+def _cands_mode(points, compile_decoder):
+    return points + ("+compile" if compile_decoder else "")
+
+
+def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False):
+    """points: "full" = the frozen point grid (bit-identical to gpu_stage); "c2f" = coarse-to-fine (see
+    _c2f_points; not bit-identical, same F1 pass count on dev 18 and held-out test4, LEDGER 2026-10-14).
+    compile_decoder: torch.compile the SAM mask decoder (not bit-identical; ~0.03% of mask pixels flip)."""
+    import torch
+    assert points in ("full", "c2f")
     os.makedirs(cache, exist_ok=True)
     T, H, W = len(run), run.H, run.W
+    mode = _cands_mode(points, compile_decoder)
     if os.path.exists(f"{cache}/moge.npz") and "masked" not in np.load(f"{cache}/moge.npz").files:
         os.replace(f"{cache}/moge.npz", f"{cache}/moge_unmasked.npz")   # cache from an older version: recompute
+    if os.path.exists(f"{cache}/cands.npz"):
+        c = np.load(f"{cache}/cands.npz")
+        old = str(c["mode"]) if "mode" in c.files else "full"            # caches before the modes: full grid
+        if old != mode:                                                  # other mode: recompute candidates
+            os.replace(f"{cache}/cands.npz", f"{cache}/cands_{old.replace('+', '_')}.npz")
+            if os.path.exists(f"{cache}/evidence.pkl"):
+                os.remove(f"{cache}/evidence.pkl")
     if os.path.exists(f"{cache}/moge.npz") and os.path.exists(f"{cache}/cands.npz"):
         return  # cached
     D = np.load(f"{cache}/mesh.npz")["D"]                                # prep's mesh depth (T,P,H,W)
@@ -128,10 +189,20 @@ def run_gpu(run, cache, owner="R3_fusion"):
             with skip_random_init():
                 model = build_sam3_image_model(checkpoint_path="C:/VScodeFiles/checkpoints/sam3/sam3.pt",
                                                load_from_HF=False, enable_inst_interactivity=True)
+            # Keep POINT_BATCH and all arithmetic unchanged; broadcast the shared
+            # image/position inputs instead of copying them for each point.
+            model.inst_interactive_predictor.model.sam_mask_decoder.expand_image_embeddings = True
+            if compile_decoder:   # fixed shapes: every batch is padded to POINT_BATCH points (_prompt_points)
+                dec = model.inst_interactive_predictor.model.sam_mask_decoder
+                dec.forward = torch.compile(dec.forward, dynamic=False)
             proc = Sam3Processor(model, confidence_threshold=0.3)
             with torch.autocast("cuda", dtype=torch.bfloat16), torch.inference_mode():
                 text_person = model.backbone.forward_text(["person"], device=proc.device)
             model.backbone.language_backbone.to("cpu")
+            # SAM3 holds an outer autocast context open. Moving the encoder to CPU
+            # does not release its cached BF16 weights; the saved text features
+            # remain valid after clearing these unused weight copies.
+            torch.clear_autocast_cache()
             torch.cuda.empty_cache()
 
             @torch.inference_mode()
@@ -161,24 +232,19 @@ def run_gpu(run, cache, owner="R3_fusion"):
                 half = []   # 2x-downsampled masks on the GPU, for dedup
                 with torch.autocast("cuda", dtype=torch.bfloat16):
                     st = proc.set_image(Image.fromarray(img))
-                    for s in range(0, len(pts), POINT_BATCH) if len(pts) else []:
-                        c = pts[s:s + POINT_BATCH]
-                        with torch.no_grad():
-                            m, iou = _predict_gpu(model, st, c[:, None, :], np.ones((len(c), 1)))
-                            cnt = torch.stack([(m > 1.0).sum((1, 2)), (m > -1.0).sum((1, 2)),
-                                               (m > 0).sum((1, 2))]).cpu().numpy()
-                        hi, lo, area = cnt[0], cnt[1], cnt[2]
-                        sv = np.repeat(src[s:s + POINT_BATCH], 3)
-                        stab = hi / np.maximum(lo, 1)
-                        ok = (iou >= IOU_T) & (stab >= STAB_T) & (area >= MIN_PX) & (area <= 0.5 * H * W)
-                        idx = np.nonzero(ok)[0]
-                        if len(idx):
-                            mk = m[torch.as_tensor(idx, device=m.device)] > 0
-                            mk_cpu = mk.cpu().numpy()
-                            for j, k in enumerate(idx):
-                                keep.append((float(iou[k] * stab[k]), mk_cpu[j], bool(sv[k])))
-                                half.append(mk[j, ::2, ::2].reshape(-1))
-                        del m
+                    if points == "full":
+                        _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
+                    else:
+                        # coarse grid first; then only the fine points that no passing coarse mask covers
+                        c_in, c_o = grid_points(inner, C2F_STRIDE), grid_points(region & ~sil & ~Vd, C2F_STRIDE)
+                        c_v = grid_points(inv, C2F_STRIDE, off=2)
+                        cp = np.concatenate([c_in, c_o, c_v])
+                        csrc = np.concatenate([np.zeros(len(c_in) + len(c_o), bool), np.ones(len(c_v), bool)])
+                        cover = torch.zeros((H, W), dtype=torch.bool, device="cuda")
+                        _prompt_points(model, st, cp, csrc, H, W, keep, half, cover=cover, pad=compile_decoder)
+                        pi = pts.astype(int)
+                        unc = ~cover.cpu().numpy()[pi[:, 1], pi[:, 0]] if len(pts) else np.zeros(0, bool)
+                        _prompt_points(model, st, pts[unc], src[unc], H, W, keep, half, pad=compile_decoder)
                     proc.reset_all_prompts(st)
                     r = person_prompt(st)
                     for mk, sc in zip(r["masks"][:, 0].cpu().numpy().astype(bool), r["scores"].float().cpu().numpy()):
@@ -200,7 +266,7 @@ def run_gpu(run, cache, owner="R3_fusion"):
                 del keep, half
             nb = (H * W + 7) // 8
             np.savez_compressed(f"{cache}/cands.npz", masks=np.stack(allm) if allm else np.zeros((0, nb), np.uint8), frame=np.array(frame_idx),
-                                score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]))
+                                score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]), mode=np.array(mode))
             np.savez_compressed(f"{cache}/person.npz",
                                 masks=np.stack(pm) if pm else np.zeros((0, (H * W + 7) // 8), np.uint8),
                                 frame=np.array(pf, int), score=np.array(ps), shape=np.array([H, W]))

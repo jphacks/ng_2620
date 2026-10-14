@@ -11,6 +11,8 @@ Stages: prep (CPU) -> gpu_stage (MoGe-2 depth, class-agnostic SAM3 candidates, S
 
 The GPU stage and the evidence run through gpu_stage_fast / evidence_fast, which produce bit-identical caches and
 evidence with less time and VRAM (see their docstrings); --reference runs the frozen gpu_stage / evidence instead.
+By default the SAM3 point prompts are coarse-to-fine (--points c2f: ~2.8x fewer decoder calls, not bit-identical; same
+F1 pass count on dev 18 and the held-out test4, LEDGER 2026-10-14); --points full keeps the frozen grid.
 """
 import argparse
 import os
@@ -29,8 +31,9 @@ import evidence_fast  # noqa: E402
 import fusion  # noqa: E402
 
 
-def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False):
-    """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask})."""
+def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="c2f", compile_decoder=False):
+    """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
+    (ignored with reference=True)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
     t0 = time.time()
     run = Run(pipeline_out, name)
@@ -38,7 +41,10 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False):
     os.makedirs(cache, exist_ok=True)
     prep.prep(run, cache)
     t1 = time.time()
-    gs.run_gpu(run, cache, owner="fusion_v2")
+    if reference:
+        gs.run_gpu(run, cache, owner="fusion_v2")
+    else:
+        gs.run_gpu(run, cache, owner="fusion_v2", points=points, compile_decoder=compile_decoder)
     t2 = time.time()
     ev = evm.compute(run, cache)
     dec = fusion.decide(ev, fusion.P)
@@ -55,5 +61,9 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--name", default=None)
     ap.add_argument("--reference", action="store_true", help="run the frozen gpu_stage / evidence")
+    ap.add_argument("--points", choices=["full", "c2f"], default="c2f",
+                    help="SAM3 point prompts: coarse-to-fine (default; faster, not bit-identical) or the frozen grid")
+    ap.add_argument("--compile_decoder", action="store_true", help="torch.compile the SAM mask decoder")
     a = ap.parse_args()
-    run_fusion(a.pipeline_out, a.out, a.name, reference=a.reference)
+    run_fusion(a.pipeline_out, a.out, a.name, reference=a.reference, points=a.points,
+               compile_decoder=a.compile_decoder)
