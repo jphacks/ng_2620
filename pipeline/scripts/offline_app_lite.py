@@ -27,6 +27,9 @@ usage (repo root):
       [--avatar_out <dir>] then replace the targets with the VRM avatar (scripts/avatar_app.py, fusion v2 occlusion)
                            in a fresh process, so that none of this process's GPU memory is held
       [--vrm <file>]       avatar for --avatar_out (default: avatar_app.py's)
+      (the hand head always shares the body head's MHR model, and both heads run hmr_fast's sync-free code)
+      [--keep_rejected_hands] run the hand pass on every hand crop, as the original does (default: skip the crops
+                           run_inference rejects by box size anyway; see skip_rejected_hands)
 """
 import argparse
 import gc
@@ -44,6 +47,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import offline_app as oa  # noqa: E402  (sets sys.path for models/*)
 from utils.skip_init import skip_random_init  # noqa: E402
+import hmr_fast  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
 
 CAPTURE = {"detection": [], "hmr_batches": [], "faces": None, "timing": {}, "stages": {}}
@@ -91,6 +95,100 @@ class StagedFOV:
         finally:
             del est
             free_gpu()
+
+
+def share_mhr(model):
+    """Let the hand head use the body head's MHR body model instead of its own copy (0.65 GB).
+
+    The checkpoint stores the MHR twice (head_pose.mhr, head_pose_hand.mhr) with identical tensors (checked here on
+    every run, not assumed), and MHR is a stateless TorchScript module. MHR is not bitwise repeatable by itself; the
+    difference after sharing stays below its repeat-to-repeat difference (scripts/eval/check_share_mhr.py).
+    """
+    a, b = model.head_pose.mhr, model.head_pose_hand.mhr
+    ta = dict(a.named_parameters()) | dict(a.named_buffers())
+    tb = dict(b.named_parameters()) | dict(b.named_buffers())
+    if ta.keys() != tb.keys() or not all(torch.equal(ta[k], tb[k]) for k in ta):
+        print("[share_mhr] the two MHR copies differ; keeping both")
+        return
+    del ta, tb
+    model.head_pose_hand.mhr = a
+    del b
+    free_gpu()
+
+
+HAND_BOX_SIZE_THRESH = 64  # CRITERIA 2 in SAM3DBody.run_inference
+
+
+def skip_rejected_hands(model):
+    """Run the hand pass (backbone + hand decoder) only on crops whose result run_inference can use.
+
+    run_inference ANDs every hand's result with `bbox_scale > 64` (CRITERIA 2) before it touches the output: wrist IK,
+    hand pose/scale/shape and the keypoint prompts are all gated by hand_valid_mask. That test depends only on the hand
+    box from the body pass, so it is known before the hand pass. Rejected rows get zeros instead of a computed result.
+    On 3DPW / Penn clips 87-100% of hand crops are rejected (median padded box 16-48 px).
+
+    When every crop is rejected, the first such call runs one crop to learn the output layout; later ones only build
+    zeros from that template (one 1-crop hand pass costs ~0.25 s, almost all of it launch-bound MHR head work).
+    """
+    orig = model.forward_step
+    template = {}
+
+    def forward_step(batch, decoder_type="body", kps_batch=None):
+        if decoder_type != "hand" or kps_batch is not None:
+            return orig(batch, decoder_type, kps_batch)
+        B, P = batch["img"].shape[:2]
+        n = B * P
+        keep = (batch["bbox_scale"].flatten(0, 1) > HAND_BOX_SIZE_THRESH).all(dim=1)
+        if n == 1 or bool(keep.all()):
+            return orig(batch, decoder_type, kps_batch)
+        # The model keeps the batch layout from _initialize_batch (the body batch) as state; the hand batch shares it.
+        # The kept rows run as a (rows, 1 person) batch, the layout the model flattens (frame, person) batches to.
+        assert model._batch_size == B and (model._max_num_person or 1) == P, (batch["img"].shape, model._batch_size)
+        idx = keep.nonzero().flatten()
+        run_idx = idx if len(idx) else torch.zeros(1, dtype=torch.long, device=keep.device)
+        m = len(run_idx)
+
+        def scatter(v):
+            if isinstance(v, dict):
+                return {k: scatter(x) for k, x in v.items()}
+            if torch.is_tensor(v) and v.dim() >= 1 and v.shape[0] == m:
+                full = v.new_zeros((n, *v.shape[1:]))
+                if len(idx):
+                    full[idx.to(v.device)] = v
+                return full
+            return v.clone() if torch.is_tensor(v) else v  # the template is reused; callers edit outputs in place
+
+        if not len(idx) and "out" in template:
+            model.hand_batch_idx, model.body_batch_idx = list(range(n)), []  # as orig leaves them
+            return scatter(template["out"])
+
+        def sub(v):
+            if not torch.is_tensor(v) or v.dim() < 1:
+                return v
+            if v.dim() >= 2 and v.shape[:2] == (B, P):  # per (frame, person)
+                rows = v.reshape(n, 1, *v.shape[2:])
+            elif v.shape[0] == B:  # per frame (cam_int): one copy per person
+                rows = v.repeat_interleave(P, dim=0) if P > 1 else v
+            else:
+                return v
+            return rows[run_idx.to(v.device)]
+
+        state = model._batch_size, model._max_num_person, model._person_valid
+        model._batch_size = m
+        if state[1]:
+            model._max_num_person = 1
+        if state[2] is not None:
+            model._person_valid = state[2][run_idx.to(state[2].device)]
+        try:
+            out = orig({k: sub(v) for k, v in batch.items()}, decoder_type, kps_batch)
+        finally:
+            model._batch_size, model._max_num_person, model._person_valid = state
+        model.hand_batch_idx = list(range(n))
+        if not len(idx):  # keep the 1-row output; scatter() turns it into zeros for any n
+            template["out"] = torch.utils._pytree.tree_map(lambda v: v.clone() if torch.is_tensor(v) else v, out)
+        return scatter(out)
+
+    model.forward_step = forward_step
 
 
 def build_sam3_tracker(ckpt_path):
@@ -235,6 +333,10 @@ def inference_lite(args):
         app.sam3_3d_body_model = oa.SAM3DBodyEstimator(
             sam_3d_body_model=model, model_cfg=model_cfg, human_detector=None, human_segmentor=None,
             fov_estimator=StagedFOV(cfg.sam_3d_body["fov_path"], dev))
+        share_mhr(model)
+        hmr_fast.install(model)  # sync-free MHR head, bitwise identical (scripts/eval/check_hmr_fast.py)
+        if not getattr(args, "keep_rejected_hands", False):
+            skip_rejected_hands(model)
     app.RUNTIME["out_obj_ids"] = obj_ids
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
@@ -249,6 +351,7 @@ if __name__ == "__main__":
     p.add_argument("--offload_state", action="store_true")
     p.add_argument("--avatar_out", default=None)
     p.add_argument("--vrm", default=None)
+    p.add_argument("--keep_rejected_hands", action="store_true")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
