@@ -21,9 +21,12 @@ The frozen gpu_stage.py stays the reference; this module changes only where the 
      parameters and buffers verified identical by scripts/eval/check_skip_init.py).
 Verified identical to gpu_stage.run_gpu (frozen): scripts/eval/check_fusion_fast.py.
 """
+import contextlib
+import gc
 import math
 import os
 import sys
+import threading
 import time
 import types
 
@@ -131,15 +134,9 @@ def _predict_masks_shared(self, image_embeddings, image_pe, sparse_prompt_embedd
 
 
 def _mask_counts(m):
-    """Exact integer pixel counts without a full-resolution int64 temporary.
-
-    Each count is bounded by H*W. Keep the original int64 numpy interface and
-    fall back to int64 accumulation if a mask could overflow signed int32.
-    """
-    import torch
-    dtype = torch.int32 if m.shape[-2] * m.shape[-1] <= 2**31 - 1 else torch.int64
-    return torch.stack([(m > value).sum((1, 2), dtype=dtype)
-                        for value in (1.0, -1.0, 0.0)]).to(torch.int64).cpu().numpy()
+    """Exact integer counts; fuse the three comparisons when Triton is available."""
+    from mask_count_reduce import count_masks
+    return count_masks(m)
 
 
 def _predict_gpu(model, st, coords, labels):
@@ -229,6 +226,138 @@ def _cands_mode(points, compile_decoder):
     return points + ("+compile" if compile_decoder else "")
 
 
+def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0):
+    """SAM3 point-prompt candidates and person masks -> cands.npz, person.npz."""
+    import torch
+    T, H, W = len(run), run.H, run.W
+    sys.path.insert(0, f"{REPO}/models/sam3")
+    from PIL import Image
+    from sam3.model_builder import build_sam3_image_model
+    from sam3.model.sam3_image_processor import Sam3Processor
+    with skip_random_init():
+        model = build_sam3_image_model(checkpoint_path="C:/VScodeFiles/checkpoints/sam3/sam3.pt",
+                                       load_from_HF=False, enable_inst_interactivity=True)
+    # Keep POINT_BATCH and all arithmetic unchanged; broadcast the shared
+    # image/position inputs instead of copying them for each point.
+    model.inst_interactive_predictor.model.sam_mask_decoder.expand_image_embeddings = True
+    dec = model.inst_interactive_predictor.model.sam_mask_decoder
+    dec.predict_masks = types.MethodType(_predict_masks_shared, dec)   # same values, image side once
+    if compile_decoder:   # fixed shapes: every batch is padded to POINT_BATCH points (_prompt_points)
+        dec.forward = torch.compile(dec.forward, dynamic=False)
+    proc = Sam3Processor(model, confidence_threshold=0.3)
+    with torch.autocast("cuda", dtype=torch.bfloat16), torch.inference_mode():
+        text_person = model.backbone.forward_text(["person"], device=proc.device)
+    model.backbone.language_backbone.to("cpu")
+    # SAM3 holds an outer autocast context open. Moving the encoder to CPU
+    # does not release its cached BF16 weights; the saved text features
+    # remain valid after clearing these unused weight copies.
+    torch.clear_autocast_cache()
+    torch.cuda.empty_cache()
+
+    @torch.inference_mode()
+    def person_prompt(state):
+        """Sam3Processor.set_text_prompt("person", state) with the text encoding computed once."""
+        state["backbone_out"].update(text_person)
+        if "geometric_prompt" not in state:
+            state["geometric_prompt"] = model._get_dummy_prompt()
+        return proc._forward_grounding(state)
+    allm, frame_idx, scores, inV = [], [], [], []
+    pm, pf, ps = [], [], []
+    for i in range(T):
+        img = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
+        lab = run.mask(i)
+        sil = sils[i]
+        region = cv2.dilate(sil.astype(np.uint8), np.ones((2 * DIL + 1,) * 2, np.uint8)) > 0
+        V = lab > 0
+        Vd = cv2.dilate(V.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+        inner = sil & ~Vd
+        inv = sil & V & ~(cv2.dilate((~V).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0)
+        pts_in = grid_points(inner, STRIDE_IN)
+        pts_v = grid_points(inv, STRIDE_V, off=2)
+        pts_o = grid_points(region & ~sil & ~Vd, STRIDE_OUT)
+        pts = np.concatenate([pts_in, pts_o, pts_v])
+        src = np.concatenate([np.zeros(len(pts_in) + len(pts_o), bool), np.ones(len(pts_v), bool)])
+        keep = []   # (score, CPU bool mask, from_visible), same order as the frozen list
+        half = []   # 2x-downsampled masks on the GPU, for dedup
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            st = proc.set_image(Image.fromarray(img))
+            if points == "full":
+                _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
+            else:
+                # coarse grid first; then only the fine points that no passing coarse mask covers
+                c_in, c_o = grid_points(inner, C2F_STRIDE), grid_points(region & ~sil & ~Vd, C2F_STRIDE)
+                c_v = grid_points(inv, C2F_STRIDE, off=2)
+                cp = np.concatenate([c_in, c_o, c_v])
+                csrc = np.concatenate([np.zeros(len(c_in) + len(c_o), bool), np.ones(len(c_v), bool)])
+                cover = torch.zeros((H, W), dtype=torch.bool, device="cuda")
+                _prompt_points(model, st, cp, csrc, H, W, keep, half, cover=cover, pad=compile_decoder)
+                pi = pts.astype(int)
+                unc = ~cover.cpu().numpy()[pi[:, 1], pi[:, 0]] if len(pts) else np.zeros(0, bool)
+                _prompt_points(model, st, pts[unc], src[unc], H, W, keep, half, pad=compile_decoder)
+            proc.reset_all_prompts(st)
+            r = person_prompt(st)
+            for mk, sc in zip(r["masks"][:, 0].cpu().numpy().astype(bool), r["scores"].float().cpu().numpy()):
+                pm.append(np.packbits(mk.reshape(-1)))
+                pf.append(i)
+                ps.append(float(sc))
+        order = sorted(range(len(keep)), key=lambda j: -keep[j][0])   # = frozen keep.sort (stable)
+        keep = [keep[j] for j in order]
+        half = [half[j] for j in order]
+        sel = _dedup_gpu(keep, half)
+        for j in sel:
+            allm.append(np.packbits(keep[j][1].reshape(-1)))
+            frame_idx.append(i)
+            scores.append(keep[j][0])
+            inV.append(keep[j][2])
+        if i % 10 == 0:
+            print(run.name, i, "pts", len(pts), "raw", len(keep), "kept", len(sel),
+                  round(time.time() - t0, 1), flush=True)
+        # r aliases st, including this image's backbone features. Both
+        # must be released before set_image allocates the next state.
+        # All retained candidates/person masks above are CPU arrays.
+        del keep, half, st, r
+    nb = (H * W + 7) // 8
+    np.savez_compressed(f"{cache}/cands.npz", masks=np.stack(allm) if allm else np.zeros((0, nb), np.uint8), frame=np.array(frame_idx),
+                        score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]), mode=np.array(mode))
+    np.savez_compressed(f"{cache}/person.npz",
+                        masks=np.stack(pm) if pm else np.zeros((0, (H * W + 7) // 8), np.uint8),
+                        frame=np.array(pf, int), score=np.array(ps), shape=np.array([H, W]))
+    del model, proc, dec, text_person
+    # The bound predict_masks method forms a decoder self-cycle. Also
+    # release BF16 weight copies held by SAM3's outer autocast context
+    # before the following CPU/avatar stages. No per-frame cache flush.
+    gc.collect()
+    torch.clear_autocast_cache()
+    torch.cuda.empty_cache()
+
+
+def _save_moge(path, Z, fov_x):
+    """np.savez_compressed(path, ...) through a temporary name, so an interrupted save never looks like a cache."""
+    tmp = path + ".part"
+    with open(tmp, "wb") as f:
+        np.savez_compressed(f, Z=Z, fov_x=fov_x, masked=True)
+    os.replace(tmp, path)
+
+
+@contextlib.contextmanager
+def _vram_cap(margin=0.5 * 2**30):
+    """Cap PyTorch's CUDA memory at what the GPU physically has free for this process.
+
+    Each prompt batch has its own size, so the caching allocator keeps reserving new segments (example1, 854x480:
+    6.2 GB allocated, >14 GB reserved on a 12 GB card). Windows' driver backs the excess with system memory, and every
+    decoder batch that lands there runs 5-10x slower (a 88-point batch: 90 ms -> 0.6-1 s). Under the cap the
+    allocator frees its unused cached blocks and retries instead. Where memory is allocated does not change what is
+    computed: outputs are bit-identical (check_fusion_fast.py)."""
+    import torch
+    free, total = torch.cuda.mem_get_info()
+    frac = (free + torch.cuda.memory_reserved() - margin) / total
+    torch.cuda.set_per_process_memory_fraction(min(1.0, max(frac, 0.1)))
+    try:
+        yield
+    finally:
+        torch.cuda.set_per_process_memory_fraction(1.0)
+
+
 def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False):
     """points: "full" = the frozen point grid (bit-identical to gpu_stage); "c2f" = coarse-to-fine (see
     _c2f_points; not bit-identical, same F1 pass count on dev 18 and held-out test4, LEDGER 2026-10-14).
@@ -258,11 +387,15 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
     sils = [(D[i] > 0).any(0) for i in range(T)]
     del D
     t0 = time.time()
+    saver = None
     with local_gpu(owner):
         if not os.path.exists(f"{cache}/moge.npz"):
             from moge.model.v2 import MoGeModel
             with skip_random_init():
                 moge = MoGeModel.from_pretrained("C:/VScodeFiles/checkpoints/moge-2-vitl-normal/model.pt").cuda().eval()
+            # Only points and mask are used. MoGe's forward skips a head the model lacks, and the normal head reads
+            # the shared neck features without writing to them: the other outputs are unchanged (~10% of a frame).
+            del moge.normal_head
             f = next(run.focal(p, i) for i in range(T) for p in run.pids if run.focal(p, i))
             fov_x = math.degrees(2 * math.atan(W / 2 / f))
             Z = np.zeros((T, H, W), np.float32)
@@ -275,100 +408,30 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
                 z[~np.isfinite(z)] = 0
                 z[~o["mask"].cpu().numpy().astype(bool)] = 0
                 Z[i] = z
-            np.savez_compressed(f"{cache}/moge.npz", Z=Z, fov_x=fov_x, masked=True)
+                # Z now owns the CPU result; the input and other GPU outputs
+                # must not survive into the next image or the SAM3 stage.
+                del o, t
+            # The same file, compressed in a thread while SAM3 runs (4.4 s per 100 frames at 854x480); joined below.
+            saver = threading.Thread(target=_save_moge, args=(f"{cache}/moge.npz", Z, fov_x))
+            saver.start()
             del moge
             torch.cuda.empty_cache()
             print(run.name, "moge", round(time.time() - t0, 1), flush=True)
         if not os.path.exists(f"{cache}/cands.npz"):
-            sys.path.insert(0, f"{REPO}/models/sam3")
-            from PIL import Image
-            from sam3.model_builder import build_sam3_image_model
-            from sam3.model.sam3_image_processor import Sam3Processor
-            with skip_random_init():
-                model = build_sam3_image_model(checkpoint_path="C:/VScodeFiles/checkpoints/sam3/sam3.pt",
-                                               load_from_HF=False, enable_inst_interactivity=True)
-            # Keep POINT_BATCH and all arithmetic unchanged; broadcast the shared
-            # image/position inputs instead of copying them for each point.
-            model.inst_interactive_predictor.model.sam_mask_decoder.expand_image_embeddings = True
-            dec = model.inst_interactive_predictor.model.sam_mask_decoder
-            dec.predict_masks = types.MethodType(_predict_masks_shared, dec)   # same values, image side once
-            if compile_decoder:   # fixed shapes: every batch is padded to POINT_BATCH points (_prompt_points)
-                dec.forward = torch.compile(dec.forward, dynamic=False)
-            proc = Sam3Processor(model, confidence_threshold=0.3)
-            with torch.autocast("cuda", dtype=torch.bfloat16), torch.inference_mode():
-                text_person = model.backbone.forward_text(["person"], device=proc.device)
-            model.backbone.language_backbone.to("cpu")
-            # SAM3 holds an outer autocast context open. Moving the encoder to CPU
-            # does not release its cached BF16 weights; the saved text features
-            # remain valid after clearing these unused weight copies.
-            torch.clear_autocast_cache()
-            torch.cuda.empty_cache()
-
-            @torch.inference_mode()
-            def person_prompt(state):
-                """Sam3Processor.set_text_prompt("person", state) with the text encoding computed once."""
-                state["backbone_out"].update(text_person)
-                if "geometric_prompt" not in state:
-                    state["geometric_prompt"] = model._get_dummy_prompt()
-                return proc._forward_grounding(state)
-            allm, frame_idx, scores, inV = [], [], [], []
-            pm, pf, ps = [], [], []
-            for i in range(T):
-                img = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
-                lab = run.mask(i)
-                sil = sils[i]
-                region = cv2.dilate(sil.astype(np.uint8), np.ones((2 * DIL + 1,) * 2, np.uint8)) > 0
-                V = lab > 0
-                Vd = cv2.dilate(V.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
-                inner = sil & ~Vd
-                inv = sil & V & ~(cv2.dilate((~V).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0)
-                pts_in = grid_points(inner, STRIDE_IN)
-                pts_v = grid_points(inv, STRIDE_V, off=2)
-                pts_o = grid_points(region & ~sil & ~Vd, STRIDE_OUT)
-                pts = np.concatenate([pts_in, pts_o, pts_v])
-                src = np.concatenate([np.zeros(len(pts_in) + len(pts_o), bool), np.ones(len(pts_v), bool)])
-                keep = []   # (score, CPU bool mask, from_visible), same order as the frozen list
-                half = []   # 2x-downsampled masks on the GPU, for dedup
-                with torch.autocast("cuda", dtype=torch.bfloat16):
-                    st = proc.set_image(Image.fromarray(img))
-                    if points == "full":
-                        _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
-                    else:
-                        # coarse grid first; then only the fine points that no passing coarse mask covers
-                        c_in, c_o = grid_points(inner, C2F_STRIDE), grid_points(region & ~sil & ~Vd, C2F_STRIDE)
-                        c_v = grid_points(inv, C2F_STRIDE, off=2)
-                        cp = np.concatenate([c_in, c_o, c_v])
-                        csrc = np.concatenate([np.zeros(len(c_in) + len(c_o), bool), np.ones(len(c_v), bool)])
-                        cover = torch.zeros((H, W), dtype=torch.bool, device="cuda")
-                        _prompt_points(model, st, cp, csrc, H, W, keep, half, cover=cover, pad=compile_decoder)
-                        pi = pts.astype(int)
-                        unc = ~cover.cpu().numpy()[pi[:, 1], pi[:, 0]] if len(pts) else np.zeros(0, bool)
-                        _prompt_points(model, st, pts[unc], src[unc], H, W, keep, half, pad=compile_decoder)
-                    proc.reset_all_prompts(st)
-                    r = person_prompt(st)
-                    for mk, sc in zip(r["masks"][:, 0].cpu().numpy().astype(bool), r["scores"].float().cpu().numpy()):
-                        pm.append(np.packbits(mk.reshape(-1)))
-                        pf.append(i)
-                        ps.append(float(sc))
-                order = sorted(range(len(keep)), key=lambda j: -keep[j][0])   # = frozen keep.sort (stable)
-                keep = [keep[j] for j in order]
-                half = [half[j] for j in order]
-                sel = _dedup_gpu(keep, half)
-                for j in sel:
-                    allm.append(np.packbits(keep[j][1].reshape(-1)))
-                    frame_idx.append(i)
-                    scores.append(keep[j][0])
-                    inV.append(keep[j][2])
-                if i % 10 == 0:
-                    print(run.name, i, "pts", len(pts), "raw", len(keep), "kept", len(sel),
-                          round(time.time() - t0, 1), flush=True)
-                del keep, half
-            nb = (H * W + 7) // 8
-            np.savez_compressed(f"{cache}/cands.npz", masks=np.stack(allm) if allm else np.zeros((0, nb), np.uint8), frame=np.array(frame_idx),
-                                score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]), mode=np.array(mode))
-            np.savez_compressed(f"{cache}/person.npz",
-                                masks=np.stack(pm) if pm else np.zeros((0, (H * W + 7) // 8), np.uint8),
-                                frame=np.array(pf, int), score=np.array(ps), shape=np.array([H, W]))
-            del model, proc
-            torch.cuda.empty_cache()
+            over = False
+            try:
+                with _vram_cap():
+                    _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0)
+            except torch.cuda.OutOfMemoryError:
+                over = True
+            if over:   # outside the except: its traceback no longer holds the failed attempt's tensors
+                # the cap only makes the allocator release its cache sooner; a frame that needs more than the cap
+                # runs uncapped (as before: slower, through the driver's system-memory fallback, same results)
+                gc.collect()
+                torch.clear_autocast_cache()
+                torch.cuda.empty_cache()
+                print(run.name, "SAM3 stage over the VRAM cap: rerun without it", flush=True)
+                _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0)
+        if saver is not None:
+            saver.join()
     print(run.name, "gpu stage", round(time.time() - t0, 1), "s", flush=True)
