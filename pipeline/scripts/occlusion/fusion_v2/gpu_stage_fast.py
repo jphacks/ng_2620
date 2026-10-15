@@ -195,13 +195,14 @@ C2F_STRIDE = 16   # coarse grid of the "c2f" mode, in every region
 def _prompt_points(model, st, pts, src, H, W, keep, half, cover=None, pad=False):
     """The frozen per-batch prompt + filter, appending (score, CPU bool mask, from_visible) to keep and the 2x
     downsampled GPU masks to half. cover (GPU bool H x W): OR-ed with every mask that passes the filter.
-    pad: repeat the last point up to POINT_BATCH (fixed shapes for the compiled decoder; the extra outputs are dropped)."""
+    pad: repeat the last point up to a multiple of 32 (fixed shapes for the compiled decoder; the extra outputs are
+    dropped)."""
     import torch
     for s in range(0, len(pts), POINT_BATCH):
         c = pts[s:s + POINT_BATCH]
         n = len(c)
-        if pad and n < POINT_BATCH:
-            c = np.concatenate([c, np.repeat(c[-1:], POINT_BATCH - n, 0)])
+        if pad and n % 32:   # sizes 32/64/96/128: four compiled graphs, not one per batch size
+            c = np.concatenate([c, np.repeat(c[-1:], 32 - n % 32, 0)])
         with torch.no_grad():
             m, iou = _predict_gpu(model, st, c[:, None, :], np.ones((len(c), 1)))
             m, iou = m[:3 * n], iou[:3 * n]

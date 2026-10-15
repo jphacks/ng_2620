@@ -33,7 +33,7 @@ import fusion  # noqa: E402
 import shared_cache  # noqa: E402
 
 
-def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="c2f", compile_decoder=False):
+def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="c2f", compile_decoder=True):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
     (ignored with reference=True)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
@@ -67,7 +67,8 @@ if __name__ == "__main__":
     ap.add_argument("--reference", action="store_true", help="run the frozen gpu_stage / evidence")
     ap.add_argument("--points", choices=["full", "c2f"], default="c2f",
                     help="SAM3 point prompts: coarse-to-fine (default; faster, not bit-identical) or the frozen grid")
-    ap.add_argument("--compile_decoder", action="store_true", help="torch.compile the SAM mask decoder")
+    ap.add_argument("--no_compile_decoder", dest="compile_decoder", action="store_false",
+                    help="eager SAM mask decoder (the default torch.compiles it; not bit-identical)")
     a = ap.parse_args()
     run_fusion(a.pipeline_out, a.out, a.name, reference=a.reference, points=a.points,
                compile_decoder=a.compile_decoder)
