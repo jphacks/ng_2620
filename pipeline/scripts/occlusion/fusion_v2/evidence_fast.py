@@ -24,6 +24,7 @@ from evidence import (DV, DV_MIN, K3, LINK_GAP, LINK_IOU, REFINE_DEPTH, load_per
                       refine_visible, robust_scale, sandwiched)
 from gpu_stage import load_cands  # noqa: E402
 from prep import load  # noqa: E402
+from shared_cache import moge_z  # noqa: E402
 
 
 def link(masks, fr):
@@ -36,8 +37,11 @@ def link(masks, fr):
             par[x] = par[par[x]]
             x = par[x]
         return x
-    flat = masks.reshape(n, -1)
-    area = flat.sum(1).astype(np.float32)
+    if hasattr(masks, "rows"):   # shared_cache.PackedMasks: unpack one frame's rows at a time, same values
+        rows, area = masks.rows, masks.areas().astype(np.float32)
+    else:
+        flat = masks.reshape(n, -1)
+        rows, area = flat.__getitem__, flat.sum(1).astype(np.float32)
     T = int(fr.max()) + 1 if n else 0
     try:
         import torch
@@ -51,7 +55,7 @@ def link(masks, fr):
 
         def mat(t):
             if t not in cache:
-                cache[t] = torch.from_numpy(flat[idx[t]]).to(dev).float() if dev else flat[idx[t]].astype(np.float32)
+                cache[t] = torch.from_numpy(rows(idx[t])).to(dev).float() if dev else rows(idx[t]).astype(np.float32)
             return cache[t]
         for t in range(T - g):
             A, B = idx[t], idx[t + g]
@@ -72,6 +76,28 @@ def link(masks, fr):
     return np.array([f(x) for x in range(n)])
 
 
+def _out_entry(v):
+    """evidence.compute's output form of one per[(i, p)] entry."""
+    return dict(s=v["s"], sig=v["sig"], dv=v["dv"], Marea=v["Marea"], Varea=v["Varea"], parts=v["parts"],
+                A=np.packbits(v["A"]), E0=np.packbits(v["E0"]), V=np.packbits(v["V"]))
+
+
+class _PersonDets:
+    """evidence.load_person_dets(cache, T, H, W) with each frame's masks unpacked when that frame is read (the
+    frozen loader unpacks every 'person' mask up front: ~27,000 full-frame bool arrays for a 5-minute clip)."""
+
+    def __init__(self, cache, T, H, W):
+        self.H, self.W = H, W
+        self.rows = [[] for _ in range(T)]
+        if os.path.exists(f"{cache}/person.npz"):
+            with np.load(f"{cache}/person.npz") as d:
+                for row, f in zip(d["masks"], d["frame"]):
+                    self.rows[int(f)].append(row)
+
+    def __getitem__(self, i):
+        return [np.unpackbits(row)[:self.H * self.W].reshape(self.H, self.W).astype(bool) for row in self.rows[i]]
+
+
 def _bbox(C, margin, H, W):
     rows, cols = np.nonzero(C.any(1))[0], np.nonzero(C.any(0))[0]
     if len(rows) == 0:
@@ -86,11 +112,11 @@ def compute(run, cache):
         return pickle.load(open(p_out, "rb"))
     c = load(cache)
     D_all, L, pids, has, foc = c["D"], c["L"], list(c["pids"]), c["has"], c["foc"]
-    Zall = np.load(f"{cache}/moge.npz")["Z"]
+    Zall = moge_z(cache)
     masks, fr, score, inV = load_cands(cache)
     track = link(masks, fr) if len(masks) else np.zeros(0, int)
     T, H, W = L.shape
-    dets = load_person_dets(cache, T, H, W)
+    dets = _PersonDets(cache, T, H, W)
     Vr_all = {}
     per = {}
     units = []
@@ -98,6 +124,7 @@ def compute(run, cache):
         Zm = Zall[i].astype(np.float32)
         lab = L[i]
         Vr = refine_visible(lab, pids, dets[i])
+        done = [(i, p) for p in pids]   # packed into their output form at the end of this frame (see below)
         for q in pids:
             Vr_all[(i, q)] = np.packbits(Vr[q])
         Dz = {}
@@ -192,8 +219,11 @@ def compute(run, cache):
                                       ncoreO=int((core & ~V).sum()), ncoreI=int((core & V).sum()),
                                       other=max([ov_people[q] for q in pids if q != p], default=0) / carea,
                                       inV=civ, score=csc, person=qperson, mdq=mdq, nvalO=nvalO))
-    out = dict(per={k: dict(s=v["s"], sig=v["sig"], dv=v["dv"], Marea=v["Marea"], Varea=v["Varea"],
-                            parts=v["parts"], A=np.packbits(v["A"]), E0=np.packbits(v["E0"]), V=np.packbits(v["V"]))
-                    for k, v in per.items()}, Vr=Vr_all, units=units, track=track, pids=pids, T=T, H=H, W=W)
+        # no later frame reads this frame's per entries: pack them now (the same dicts the frozen code builds after
+        # the loop), so the full-frame V / A / E0 arrays of every frame are not all alive at once
+        for k in done:
+            if k in per:
+                per[k] = _out_entry(per[k])
+    out = dict(per=per, Vr=Vr_all, units=units, track=track, pids=pids, T=T, H=H, W=W)
     pickle.dump(out, open(p_out, "wb"))
     return out

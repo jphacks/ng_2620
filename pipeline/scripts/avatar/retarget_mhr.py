@@ -112,6 +112,7 @@ class MhrToVrm:
         floor_y = float(z["floor_y"])                      # rest soles
         self.parent = {c: i for i, n in enumerate(model.nodes) for c in n.get("children", [])}
         self.order = _topo(model.nodes)
+        self._ik_update_nodes = {}
         self.rest = model.rest_globals()                    # (N,4,4) glTF
         hb = model.humanoid
         # which way does the VRM face? (toes in front of the feet) -> glTF->MHR rotation
@@ -159,7 +160,8 @@ class MhrToVrm:
             sole_y = (self.rest[f] @ q)[1] if q is not None else 0.0
             vh.append(self.prest[f][1] - sole_y)
         self.vrm_ankle_h = float(np.mean(vh))
-        ys = np.concatenate([self.m.skin_primitive(p, self.rest)[0][:, 1] for p in self.m.prims])
+        ys = np.concatenate([self.m.skin_primitive(p, self.rest, compute_normals=False)[0][:, 1]
+                             for p in self.m.prims])
         self.height_m = float(ys.max() - ys.min())       # rest mesh height at scale 1
         self.vrm_leg = float(np.mean(vleg) + self.vrm_ankle_h)
 
@@ -205,7 +207,8 @@ class MhrToVrm:
     def solve(self, G, coords_cam, scale, arm_ik=True, leg_ik=True, reach=0.995):
         """One frame: -> (node globals (N,4,4) glTF, translation t, {limb: end-effector error before IK [m]})."""
         T = self.targets(np.asarray(G, np.float32))
-        g = self.m.global_matrices(self.locals_(T))
+        loc = self.locals_(T)
+        g = self.m.global_matrices(loc)
         t = self.placement(g, scale, coords_cam)
         err = {}
         limbs = ([("arm", s, "upper_arm", "lower_arm", "hand", "hand") for s in ("left", "right")] * bool(arm_ik)
@@ -224,8 +227,40 @@ class MhrToVrm:
             r = self.two_bone_ik(T, g, side, (u, l, e), (S_CAM @ (w - t)) / scale, reach)
             if r is not None:
                 err[f"{side}_{kind}"] = r * scale
-                g = self.m.global_matrices(self.locals_(T))
+                changed = tuple(self.m.humanoid[f"{side}_{b}"] for b in (u, l))
+                self._update_ik_globals(T, loc, g, changed)
         return g, t, err
+
+    def _update_ik_globals(self, T, loc, g, changed):
+        """IK changes two target rotations. Recompute their dependent nodes only.
+
+        Local rotations depend on T[node] and T[parent], so only the changed
+        nodes and their immediate children need new locals. Global matrices must
+        still be recomputed for ALL descendants, preserving rounding and the
+        original parent-to-child matrix multiplication order. Nothing is reused
+        across frames; only the static dependency lists are cached.
+        """
+        if changed not in self._ik_update_nodes:
+            roots = set(changed)
+            affected = set(roots)
+            local_nodes, global_nodes = [], []
+            for i in self.order:
+                p = self.parent.get(i)
+                if i in roots or p in roots:
+                    local_nodes.append(i)
+                if i in affected or p in affected:
+                    affected.add(i)
+                    global_nodes.append(i)
+            self._ik_update_nodes[changed] = local_nodes, global_nodes
+        local_nodes, global_nodes = self._ik_update_nodes[changed]
+        for i in local_nodes:
+            p = self.parent.get(i)
+            Lm = T[i] if p is None else T[p].T @ T[i]
+            loc[i] = self.RY.T @ Lm @ self.RY
+        for i in global_nodes:
+            local = self.m.local_matrix(i, loc)
+            p = self.parent.get(i)
+            g[i] = local if p is None else g[p] @ local
 
     def two_bone_ik(self, T, g, side, bones, target, reach=0.995):
         """2-bone IK, virtual-vlog retarget.VrmRetargeter.apply_arm_ik / apply_leg_ik: rotate the middle joint in
@@ -282,7 +317,7 @@ class MhrToVrm:
                 v = ((p.joints == col[0]) * p.weights).max(1) > 0.5
                 if v.sum() < 5:
                     continue
-                P, _ = self.m.skin_primitive(p, self.rest)
+                P, _ = self.m.skin_primitive(p, self.rest, compute_normals=False)
                 y = P[v][:, 1]
                 k = int(np.argmin(y))
                 if best is None or y[k] < best[0]:

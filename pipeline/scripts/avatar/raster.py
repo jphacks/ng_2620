@@ -118,10 +118,50 @@ class Rasterizer:
                 self.prog["tex"].value = 0
             mesh["vao"].render(self.mgl.TRIANGLES)
 
+    def render_box(self, meshes, mvp, box):
+        """render() read back only inside box = (x0, y0, x1, y1) in supersampled pixels, top-left origin (the
+        drawing is the same: the full frame is rasterised). -> (rgba uint8, depth float32) of the box."""
+        x0, y0, x1, y1 = box
+        self._draw_all(meshes, mvp)
+        vp = (x0, self.RH - y1, x1 - x0, y1 - y0)
+        img = np.frombuffer(self.fbo.read(viewport=vp, components=4, dtype="f1"), np.uint8).reshape(y1 - y0, x1 - x0, 4)
+        d = np.frombuffer(self.fbo.read(viewport=vp, components=1, attachment=-1, dtype="f4"),
+                          np.float32).reshape(y1 - y0, x1 - x0)
+        return self._readback(img, d)
+
+    def render_box_gpu(self, meshes, mvp, box, dev):
+        """render_box with the depth conversion and the flip done on the GPU (torch): -> (rgba uint8, depth
+        float32) tensors on dev. The same float32 expression as _readback."""
+        import torch
+        x0, y0, x1, y1 = box
+        self._draw_all(meshes, mvp)
+        vp = (x0, self.RH - y1, x1 - x0, y1 - y0)
+        img = torch.frombuffer(bytearray(self.fbo.read(viewport=vp, components=4, dtype="f1")), dtype=torch.uint8)
+        d = torch.frombuffer(bytearray(self.fbo.read(viewport=vp, components=1, attachment=-1, dtype="f4")),
+                             dtype=torch.float32)
+        img = img.to(dev).reshape(y1 - y0, x1 - x0, 4).flip(0)
+        d = d.to(dev).reshape(y1 - y0, x1 - x0).flip(0)
+        n, f = np.float32(self.near), np.float32(self.far)
+        z = (2.0 * n * f) / ((f + n) - (2.0 * d - 1.0) * (f - n))
+        return img, torch.where(d < 1.0, z, torch.full_like(z, float("inf")))
+
+    def _readback(self, img, d):
+        n, f = self.near, self.far
+        z = 2.0 * n * f / (f + n - (2.0 * d - 1.0) * (f - n))      # window depth -> eye distance along the axis
+        z = np.where(d < 1.0, z, np.inf).astype(np.float32)
+        return np.ascontiguousarray(img[::-1]), np.ascontiguousarray(z[::-1])
+
     def render(self, meshes, mvp, native=True):
         """-> (rgba uint8 (H,W,4), depth float32 (H,W) camera Z in metres, inf where nothing is drawn).
         native=False returns the supersampled buffers (H*ssaa, W*ssaa) instead, for compositing several avatars
         before the downsample (per-pixel depth order at native resolution aliases where two avatars intersect)."""
+        self._draw_all(meshes, mvp)
+        img = np.frombuffer(self.fbo.read(components=4, dtype="f1"), np.uint8).reshape(self.RH, self.RW, 4)
+        d = np.frombuffer(self.depth.read(), np.float32).reshape(self.RH, self.RW)
+        img, z = self._readback(img, d)
+        return self.downsample(img, z) if native else (img, z)
+
+    def _draw_all(self, meshes, mvp):
         self.fbo.use()
         self.ctx.clear(0, 0, 0, 0, depth=1.0)
         self.ctx.enable(self.mgl.DEPTH_TEST)
@@ -139,14 +179,6 @@ class Rasterizer:
             self._draw(blend)
             self.ctx.depth_mask = True
             self.ctx.disable(self.mgl.BLEND)
-
-        img = np.frombuffer(self.fbo.read(components=4, dtype="f1"), np.uint8).reshape(self.RH, self.RW, 4)
-        d = np.frombuffer(self.depth.read(), np.float32).reshape(self.RH, self.RW)
-        n, f = self.near, self.far
-        z = 2.0 * n * f / (f + n - (2.0 * d - 1.0) * (f - n))      # window depth -> eye distance along the axis
-        z = np.where(d < 1.0, z, np.inf).astype(np.float32)
-        img, z = np.ascontiguousarray(img[::-1]), np.ascontiguousarray(z[::-1])
-        return self.downsample(img, z) if native else (img, z)
 
     def downsample(self, img, z):
         """Supersampled (rgba, depth) -> native: area average of the colour, nearest surface of the depth."""

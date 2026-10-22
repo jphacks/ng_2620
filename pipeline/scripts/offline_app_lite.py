@@ -24,14 +24,26 @@ usage (repo root):
   .venv/Scripts/python.exe -u scripts/offline_app_lite.py --input_video <frames dir | .mp4> --output_dir <dir>
       [--capture <pkl>]   per-frame HMR outputs + stage timings, same format as scripts/eval/run_profiled.py
       [--offload_state]   keep SAM3's per-frame tracking memory on CPU (long videos)
+      [--preload_frames]  SAM3's original frame loading: every frame as 1008x1008 float32 in RAM up front (21.9 GB
+                           for 1800 frames). Default: rebuilt per access from the JPEG bytes, bit-identical
+                           (utils/lazy_frames.py, scripts/eval/check_lazy_frames.py)
+      [--keep_tracker_memory] keep every tracked frame's SAM3 output (+3.9 GB VRAM per 1800 frames). Default: drop
+                           the ones no later frame can select (utils/tracker_prune.py; masks bit-identical)
       [--avatar_out <dir>] then replace the targets with the VRM avatar (scripts/avatar_app.py, fusion v2 occlusion)
-                           in a fresh process, so that none of this process's GPU memory is held
+                           in a fresh process, after releasing this process's cached CUDA tensors and allocations
       [--vrm <file>]       avatar for --avatar_out (default: avatar_app.py's)
+      [--avatar_hq]        --avatar_out at the input video's own quality (avatar_app.py --hq)
+      [--compile_backbone] torch.compile the HMR backbone (faster HMR; not bit-identical to eager)
       (the hand head always shares the body head's MHR model, and both heads run hmr_fast's sync-free code)
+      [--hmr_input_size N] HMR crop size (multiple of 16; default 384, trained at 512). On 11 3DPW clips 384 vs 512:
+                           PA-MPJPE 35.27 vs 35.27 mm, MPJPE 57.81 vs 55.62 mm, hmr_4d -19% (testdata/2026-10-14/res_eval2,
+                           scripts/eval/gt_3dpw_hmr.py). Pass 512 for the original model input.
+      [--save_workers N]   threads saving meshes / overlays while HMR runs (default 2; GL drawing stays on one thread)
       [--keep_rejected_hands] run the hand pass on every hand crop, as the original does (default: skip the crops
                            run_inference rejects by box size anyway; see skip_rejected_hands)
 """
 import argparse
+import contextlib
 import gc
 import glob
 import os
@@ -47,14 +59,35 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import offline_app as oa  # noqa: E402  (sets sys.path for models/*)
 from utils.skip_init import skip_random_init  # noqa: E402
+from utils.bf16_weights import bf16_weights  # noqa: E402
+from utils import vitdet_attn  # noqa: E402
+from utils.stream_blocks import stream_blocks  # noqa: E402
+from utils.compile_cache import use_persistent_compile_cache  # noqa: E402
+from utils.lazy_frames import lazy_jpeg_frames  # noqa: E402
+from utils.tracker_prune import prune_propagation  # noqa: E402
 import hmr_fast  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
 
 CAPTURE = {"detection": [], "hmr_batches": [], "faces": None, "timing": {}, "stages": {}}
 
 
+def install_pruned_propagation(predictor):
+    """predictor.propagate_in_video through utils.tracker_prune.prune_propagation (an instance attribute; remove it
+    after the propagation so the tracker can be freed)."""
+    full = type(predictor).propagate_in_video
+
+    def pruned(inference_state, *a, **k):
+        return prune_propagation(predictor, inference_state, full(predictor, inference_state, *a, **k),
+                                 reverse=k.get("reverse", False))
+    predictor.propagate_in_video = pruned
+
+
 def free_gpu():
     gc.collect()
+    # SAM3's builder leaves a bf16 autocast open for the whole process, and autocast keeps its bf16 weight copies
+    # until that region exits: without this the freed SAM3 tracker's copies (0.9 GB) stay on the GPU through HMR.
+    # Dropping them only means a later cast is redone, with the same values.
+    torch.clear_autocast_cache()
     torch.cuda.empty_cache()
 
 
@@ -67,6 +100,7 @@ class Stage:
     def __enter__(self):
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
+        self.start = torch.cuda.memory_allocated() / 1024 ** 3
         self.t0 = time.perf_counter()
         return self
 
@@ -76,7 +110,8 @@ class Stage:
         peak = torch.cuda.max_memory_allocated() / 1024 ** 3
         res = torch.cuda.max_memory_reserved() / 1024 ** 3
         CAPTURE["stages"][self.name] = dict(time_s=dt, peak_alloc_GB=peak, peak_reserved_GB=res)
-        print(f"[STAGE][{self.name}] time={dt:.2f} s, peak_alloc={peak:.2f} GB, peak_reserved={res:.2f} GB",
+        print(f"[STAGE][{self.name}] time={dt:.2f} s, peak_alloc={peak:.2f} GB, peak_reserved={res:.2f} GB, "
+              f"alloc at start={self.start:.2f} GB",
               flush=True)
 
 
@@ -85,8 +120,22 @@ class StagedFOV:
 
     def __init__(self, path, device):
         self.path, self.device = path, device
+        self.pre = None
+
+    def precompute(self, img):
+        """Run the call for `img` now, before the HMR model is on the GPU (MoGe and HMR together made the hmr_4d
+        peak; with free_gpu's autocast-cache clear 6.43 -> 3.23 GB allocated on penn 1791). Called under the same autocast(enabled=False) as hmr_4d; the result is
+        returned only for an identical image, any other image runs MoGe as before."""
+        self.pre = (img.copy(), self._run(img))
 
     def get_cam_intrinsics(self, img, **kw):
+        if self.pre is not None and not kw and np.array_equal(self.pre[0], img):
+            return self.pre[1]
+        if self.pre is not None:
+            print("[fov] not the precomputed image: running MoGe-2 again", flush=True)
+        return self._run(img, **kw)
+
+    def _run(self, img, **kw):
         from models.sam_3d_body.tools.build_fov_estimator import FOVEstimator
         with skip_random_init():
             est = FOVEstimator(name="moge2", device=self.device, path=self.path)
@@ -95,6 +144,29 @@ class StagedFOV:
         finally:
             del est
             free_gpu()
+
+
+def compile_backbone(backbone, multiple):
+    """torch.compile the HMR backbone (DINOv3, 64% of HMR time) with one static graph.
+
+    Inputs are zero-padded to a multiple of `multiple` (the HMR batch size) and the padding is sliced off, so the
+    shorter last batch reuses the full-batch graph instead of compiling a new one (~25 s per new shape). Each crop is
+    encoded independently, so padding does not change the real crops' features. Not bit-identical to eager bf16; its
+    difference from an fp32 backbone is the same size as eager's (testdata/2026-10-14/compile).
+
+    The inductor cache (default %TEMP%/torchinductor_<user>) must sit on a short path: triton's temp file names
+    under testdata/... exceeded Windows MAX_PATH.
+    """
+    compiled = torch.compile(backbone.forward, dynamic=False)
+
+    def forward(x, extra_embed=None):
+        n = x.shape[0]
+        pad = -n % multiple
+        if pad:
+            x = torch.cat([x, x.new_zeros((pad, *x.shape[1:]))])
+        return compiled(x, extra_embed=extra_embed)[:n]
+
+    backbone.forward = forward
 
 
 def share_mhr(model):
@@ -198,7 +270,11 @@ def build_sam3_tracker(ckpt_path):
     from models.sam3.sam3.model_builder import build_tracker
     with skip_random_init():
         tracker = build_tracker(apply_temporal_disambiguation=True, with_backbone=True)
-    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+    # Materialize only the tracker/vision tensors selected below. Keep the
+    # ordinary copy load (dtype/layout unchanged) and support legacy .pt files.
+    with open(ckpt_path, "rb") as checkpoint_file:
+        use_mmap = checkpoint_file.read(4) == b"PK\x03\x04"
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True, mmap=use_mmap)
     if "model" in ckpt and isinstance(ckpt["model"], dict):
         ckpt = ckpt["model"]
     sd = {k[len("tracker."):]: v for k, v in ckpt.items() if k.startswith("tracker.")}
@@ -216,7 +292,14 @@ def detect_first_frame(cfg, input_video):
     from models.sam_3d_body.tools.build_detector import HumanDetector
     from models.sam_3d_body.sam_3d_body.data.utils.io import load_image
     with skip_random_init():
-        det = HumanDetector(name="vitdet", device=torch.device("cuda"), path=cfg.sam_3d_body["detector_path"])
+        det = HumanDetector(name="vitdet", device=torch.device("cpu"), path=cfg.sam_3d_body["detector_path"])
+    # It only runs under the bf16 autocast below: keep one bf16 copy of its Linear / Conv weights instead of fp32 plus
+    # autocast's cached bf16 copy (same values, boxes bit-identical). Cast on the CPU, so the fp32 weights never
+    # reach the GPU.
+    bf16_weights(det.detector)
+    vitdet_attn.install()  # per-head softmax in the global blocks: same boxes, -1.8 GB peak
+    det.device = torch.device("cuda")
+    det.detector.to(det.device)
 
     def run(img_bgr):
         boxes = det.run_human_detection(img_bgr, det_cat_id=0, bbox_thr=0.6, nms_thr=0.3,
@@ -263,6 +346,7 @@ def build_app(cfg, output_dir):
         "completion_resolution": cfg.completion.get("completion_resolution", [512, 1024]),
         "smpl_export": cfg.runtime.get("smpl_export", False),
         "async_save": True,      # save batch b (CPU / OpenGL) while the GPU runs batch b+1
+        "save_workers": 2,       # saving threads (one job per frame); see offline_app.on_4d_generation
         "bboxes": None,
     }
     app.OUTPUT_DIR = output_dir
@@ -297,6 +381,11 @@ def capture_hmr():
 def inference_lite(args):
     cfg = OmegaConf.load(os.path.join(oa.ROOT, "configs", "body4d.yaml"))
     app = build_app(cfg, args.output_dir)
+    app.RUNTIME["save_workers"] = getattr(args, "save_workers", 2)
+    if not getattr(args, "autocast_cache", False):
+        # SAM3's process-wide bf16 autocast would cache a bf16 copy of every fp32 weight it casts (SAM3, MoGe):
+        # recast per call instead. Same casts, same values; masks bit-identical, -0.9 GB in sam3, -0.6 GB in fov.
+        torch.set_autocast_cache_enabled(False)
 
     # 1. person boxes on the first frame with a person (ViTDet only)
     with Stage("detect"):
@@ -307,8 +396,11 @@ def inference_lite(args):
     with Stage("sam3_load"):
         app.predictor = build_sam3_tracker(cfg.sam3["ckpt_path"])
     with Stage("sam3_init_state"):
-        state = app.predictor.init_state(video_path=args.input_video if image_list is None else image_list,
-                                         offload_video_to_cpu=True, offload_state_to_cpu=args.offload_state)
+        # frames are rebuilt on access from their JPEG bytes (bit-identical): preloading them as 1008^2 float32
+        # takes 12.2 MB per frame, 21.9 GB for a 60 s clip
+        with (contextlib.nullcontext() if getattr(args, "preload_frames", False) else lazy_jpeg_frames()):
+            state = app.predictor.init_state(video_path=args.input_video if image_list is None else image_list,
+                                             offload_video_to_cpu=True, offload_state_to_cpu=args.offload_state)
         app.predictor.clear_all_points_in_video(state)
         app.RUNTIME["inference_state"] = state
         app.RUNTIME["out_obj_ids"] = []
@@ -317,24 +409,60 @@ def inference_lite(args):
             _, app.RUNTIME["out_obj_ids"], _, _ = app.predictor.add_new_points_or_box(
                 inference_state=state, frame_idx=start_idx, obj_id=obj_id + 1, box=rel_box)
     with Stage("sam3_propagate"):
-        app.on_mask_generation(start_frame_idx=0)
+        if not getattr(args, "keep_tracker_memory", False):
+            # outputs of past frames that no later frame can select are dropped as the propagation goes
+            # (utils/tracker_prune.py, masks bit-identical): +3.9 GB of VRAM per 1800 frames otherwise
+            install_pruned_propagation(app.predictor)
+        # on_mask_generation's default stops after frame 1800 (60 s at 30 fps); track the whole video. Videos of up
+        # to 1801 frames run exactly as before.
+        app.on_mask_generation(start_frame_idx=0, max_frame_num_to_track=max(1800, state["num_frames"]))
+        app.predictor.__dict__.pop("propagate_in_video", None)   # the wrapper references the tracker: drop it
     obj_ids = list(app.RUNTIME["out_obj_ids"])
     app.RUNTIME["inference_state"] = None
     app.predictor = None
     del state
     free_gpu()
 
-    # 3. HMR (SAM-3D-Body; MoGe-2 only for the single intrinsics call inside on_4d_generation)
+    # 3. HMR (SAM-3D-Body; MoGe-2 only for the single intrinsics call inside on_4d_generation, run ahead of the load)
+    dev = torch.device("cuda")
+    fov = StagedFOV(cfg.sam_3d_body["fov_path"], dev)
+    with Stage("fov"):
+        imgs = sorted(glob.glob(os.path.join(app.OUTPUT_DIR, "images", "*.jpg")))  # on_4d_generation's images_list[0]
+        if imgs:
+            with torch.autocast("cuda", enabled=False):
+                fov.precompute(np.array(Image.open(imgs[0])).astype("uint8"))
     with Stage("hmr_load"):
-        dev = torch.device("cuda")
         with skip_random_init():
-            model, model_cfg = oa.load_sam_3d_body(cfg.sam_3d_body["ckpt_path"], device=dev,
+            model, model_cfg = oa.load_sam_3d_body(cfg.sam_3d_body["ckpt_path"], device=torch.device("cpu"),
                                                    mhr_path=cfg.sam_3d_body["mhr_path"])
+        # Share the MHR copy on the CPU, so the second copy never reaches the GPU (it set the hmr_load peak).
+        share_mhr(model)
+        enc = model.backbone.encoder
+        if not getattr(args, "resident_backbone", False):
+            # DINOv3 blocks stay in pinned CPU memory and stream through two GPU slots (utils/stream_blocks.py):
+            # -1.5 GB resident, same weights, no measurable time cost.
+            blocks, enc.blocks = enc.blocks, torch.nn.ModuleList()
+            model.to(dev)
+            enc.blocks = blocks
+            stream_blocks(blocks, dev)
+        else:
+            model.to(dev)
+        size = getattr(args, "hmr_input_size", 384)
+        if size:
+            # Crop size fed to the backbone (trained at 512). The DINOv3 RoPE, the ray-conditioning embedding and the
+            # decoder's dense positional encoding all follow the feature-map size, and _get_hand_box / the crop
+            # transforms read MODEL.IMAGE_SIZE, so this one setting changes body and hand crops consistently.
+            assert size % model.backbone.patch_size == 0, (size, model.backbone.patch_size)
+            assert model.cfg is model_cfg
+            model_cfg.defrost()
+            model_cfg.MODEL.IMAGE_SIZE = [size, size]
+            model_cfg.freeze()
         app.sam3_3d_body_model = oa.SAM3DBodyEstimator(
             sam_3d_body_model=model, model_cfg=model_cfg, human_detector=None, human_segmentor=None,
-            fov_estimator=StagedFOV(cfg.sam_3d_body["fov_path"], dev))
-        share_mhr(model)
+            fov_estimator=fov)
         hmr_fast.install(model)  # sync-free MHR head, bitwise identical (scripts/eval/check_hmr_fast.py)
+        if getattr(args, "compile_backbone", False):
+            compile_backbone(model.backbone, app.RUNTIME["batch_size"])
         if not getattr(args, "keep_rejected_hands", False):
             skip_rejected_hands(model)
     app.RUNTIME["out_obj_ids"] = obj_ids
@@ -350,11 +478,21 @@ if __name__ == "__main__":
     p.add_argument("--capture", default=None)
     p.add_argument("--offload_state", action="store_true")
     p.add_argument("--avatar_out", default=None)
+    p.add_argument("--avatar_hq", action="store_true",
+                   help="avatar output over the original input frames, PNG frames, mp4 CRF 12 (avatar_app.py --hq)")
     p.add_argument("--vrm", default=None)
+    p.add_argument("--compile_backbone", action="store_true")
     p.add_argument("--keep_rejected_hands", action="store_true")
+    p.add_argument("--hmr_input_size", type=int, default=384)
+    p.add_argument("--save_workers", type=int, default=2)
+    p.add_argument("--autocast_cache", action="store_true")
+    p.add_argument("--resident_backbone", action="store_true")
+    p.add_argument("--preload_frames", action="store_true")
+    p.add_argument("--keep_tracker_memory", action="store_true")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
+    use_persistent_compile_cache()   # also inherited by the avatar subprocess
     if args.capture:
         capture_hmr()
 
@@ -371,6 +509,22 @@ if __name__ == "__main__":
         print(f"[CAPTURE] saved {args.capture}")
     if args.avatar_out:
         import subprocess
+        # The parent stays alive during subprocess.call. SAM3's process-wide autocast
+        # retains weight copies even after inference_lite's models go out of scope.
+        # Release those references before emptying the allocator cache so the avatar
+        # process does not compete with the completed lite stage for VRAM.
+        torch.cuda.synchronize()
+        gc.collect()
+        torch.clear_autocast_cache()
+        torch.cuda.empty_cache()
+        # the pinned host blocks of the streamed DINOv3 weights (2.3 GB) stay cached by torch's host allocator after
+        # the model is gone; give them back before the avatar process needs the RAM
+        pinned = torch.cuda.host_memory_stats().get("reserved_bytes.current", 0)
+        torch._C._host_emptyCache()
+        print(f"[HANDOFF] parent CUDA alloc={torch.cuda.memory_allocated() / 1024 ** 3:.3f} GiB, "
+              f"reserved={torch.cuda.memory_reserved() / 1024 ** 3:.3f} GiB, pinned host released "
+              f"{pinned / 1024 ** 3:.2f} -> {torch.cuda.host_memory_stats().get('reserved_bytes.current', 0) / 1024 ** 3:.2f} GiB",
+              flush=True)
         cmd = [sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatar_app.py"),
-               "--pipeline_out", args.output_dir, "--out", args.avatar_out] + (["--vrm", args.vrm] if args.vrm else [])
+               "--pipeline_out", args.output_dir, "--out", args.avatar_out] + (["--vrm", args.vrm] if args.vrm else [])             + (["--hq", args.input_video] if args.avatar_hq else [])
         sys.exit(subprocess.call(cmd))

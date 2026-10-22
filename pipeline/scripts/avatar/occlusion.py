@@ -28,7 +28,8 @@ def _nearest_parts(parts, M):
     if not M.any():
         return parts
     from scipy.ndimage import distance_transform_edt
-    _, (iy, ix) = distance_transform_edt(~M, return_indices=True)
+    # Only the nearest-pixel indices are used; do not compute the distance map.
+    iy, ix = distance_transform_edt(~M, return_distances=False, return_indices=True)
     return parts[iy, ix]
 
 
@@ -101,11 +102,12 @@ class AvatarHider:
         from fusion import P
         from gpu_stage import load_cands
         from prep import load
+        from shared_cache import moge_z
         self.P, self.people = P, people
         self.ev, self.dec, cache = fus["ev"], fus["dec"], fus["cache"]
         self.c = load(cache)
         self.pids = list(self.c["pids"])
-        self.Zall = np.load(f"{cache}/moge.npz")["Z"]
+        self.Zall = moge_z(cache)   # memory-mapped under shared_cache.install()
         self.masks, _, _, _ = load_cands(cache)
         self.byf = {}
         for u in self.ev["units"]:

@@ -40,10 +40,11 @@ def worker(pout, name, src, out, use):
     run_fusion_v2.run_fusion = keep            # avatar_app imports it at call time
     import numpy as np
     with np.load(os.path.join(dst, "cands.npz")) as c:
-        points = str(c["mode"]) if "mode" in c.files else "full"
+        mode = str(c["mode"]) if "mode" in c.files else "full"   # gpu_stage_fast._cands_mode: points[+compile]
+    points, compiled = mode.split("+")[0], mode.endswith("+compile")
     a = argparse.Namespace(pipeline_out=pout, out=out, vrm=avatar_app.DEFAULT_VRM, name=name, fps=30.0, ssaa=2,
                            removal_workers=4, no_occlusion=False, no_removal=False, no_spring=False, no_ik=False,
-                           fusion_reference=False, fusion_points=points, fusion_compile_decoder=False)
+                           fusion_reference=False, fusion_points=points, fusion_compile_decoder=compiled)
     t = time.perf_counter()
     st = avatar_app.main(a)
     st["wall_s"] = round(time.perf_counter() - t, 1)

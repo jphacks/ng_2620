@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.join(ME, "fusion_v2"))
 
 from r3common import Run  # noqa: E402
 import prep  # noqa: E402
+import prep_fast  # noqa: E402
 import gpu_stage  # noqa: E402
 import gpu_stage_fast  # noqa: E402
 import evidence  # noqa: E402
@@ -43,7 +44,7 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     run = Run(pipeline_out, name)
     cache = os.path.join(out_dir, "_r3cache", run.name)
     os.makedirs(cache, exist_ok=True)
-    prep.prep(run, cache)
+    (prep if reference else prep_fast).prep(run, cache)   # prep_fast: same mesh.npz, arrays on disk
     t1 = time.time()
     if reference:
         gs.run_gpu(run, cache, owner="fusion_v2")

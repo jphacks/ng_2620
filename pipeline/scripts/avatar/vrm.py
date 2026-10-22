@@ -101,10 +101,12 @@ class VrmModel:
 
     # --- スキニング -----------------------------------------------------
     def skin_primitive(self, prim: Primitive, globals_: np.ndarray,
-                       morph: dict[int, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
+                       morph: dict[int, float] | None = None, *,
+                       compute_normals: bool = True) -> tuple[np.ndarray, np.ndarray | None]:
         """線形ブレンドスキニング。戻り値は (頂点, 法線)。
 
         morph: {target index: weight} をスキニング前の頂点位置に足す（表情）。
+        compute_normals=False: 頂点だけを使うunlit描画向け。法線は計算せずNoneを返す。
         """
         base = prim.positions
         if morph and prim.targets:
@@ -113,7 +115,7 @@ class VrmModel:
                 if wt > 1e-4 and ti < len(prim.targets):
                     base += prim.targets[ti] * np.float32(wt)
         if prim.skin is None or prim.joints is None:
-            return base.copy(), prim.normals.copy()
+            return base.copy(), prim.normals.copy() if compute_normals else None
         skin = self.skins[prim.skin]
         joints = np.asarray(skin["joints"], np.int32)
         ibm = skin["_ibm"]                                     # (J,4,4)
@@ -122,7 +124,7 @@ class VrmModel:
         idx = prim.joints
         # (V,4,4,4) を作らず、影響4本を順に足す
         P = np.zeros_like(prim.positions)
-        Nn = np.zeros_like(prim.normals)
+        Nn = np.zeros_like(prim.normals) if compute_normals else None
         ones = np.ones((len(prim.positions), 1), np.float32)
         ph = np.concatenate([base, ones], 1)                    # (V,4)
         for k in range(idx.shape[1]):
@@ -130,10 +132,14 @@ class VrmModel:
             if not np.any(wk):
                 continue
             Mk = M[idx[:, k]]                                   # (V,4,4)
-            P += wk * np.einsum("vij,vj->vi", Mk, ph)[:, :3]
-            Nn += wk * np.einsum("vij,vj->vi", Mk[:, :3, :3], prim.normals)
-        nl = np.linalg.norm(Nn, axis=1, keepdims=True)
-        Nn = Nn / np.maximum(nl, 1e-8)
+            # Only xyz is consumed; retain all four input columns and their
+            # reduction order, but do not compute the discarded homogeneous row.
+            P += wk * np.einsum("vij,vj->vi", Mk[:, :3, :], ph)
+            if compute_normals:
+                Nn += wk * np.einsum("vij,vj->vi", Mk[:, :3, :3], prim.normals)
+        if compute_normals:
+            nl = np.linalg.norm(Nn, axis=1, keepdims=True)
+            Nn = Nn / np.maximum(nl, 1e-8)
         return P, Nn
 
 
