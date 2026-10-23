@@ -52,7 +52,8 @@ usage (repo root):
                            not bit-identical (IoU 0.994-0.999 vs SDPA, scripts/eval/check_track_fast.py --attn)
       (--tracker_size 1008 --sdpa_attn --slow_tracker: the original tracking, bit for bit)
       [--hmr_stride K]     SAM 3D Body on every K-th frame (and where the tracked persons change); the frames in between
-                           interpolated from their keyframes (utils/hmr_stride.py). Default 1 (every frame)
+                           interpolated from their keyframes (utils/hmr_stride.py). Default 3 (avatar output judged
+                           indistinguishable by eye from K=1 on downtown_bar / courtyard_basketball); 1 = every frame
       [--individual_overlays] also save rendered_frames_individual/ (four views per person per frame; not read by the
                            pipeline, ~45 ms per frame of saving)
       [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
@@ -516,7 +517,7 @@ def inference_lite(args):
     app.RUNTIME["out_obj_ids"] = obj_ids
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
-            stride = getattr(args, "hmr_stride", 1)
+            stride = getattr(args, "hmr_stride", 3)
             if stride > 1:   # HMR on keyframes, the frames in between interpolated (utils/hmr_stride.py)
                 from utils import hmr_stride
                 print("[hmr_stride]", hmr_stride.run(app, stride), flush=True)
@@ -557,7 +558,7 @@ if __name__ == "__main__":
     p.add_argument("--sdpa_attn", action="store_true")
     p.add_argument("--moge_ahead", action="store_true")
     p.add_argument("--individual_overlays", action="store_true")
-    p.add_argument("--hmr_stride", type=int, default=1)
+    p.add_argument("--hmr_stride", type=int, default=3)
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
