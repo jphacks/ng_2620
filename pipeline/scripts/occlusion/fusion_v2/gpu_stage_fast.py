@@ -49,6 +49,14 @@ ASYNC_GROUNDING = os.environ.get("FUSION_ASYNC_GROUNDING", "1") == "1"  # see _s
 # MoGe-2 resolution_level (its default and the frozen value: 9). 3 = ~0.54x MoGe time; not bit-identical. Kept the
 # pass count on dev 51 (43 -> 44) and on the held-out test6 (7/11 = base, worst F1 -0.023), LEDGER 2026-10-17.
 MOGE_LEVEL = int(os.environ.get("FUSION_MOGE_LEVEL", "3"))
+# The scene depth model (the cache file keeps the name moge.npz and its layout either way). fusion only uses the depth
+# after fitting a per-person, per-frame scale to the mesh (evidence.robust_scale), so a metric-depth model works as a
+# drop-in. "da2_indoor_s": Depth Anything V2 Metric Indoor Small (Apache-2.0), 13.8 vs MoGe's 137 ms/frame on an RTX
+# 5060 Ti; hide clip IoU vs MoGe 0.967 (downtown_bar) / 0.995 (courtyard_basketball) (scripts/eval/depth_swap_study.py)
+DEPTH_MODELS = {"moge": None, "da2_indoor_s": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
+                "da2_outdoor_s": "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf"}
+DEPTH = os.environ.get("FUSION_DEPTH", "moge")
+assert DEPTH in DEPTH_MODELS, f"FUSION_DEPTH={DEPTH}: one of {sorted(DEPTH_MODELS)}"
 
 
 # Shared image side of the mask decoder. With expand_image_embeddings, every prompt of a batch carries the same image
@@ -471,12 +479,36 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
     torch.cuda.empty_cache()
 
 
-def _save_moge(path, Z, fov_x, level):
-    """np.savez_compressed(path, ...) through a temporary name, so an interrupted save never looks like a cache."""
+def _save_moge(path, Z, fov_x, level, model="moge"):
+    """np.savez_compressed(path, ...) through a temporary name, so an interrupted save never looks like a cache.
+    model: the depth model (DEPTH); files without the key are MoGe's."""
     tmp = path + ".part"
     with open(tmp, "wb") as f:
-        np.savez_compressed(f, Z=Z, fov_x=fov_x, masked=True, level=level)
+        if model == "moge":
+            np.savez_compressed(f, Z=Z, fov_x=fov_x, masked=True, level=level)
+        else:
+            np.savez_compressed(f, Z=Z, fov_x=fov_x, masked=True, level=level, model=model)
     os.replace(tmp, path)
+
+
+def hf_depth(run, Z, model_id):
+    """Metric depth of every frame of run into Z (T, H, W) float32 from a transformers depth model, fp16, resized
+    bilinearly to the frame; 0 where not finite or negative."""
+    import torch
+    from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+    proc = AutoImageProcessor.from_pretrained(model_id)
+    m = AutoModelForDepthEstimation.from_pretrained(model_id).cuda().eval().half()
+    for i in range(len(run)):
+        rgb = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
+        x = proc(images=rgb, return_tensors="pt")["pixel_values"].cuda().half()
+        with torch.no_grad():
+            d = m(pixel_values=x).predicted_depth
+        d = torch.nn.functional.interpolate(d[:, None].float(), size=(run.H, run.W), mode="bilinear",
+                                            align_corners=False)[0, 0].cpu().numpy()
+        d[~np.isfinite(d) | (d < 0)] = 0
+        Z[i] = d
+    del m
+    torch.cuda.empty_cache()
 
 
 def moge_depth(run, Z, fov_x):
@@ -563,13 +595,19 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
     T, H, W = len(run), run.H, run.W
     mode = _cands_mode(points, compile_decoder)
     # np.load keeps the file open until closed, and Windows cannot rename an open file: read, close, then replace
-    masked, level = True, MOGE_LEVEL
+    masked, level, model = True, MOGE_LEVEL, DEPTH
     if os.path.exists(f"{cache}/moge.npz"):
         with np.load(f"{cache}/moge.npz") as z:
             masked = "masked" in z.files
             level = int(z["level"]) if "level" in z.files else 9        # caches before the level key: level 9
+            model = str(z["model"]) if "model" in z.files else "moge"
     if not masked:
         os.replace(f"{cache}/moge.npz", f"{cache}/moge_unmasked.npz")   # cache from an older version: recompute
+    elif model != DEPTH:                                                 # another depth model: recompute
+        os.replace(f"{cache}/moge.npz", f"{cache}/depth_{model}.npz")
+        if os.path.exists(f"{cache}/evidence.pkl"):
+            os.replace(f"{cache}/evidence.pkl", f"{cache}/evidence_{model}.pkl")
+        level = MOGE_LEVEL
     elif level != MOGE_LEVEL:                                            # other resolution level: recompute
         os.replace(f"{cache}/moge.npz", f"{cache}/moge_level{level}.npz")
         if os.path.exists(f"{cache}/evidence.pkl"):
@@ -581,7 +619,7 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
             os.replace(f"{cache}/cands.npz", f"{cache}/cands_{old.replace('+', '_')}.npz")
             if os.path.exists(f"{cache}/evidence.pkl"):
                 os.remove(f"{cache}/evidence.pkl")
-    if not os.path.exists(f"{cache}/moge.npz") and _take_ahead(run, cache):
+    if DEPTH == "moge" and not os.path.exists(f"{cache}/moge.npz") and _take_ahead(run, cache):
         print(run.name, "moge from the mesh stage (moge_ahead.py)", flush=True)
     if os.path.exists(f"{cache}/moge.npz") and os.path.exists(f"{cache}/cands.npz"):
         return  # cached
@@ -598,11 +636,14 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
         if need_moge:
             fov_x = moge_fov_x(run)
             Z = disk_arrays.scratch(f"{cache}/_moge_Z.npy", (T, H, W), np.float32)   # np.zeros, on disk
-            moge_depth(run, Z, fov_x)
+            if DEPTH == "moge":
+                moge_depth(run, Z, fov_x)
+            else:
+                hf_depth(run, Z, DEPTH_MODELS[DEPTH])
             # The same file, compressed in a thread while SAM3 runs (4.4 s per 100 frames at 854x480); joined below.
-            saver = threading.Thread(target=_save_moge, args=(f"{cache}/moge.npz", Z, fov_x, MOGE_LEVEL))
+            saver = threading.Thread(target=_save_moge, args=(f"{cache}/moge.npz", Z, fov_x, MOGE_LEVEL, DEPTH))
             saver.start()
-            print(run.name, "moge", round(time.time() - t0, 1), flush=True)
+            print(run.name, "moge" if DEPTH == "moge" else f"depth {DEPTH}", round(time.time() - t0, 1), flush=True)
         if not os.path.exists(f"{cache}/cands.npz"):
             over = False
             built = []

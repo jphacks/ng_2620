@@ -59,7 +59,7 @@ def main(a, extra):
         m = re.search(r"\[fusion_v2\].*prep (\d+)s, gpu (\d+)s, cpu (\d+)s", line)
         if m:
             res["fusion_parts_s"] = dict(prep=int(m[1]), gpu=int(m[2]), cpu=int(m[3]))
-        m = re.search(r"(\S+) moge ([\d.]+)$", line.strip())
+        m = re.search(r"(\S+) (?:moge|depth \S+) ([\d.]+)$", line.strip())   # the scene depth model
         if m:
             res["fusion_moge_s"] = float(m[2])
     res["total_wall_s"] = res["mesh_wall_s"] + res["avatar_wall_s"]
@@ -73,7 +73,7 @@ def main(a, extra):
              ("  fusion v2", s.get("fusion_s", 0))]
     if "fusion_parts_s" in res:
         fp = res["fusion_parts_s"]
-        rows += [("    prep", fp["prep"]), ("    gpu (MoGe + SAM3)", fp["gpu"]), ("      MoGe", res.get("fusion_moge_s", 0)),
+        rows += [("    prep", fp["prep"]), ("    gpu (MoGe + SAM3)", fp["gpu"]), ("      scene depth (MoGe or FUSION_DEPTH)", res.get("fusion_moge_s", 0)),
                  ("    cpu (evidence, decision, render)", fp["cpu"])]
     rows += [("  removal (thread, overlapped)", s.get("removal_s", 0)), ("  removal wait after fusion", s.get("removal_wait_s", 0)),
              ("  retarget + render", s.get("render_s", 0)), ("  hide", s.get("hide_s", 0)),
