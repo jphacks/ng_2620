@@ -33,12 +33,6 @@ usage (repo root):
                            in a fresh process, after releasing this process's cached CUDA tensors and allocations
       [--vrm <file>]       avatar for --avatar_out (default: avatar_app.py's)
       [--avatar_hq]        --avatar_out at the input video's own quality (avatar_app.py --hq)
-      [--avatar_source <frames dir | video>] --avatar_out over these frames (avatar_app.py --hq; e.g. the full-
-                           resolution frames of a downscaled input)
-      [--avatar_args "<args>"] more avatar_app.py arguments
-      [--avatar_after]     start the avatar process after this one ends. Default: as soon as the tracking has
-                           written images/ and masks/ (avatar_app --wait_mesh): what needs no mesh (frames, removal,
-                           scene depth, SAM3 build, VRM) runs while HMR does, the rest after <output_dir>/_mesh_done
       [--compile_backbone] torch.compile the HMR backbone (faster HMR; not bit-identical to eager)
       (the hand head always shares the body head's MHR model, and both heads run hmr_fast's sync-free code)
       [--hmr_input_size N] HMR crop size (multiple of 16; default 384, trained at 512). On 11 3DPW clips 384 vs 512:
@@ -400,37 +394,9 @@ def capture_hmr():
     oa.process_image_with_mask = wrapped
 
 
-def avatar_cmd(args, wait):
-    """avatar_app.py command line for --avatar_out."""
-    src = getattr(args, "avatar_source", None) or (args.input_video if getattr(args, "avatar_hq", False) else None)
-    return ([sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatar_app.py"),
-             "--pipeline_out", args.output_dir, "--out", args.avatar_out]
-            + (["--vrm", args.vrm] if args.vrm else []) + (["--hq", src] if src else [])
-            + (["--wait_mesh", "--parent_pid", str(os.getpid())] if wait else [])
-            + (getattr(args, "avatar_args", "") or "").split())
-
-
-AVATAR = {}   # the avatar process started during inference_lite (--avatar_out without --avatar_after)
-
-
 def inference_lite(args):
     cfg = OmegaConf.load(os.path.join(oa.ROOT, "configs", "body4d.yaml"))
     app = build_app(cfg, args.output_dir)
-    done_mark = os.path.join(args.output_dir, "_mesh_done")
-    if os.path.exists(done_mark):   # a previous run's
-        os.remove(done_mark)
-    # _saved/<stem>: frame <stem>'s HMR outputs are all saved (its meshes, focal lengths, skeletons): avatar_app
-    # --wait_mesh prepares the frames that have it while HMR still runs
-    saved_dir = os.path.join(args.output_dir, "_saved")
-    import shutil
-    shutil.rmtree(saved_dir, ignore_errors=True)
-    os.makedirs(saved_dir)
-    save_frame = app._save_frame
-
-    def save_frame_marked(image_path, *rest):
-        save_frame(image_path, *rest)
-        open(os.path.join(saved_dir, os.path.splitext(os.path.basename(image_path))[0]), "w").close()
-    app._save_frame = save_frame_marked
     app.RUNTIME["save_workers"] = getattr(args, "save_workers", 2)
     if not getattr(args, "autocast_cache", False):
         # SAM3's process-wide bf16 autocast would cache a bf16 copy of every fp32 weight it casts (SAM3, MoGe):
@@ -487,10 +453,6 @@ def inference_lite(args):
     app.predictor = None
     del state
     free_gpu()
-
-    if getattr(args, "avatar_out", None) and not getattr(args, "avatar_after", False):
-        import subprocess
-        AVATAR["proc"] = subprocess.Popen(avatar_cmd(args, wait=True))
 
     # --moge_ahead: fusion v2's MoGe-2 depth needs only images/ and the focal length, so a second process can compute
     # it while HMR runs; avatar_app's fusion then takes the file instead of running MoGe itself
@@ -549,7 +511,6 @@ def inference_lite(args):
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
             app.on_4d_generation()
-    open(done_mark, "w").close()   # every HMR output is saved (on_4d_generation joins its save threads)
     if ahead is not None:
         t0 = time.perf_counter()
         if glob.glob(os.path.join(app.OUTPUT_DIR, "focal_4d_individual", "*", "*.json")):
@@ -572,9 +533,6 @@ if __name__ == "__main__":
     p.add_argument("--avatar_hq", action="store_true",
                    help="avatar output over the original input frames, PNG frames, mp4 CRF 12 (avatar_app.py --hq)")
     p.add_argument("--vrm", default=None)
-    p.add_argument("--avatar_source", default=None)
-    p.add_argument("--avatar_args", default="")
-    p.add_argument("--avatar_after", action="store_true")
     p.add_argument("--compile_backbone", action="store_true")
     p.add_argument("--keep_rejected_hands", action="store_true")
     p.add_argument("--hmr_input_size", type=int, default=384)
@@ -605,14 +563,6 @@ if __name__ == "__main__":
         with open(args.capture, "wb") as f:
             pickle.dump(CAPTURE, f)
         print(f"[CAPTURE] saved {args.capture}")
-    if "proc" in AVATAR:
-        # the avatar process started after the tracking: free this process's GPU memory for it, then wait
-        torch.cuda.synchronize()
-        gc.collect()
-        torch.clear_autocast_cache()
-        torch.cuda.empty_cache()
-        torch._C._host_emptyCache()
-        sys.exit(AVATAR["proc"].wait())
     if args.avatar_out:
         import subprocess
         # The parent stays alive during subprocess.call. SAM3's process-wide autocast
@@ -631,4 +581,6 @@ if __name__ == "__main__":
               f"reserved={torch.cuda.memory_reserved() / 1024 ** 3:.3f} GiB, pinned host released "
               f"{pinned / 1024 ** 3:.2f} -> {torch.cuda.host_memory_stats().get('reserved_bytes.current', 0) / 1024 ** 3:.2f} GiB",
               flush=True)
-        sys.exit(subprocess.call(avatar_cmd(args, wait=False)))
+        cmd = [sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatar_app.py"),
+               "--pipeline_out", args.output_dir, "--out", args.avatar_out] + (["--vrm", args.vrm] if args.vrm else [])             + (["--hq", args.input_video] if args.avatar_hq else [])
+        sys.exit(subprocess.call(cmd))

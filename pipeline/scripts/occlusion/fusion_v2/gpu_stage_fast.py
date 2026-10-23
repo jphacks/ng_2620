@@ -545,29 +545,6 @@ def moge_depth(run, Z, fov_x):
     torch.cuda.empty_cache()
 
 
-_PRELOAD = []   # a _SAM3Loader started by precompute(), taken by run_gpu
-
-
-def precompute(run, cache, compile_decoder=True):
-    """The parts of run_gpu that do not need the meshes, for a caller that runs while the mesh stage still runs HMR
-    (avatar_app --wait_mesh): start building SAM3 in a thread, and compute the scene depth into cache/moge.npz when
-    the model needs no focal length (DEPTH != "moge"). run_gpu then finds both and skips them; the same values."""
-    os.makedirs(cache, exist_ok=True)
-    need_depth = DEPTH != "moge" and not os.path.exists(f"{cache}/moge.npz")
-    loaded = hf_depth_load(DEPTH_MODELS[DEPTH]) if need_depth else None   # before the SAM3 thread (hf_depth_load)
-    if not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD and not _PRELOAD:
-        _PRELOAD.append(_SAM3Loader(compile_decoder))
-    if need_depth:
-        t0 = time.time()
-        Z = disk_arrays.scratch(f"{cache}/_moge_Z.npy", (len(run), run.H, run.W), np.float32)
-        hf_depth(run, Z, DEPTH_MODELS[DEPTH], loaded)
-        del loaded
-        _save_moge(f"{cache}/moge.npz", Z, 0.0, MOGE_LEVEL, DEPTH)
-        del Z
-        disk_arrays.release(f"{cache}/_moge_Z.npy")
-        print(run.name, f"depth {DEPTH} (before the meshes)", round(time.time() - t0, 1), flush=True)
-
-
 def ahead_path(run):
     """Where scripts/occlusion/moge_ahead.py leaves the MoGe depth it computed during the mesh stage (MOGE_LEVEL)."""
     return f"{run.pout}/moge_level{MOGE_LEVEL}.npz"
@@ -662,9 +639,9 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
     saver = None
     with local_gpu(owner):
         need_moge = not os.path.exists(f"{cache}/moge.npz")
-        loader = _PRELOAD.pop() if _PRELOAD else None   # precompute()'s
+        loader = None
         loaded = hf_depth_load(DEPTH_MODELS[DEPTH]) if need_moge and DEPTH != "moge" else None   # before the thread
-        if loader is None and need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
+        if need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
             loader = _SAM3Loader(compile_decoder)   # builds SAM3 while MoGe runs
         if need_moge:
             fov_x = moge_fov_x(run)

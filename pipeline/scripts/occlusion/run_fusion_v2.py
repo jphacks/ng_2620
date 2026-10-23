@@ -41,7 +41,7 @@ import shared_cache  # noqa: E402
 
 
 def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True,
-               render=True, prep_pre=None):
+               render=True):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
     (ignored with reference=True). render=False skips fusion.render (hide=None; ~3 s per 120 frames): for callers
     that draw the decisions themselves (avatar_app's AvatarHider)."""
@@ -52,10 +52,7 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     run = Run(pipeline_out, name)
     cache = os.path.join(out_dir, "_r3cache", run.name)
     os.makedirs(cache, exist_ok=True)
-    if reference:
-        prep.prep(run, cache)
-    else:   # same mesh.npz, arrays on disk; prep_pre: frames prepared while HMR ran (avatar_app --wait_mesh)
-        prep_fast.prep(run, cache, pre=prep_pre)
+    (prep if reference else prep_fast).prep(run, cache)   # prep_fast: same mesh.npz, arrays on disk
     t1 = time.time()
     if reference:
         gs.run_gpu(run, cache, owner="fusion_v2")

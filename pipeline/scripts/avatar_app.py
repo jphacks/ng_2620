@@ -13,10 +13,6 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
   6. composite   clean plate, then the avatars back to front (z-buffer between avatars, at the supersampled
                  resolution so that intersecting avatars do not alias), each hidden where a real object is in front
                  of it; hidden pixels show the real frame (the occluder)
-With --wait_mesh (offline_app_lite --avatar_out starts this process as soon as the tracking has written images/ and
-masks/, while HMR still runs), the steps that need no mesh run first: the frames are read, the real targets' removal
-starts (targets = the tracked labels; redone if the meshed targets turn out different), the scene depth is computed
-and SAM3 is built (gpu_stage_fast.precompute), the VRM is loaded; then it waits for <pipeline_out>/_mesh_done.
 Steps 2, 4-6 stream over the frames in one pass: a hide mask is smoothed over frames t-1..t+1, so frame t is
 composited once frame t+1 is rendered (two frames of render buffers in memory, every frame skinned and rendered once).
 
@@ -221,34 +217,11 @@ def _composite(out, layers):
     return out
 
 
-MESH_DONE = "_mesh_done"   # written into pipeline_out by offline_app_lite when every HMR output is saved
-
-
-def wait_mesh(pout, parent_pid):
-    """Block until the mesh stage has saved everything (MESH_DONE); exit if the process that runs it is gone."""
-    import psutil
-    t0 = time.perf_counter()
-    while not os.path.exists(os.path.join(pout, MESH_DONE)):
-        if parent_pid and not psutil.pid_exists(parent_pid):
-            raise SystemExit(f"[avatar] the mesh stage (pid {parent_pid}) ended without {MESH_DONE}")
-        time.sleep(0.1)
-    return time.perf_counter() - t0
-
-
-def tracked_labels(run):
-    """The person labels of the tracking masks (the targets, before the meshes say which ones were meshed)."""
-    labs = set()
-    for i in range(len(run)):
-        labs.update(int(v) for v in np.unique(run.mask(i)) if v)
-    return sorted(labs)
-
-
 def main(a):
     t_all = time.perf_counter()
     from r3common import Run
     run = Run(a.pipeline_out, a.name)
     stems, H, W, n = run.stems, run.H, run.W, len(run)
-    waiting = getattr(a, "wait_mesh", False)
     os.makedirs(a.out, exist_ok=True)
     stats = {"run": run.name, "frames": n, "size": [W, H], "vrm": os.path.basename(a.vrm)}
     # --hq: the pipeline (tracking, meshes, masks, fusion's occlusion decisions) stays at its own resolution H x W;
@@ -259,25 +232,17 @@ def main(a):
     if abs(OH / H - sc) > 0.01:
         raise SystemExit(f"--hq {a.source}: {OW}x{OH} is not a rescale of the pipeline's {W}x{H}")
     stats["out_size"] = [OW, OH]
-
-    def skeletons():
-        sk = load_skeletons(run.pout, stems)
-        pids = sorted({p for p, _ in sk})
-        if not pids:
-            raise SystemExit(f"no skeleton_4d_individual/ in {run.pout}: re-run the mesh pipeline (it now saves skeletons)")
-        if a.smooth > 0 or a.foot_lock:
-            from avatar.smooth import smooth_skeletons
-            sk, ss = smooth_skeletons(sk, pids, sigma_s=a.smooth, fps=a.fps, foot_lock=a.foot_lock)
-            stats.update(ss)
-            print(f"[avatar] smoothing sigma {a.smooth} s, foot lock {a.foot_lock}: {ss}", flush=True)
-        focal = float(next(iter(sk.values()))["focal"])
-        print(f"[avatar] {run.name}: {n} frames {W}x{H}, targets {pids}, focal {focal:.1f}", flush=True)
-        return sk, pids, focal
-
-    if waiting:
-        pids = tracked_labels(run)   # the removal's targets until the meshes are known (checked below)
-    else:
-        sk, pids, focal = skeletons()
+    sk = load_skeletons(run.pout, stems)
+    pids = sorted({p for p, _ in sk})
+    if not pids:
+        raise SystemExit(f"no skeleton_4d_individual/ in {run.pout}: re-run the mesh pipeline (it now saves skeletons)")
+    if a.smooth > 0 or a.foot_lock:
+        from avatar.smooth import smooth_skeletons
+        sk, ss = smooth_skeletons(sk, pids, sigma_s=a.smooth, fps=a.fps, foot_lock=a.foot_lock)
+        stats.update(ss)
+        print(f"[avatar] smoothing sigma {a.smooth} s, foot lock {a.foot_lock}: {ss}", flush=True)
+    focal = float(next(iter(sk.values()))["focal"])
+    print(f"[avatar] {run.name}: {n} frames {W}x{H}, targets {pids}, focal {focal:.1f}", flush=True)
 
     # 3 (started first). erase the real targets: independent of the occlusion decisions, so it runs in a thread while
     # fusion v2 runs (same function, same inputs: same plates). --gpu_removal fills the plates on the GPU
@@ -318,41 +283,6 @@ def main(a):
         removal["thread"] = threading.Thread(target=_removal, daemon=True)
         removal["thread"].start()
 
-    if waiting:
-        model = load_vrm(a.vrm)
-        if not a.no_occlusion and not getattr(a, "fusion_reference", False):
-            import gpu_stage_fast
-            gpu_stage_fast.precompute(run, os.path.join(a.out, "occlusion", "_r3cache", run.name),
-                                      compile_decoder=getattr(a, "fusion_compile_decoder", True))
-        prep_pre = None
-        if not a.no_occlusion and not getattr(a, "fusion_reference", False):
-            # fusion's prep, frame by frame as HMR saves them (offline_app_lite's _saved/<stem> marks)
-            import prep_fast
-            t0 = time.perf_counter()
-            prep_pre = prep_fast.Ahead(os.path.join(a.out, "occlusion", "_r3cache", run.name), n, pids, H, W)
-            for i, stem in enumerate(stems):
-                while not os.path.exists(os.path.join(run.pout, "_saved", stem)):
-                    if os.path.exists(os.path.join(run.pout, MESH_DONE)):
-                        break
-                    time.sleep(0.05)
-                else:
-                    prep_pre.put(i, prep_fast.frame_meshes(run, i))
-                    continue
-                break
-            stats["prep_ahead_frames"] = len(prep_pre)
-            stats["prep_ahead_s"] = round(time.perf_counter() - t0, 1)
-        stats["mesh_wait_s"] = round(wait_mesh(run.pout, getattr(a, "parent_pid", 0)), 1)
-        print(f"[avatar] waited {stats['mesh_wait_s']} s for the mesh stage", flush=True)
-        run = Run(a.pipeline_out, a.name)   # now with the meshed persons
-        removal_pids = pids
-        sk, pids, focal = skeletons()
-        if pids != removal_pids and not a.no_removal:
-            print(f"[avatar] meshed targets {pids} != tracked {removal_pids}: redoing the removal", flush=True)
-            removal["thread"].join()
-            removal.clear()
-            removal["thread"] = threading.Thread(target=_removal, daemon=True)
-            removal["thread"].start()
-
     # 1. occlusion decisions (fusion v2 on the meshes)
     fus = None
     if not a.no_occlusion:
@@ -362,15 +292,13 @@ def main(a):
                          reference=getattr(a, "fusion_reference", False),
                          points=getattr(a, "fusion_points", "kf_lite"),
                          compile_decoder=getattr(a, "fusion_compile_decoder", True),
-                         render=False,   # fusion.render's own hide masks: the avatar draws its own (AvatarHider)
-                         prep_pre=prep_pre if waiting else None)
+                         render=False)   # fusion.render's own hide masks: the avatar draws its own (AvatarHider)
         fus.pop("hide", None)
         stats["fusion_s"] = round(time.perf_counter() - t0, 1)
 
     # 2. avatars (retarget + render are done per frame below)
     t0 = time.perf_counter()
-    if not waiting:
-        model = load_vrm(a.vrm)
+    model = load_vrm(a.vrm)
     rz = Rasterizer(OW, OH, ssaa=a.ssaa)
     K = np.array([[focal * sc, 0, OW / 2], [0, focal * sc, OH / 2], [0, 0, 1]])
     mvp = camera_mvp(K, OW, OH)
@@ -576,10 +504,6 @@ if __name__ == "__main__":
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
     ap.add_argument("--no_occlusion", action="store_true")
-    ap.add_argument("--wait_mesh", action="store_true",
-                    help="started while the mesh stage still runs: do what needs no mesh, then wait for "
-                         "<pipeline_out>/_mesh_done (offline_app_lite --avatar_out starts it this way)")
-    ap.add_argument("--parent_pid", type=int, default=0, help="with --wait_mesh: stop waiting if this process ends")
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
