@@ -55,7 +55,9 @@ MOGE_LEVEL = int(os.environ.get("FUSION_MOGE_LEVEL", "3"))
 # 5060 Ti; hide clip IoU vs MoGe 0.967 (downtown_bar) / 0.995 (courtyard_basketball) (scripts/eval/depth_swap_study.py)
 DEPTH_MODELS = {"moge": None, "da2_indoor_s": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
                 "da2_outdoor_s": "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf"}
-DEPTH = os.environ.get("FUSION_DEPTH", "moge")
+# Default da2_indoor_s (2026-10-24: on downtown_bar frame 32 it hid the avatar's skirt behind the crate MoGe drew it
+# over; judged better by eye). FUSION_DEPTH=moge gives the previous scene depth.
+DEPTH = os.environ.get("FUSION_DEPTH", "da2_indoor_s")
 assert DEPTH in DEPTH_MODELS, f"FUSION_DEPTH={DEPTH}: one of {sorted(DEPTH_MODELS)}"
 
 
