@@ -40,9 +40,11 @@ import fusion  # noqa: E402
 import shared_cache  # noqa: E402
 
 
-def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True):
+def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True,
+               render=True, prep_pre=None):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
-    (ignored with reference=True)."""
+    (ignored with reference=True). render=False skips fusion.render (hide=None; ~3 s per 120 frames): for callers
+    that draw the decisions themselves (avatar_app's AvatarHider)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
     if not reference:
         shared_cache.install()   # evidence / render / AvatarHider share cache loads and ground masks (same values)
@@ -50,7 +52,10 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     run = Run(pipeline_out, name)
     cache = os.path.join(out_dir, "_r3cache", run.name)
     os.makedirs(cache, exist_ok=True)
-    (prep if reference else prep_fast).prep(run, cache)   # prep_fast: same mesh.npz, arrays on disk
+    if reference:
+        prep.prep(run, cache)
+    else:   # same mesh.npz, arrays on disk; prep_pre: frames prepared while HMR ran (avatar_app --wait_mesh)
+        prep_fast.prep(run, cache, pre=prep_pre)
     t1 = time.time()
     if reference:
         gs.run_gpu(run, cache, owner="fusion_v2")
@@ -59,7 +64,7 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     t2 = time.time()
     ev = evm.compute(run, cache)
     dec = fusion.decide(ev, fusion.P)
-    hide = fusion.render(run, ev, cache, dec, out_dir, fusion.P, save=save)
+    hide = fusion.render(run, ev, cache, dec, out_dir, fusion.P, save=save) if render or save else None
     t3 = time.time()
     print(f"[fusion_v2] {run.name}: {len(run)} frames, pids {run.pids}; prep {t1 - t0:.0f}s, gpu {t2 - t1:.0f}s, "
           f"cpu {t3 - t2:.0f}s, total {t3 - t0:.0f}s", flush=True)

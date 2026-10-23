@@ -493,13 +493,20 @@ def _save_moge(path, Z, fov_x, level, model="moge"):
     os.replace(tmp, path)
 
 
-def hf_depth(run, Z, model_id):
-    """Metric depth of every frame of run into Z (T, H, W) float32 from a transformers depth model, fp16, resized
-    bilinearly to the frame; 0 where not finite or negative."""
-    import torch
+def hf_depth_load(model_id):
+    """(processor, fp16 CUDA model). Load it before a _SAM3Loader thread starts: transformers' from_pretrained builds
+    the model under a process-wide empty-weights (meta device) context, and a SAM3 build running at the same time in
+    another thread then got meta parameters ("Cannot copy out of meta tensor")."""
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation
     proc = AutoImageProcessor.from_pretrained(model_id)
-    m = AutoModelForDepthEstimation.from_pretrained(model_id).cuda().eval().half()
+    return proc, AutoModelForDepthEstimation.from_pretrained(model_id).cuda().eval().half()
+
+
+def hf_depth(run, Z, model_id, loaded=None):
+    """Metric depth of every frame of run into Z (T, H, W) float32 from a transformers depth model, fp16, resized
+    bilinearly to the frame; 0 where not finite or negative. loaded: hf_depth_load(model_id)'s result."""
+    import torch
+    proc, m = loaded or hf_depth_load(model_id)
     for i in range(len(run)):
         rgb = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
         x = proc(images=rgb, return_tensors="pt")["pixel_values"].cuda().half()
@@ -536,6 +543,29 @@ def moge_depth(run, Z, fov_x):
         del o, t
     del moge
     torch.cuda.empty_cache()
+
+
+_PRELOAD = []   # a _SAM3Loader started by precompute(), taken by run_gpu
+
+
+def precompute(run, cache, compile_decoder=True):
+    """The parts of run_gpu that do not need the meshes, for a caller that runs while the mesh stage still runs HMR
+    (avatar_app --wait_mesh): start building SAM3 in a thread, and compute the scene depth into cache/moge.npz when
+    the model needs no focal length (DEPTH != "moge"). run_gpu then finds both and skips them; the same values."""
+    os.makedirs(cache, exist_ok=True)
+    need_depth = DEPTH != "moge" and not os.path.exists(f"{cache}/moge.npz")
+    loaded = hf_depth_load(DEPTH_MODELS[DEPTH]) if need_depth else None   # before the SAM3 thread (hf_depth_load)
+    if not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD and not _PRELOAD:
+        _PRELOAD.append(_SAM3Loader(compile_decoder))
+    if need_depth:
+        t0 = time.time()
+        Z = disk_arrays.scratch(f"{cache}/_moge_Z.npy", (len(run), run.H, run.W), np.float32)
+        hf_depth(run, Z, DEPTH_MODELS[DEPTH], loaded)
+        del loaded
+        _save_moge(f"{cache}/moge.npz", Z, 0.0, MOGE_LEVEL, DEPTH)
+        del Z
+        disk_arrays.release(f"{cache}/_moge_Z.npy")
+        print(run.name, f"depth {DEPTH} (before the meshes)", round(time.time() - t0, 1), flush=True)
 
 
 def ahead_path(run):
@@ -632,8 +662,9 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
     saver = None
     with local_gpu(owner):
         need_moge = not os.path.exists(f"{cache}/moge.npz")
-        loader = None
-        if need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
+        loader = _PRELOAD.pop() if _PRELOAD else None   # precompute()'s
+        loaded = hf_depth_load(DEPTH_MODELS[DEPTH]) if need_moge and DEPTH != "moge" else None   # before the thread
+        if loader is None and need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
             loader = _SAM3Loader(compile_decoder)   # builds SAM3 while MoGe runs
         if need_moge:
             fov_x = moge_fov_x(run)
@@ -641,7 +672,8 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
             if DEPTH == "moge":
                 moge_depth(run, Z, fov_x)
             else:
-                hf_depth(run, Z, DEPTH_MODELS[DEPTH])
+                hf_depth(run, Z, DEPTH_MODELS[DEPTH], loaded)
+                del loaded
             # The same file, compressed in a thread while SAM3 runs (4.4 s per 100 frames at 854x480); joined below.
             saver = threading.Thread(target=_save_moge, args=(f"{cache}/moge.npz", Z, fov_x, MOGE_LEVEL, DEPTH))
             saver.start()

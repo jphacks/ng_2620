@@ -7,6 +7,8 @@ included):
                                                           person removal (in a thread, overlapped with fusion),
                                                           retarget + render, composite + encode
 and parses the stage lines both print ([STAGE][...] / stats.json) into <out>/e2e.json, with a table on stdout.
+--overlap runs the production single command instead (offline_app_lite --avatar_out: the avatar process starts
+after the tracking and overlaps HMR); both processes then log to mesh.log and the total is that command's wall time.
 
 usage (repo root):
   python scripts/eval/e2e.py --input <frames dir or .mp4> --out <dir> [--hq <hi-res frames dir>] [--vrm <file>]
@@ -41,8 +43,16 @@ def main(a, extra):
     py = sys.executable
     res = {"input": a.input, "hq": a.hq, "vrm": a.vrm}
 
-    res["mesh_wall_s"] = run([py, "-u", "scripts/offline_app_lite.py", "--input_video", a.input, "--output_dir", pout]
-                             + a.mesh_args.split(), os.path.join(a.out, "mesh.log"))
+    av = os.path.join(a.out, "avatar")
+    avatar_args = ["--name", name, "--gpu_removal"] + extra
+    if a.overlap:
+        cmd = ([py, "-u", "scripts/offline_app_lite.py", "--input_video", a.input, "--output_dir", pout,
+                "--avatar_out", av, "--avatar_args", " ".join(avatar_args)]
+               + (["--avatar_source", a.hq] if a.hq else []) + (["--vrm", a.vrm] if a.vrm else []) + a.mesh_args.split())
+        res["total_wall_s"] = run(cmd, os.path.join(a.out, "mesh.log"))
+    else:
+        res["mesh_wall_s"] = run([py, "-u", "scripts/offline_app_lite.py", "--input_video", a.input, "--output_dir",
+                                  pout] + a.mesh_args.split(), os.path.join(a.out, "mesh.log"))
     stages = {}
     for line in open(os.path.join(a.out, "mesh.log"), encoding="utf-8", errors="replace"):
         m = re.match(r"\[STAGE\]\[(\w+)\] time=([\d.]+) s, peak_alloc=([\d.]+) GB", line)
@@ -50,27 +60,29 @@ def main(a, extra):
             stages[m[1]] = dict(time_s=float(m[2]), peak_alloc_GB=float(m[3]))
     res["mesh_stages"] = stages
 
-    av = os.path.join(a.out, "avatar")
-    cmd = [py, "-u", "scripts/avatar_app.py", "--pipeline_out", pout, "--out", av, "--name", name, "--gpu_removal"]
-    cmd += (["--hq", a.hq] if a.hq else []) + (["--vrm", a.vrm] if a.vrm else []) + extra
-    res["avatar_wall_s"] = run(cmd, os.path.join(a.out, "avatar.log"))
+    if not a.overlap:
+        cmd = [py, "-u", "scripts/avatar_app.py", "--pipeline_out", pout, "--out", av] + avatar_args
+        cmd += (["--hq", a.hq] if a.hq else []) + (["--vrm", a.vrm] if a.vrm else [])
+        res["avatar_wall_s"] = run(cmd, os.path.join(a.out, "avatar.log"))
+        res["total_wall_s"] = res["mesh_wall_s"] + res["avatar_wall_s"]
     res["avatar_stats"] = json.load(open(os.path.join(av, "stats.json")))
-    for line in open(os.path.join(a.out, "avatar.log"), encoding="utf-8", errors="replace"):
+    for line in open(os.path.join(a.out, "mesh.log" if a.overlap else "avatar.log"), encoding="utf-8",
+                     errors="replace"):
         m = re.search(r"\[fusion_v2\].*prep (\d+)s, gpu (\d+)s, cpu (\d+)s", line)
         if m:
             res["fusion_parts_s"] = dict(prep=int(m[1]), gpu=int(m[2]), cpu=int(m[3]))
         m = re.search(r"(\S+) (?:moge|depth \S+) ([\d.]+)$", line.strip())   # the scene depth model
         if m:
             res["fusion_moge_s"] = float(m[2])
-    res["total_wall_s"] = res["mesh_wall_s"] + res["avatar_wall_s"]
     json.dump(res, open(os.path.join(a.out, "e2e.json"), "w"), indent=1)
 
     s = res["avatar_stats"]
     n = s["frames"]
-    rows = [("mesh (process wall)", res["mesh_wall_s"])]
+    rows = [("mesh (process wall)", res["mesh_wall_s"])] if not a.overlap else []
     rows += [(f"  {k}", v["time_s"]) for k, v in stages.items()]
-    rows += [("avatar (process wall)", res["avatar_wall_s"]),
-             ("  fusion v2", s.get("fusion_s", 0))]
+    rows += [("avatar (process wall)", res["avatar_wall_s"])] if not a.overlap else \
+        [("avatar: waited for the mesh stage", s.get("mesh_wait_s", 0))]
+    rows += [("  fusion v2", s.get("fusion_s", 0))]
     if "fusion_parts_s" in res:
         fp = res["fusion_parts_s"]
         rows += [("    prep", fp["prep"]), ("    gpu (MoGe + SAM3)", fp["gpu"]), ("      scene depth (MoGe or FUSION_DEPTH)", res.get("fusion_moge_s", 0)),
@@ -96,4 +108,5 @@ if __name__ == "__main__":
     ap.add_argument("--vrm", default=None)
     ap.add_argument("--name", default=None)
     ap.add_argument("--mesh_args", default="")
+    ap.add_argument("--overlap", action="store_true", help="the production single command (see module docstring)")
     main(ap.parse_args(argv), extra)
