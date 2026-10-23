@@ -44,11 +44,13 @@ usage (repo root):
       [--slow_tracker]     SAM3 tracking without utils/sam3_track_fast (bf16 backbone weights, the tracker's neck only,
                            frames decoded ahead): masks bit-identical either way, 341 -> 310 ms/frame on downtown_bar
                            (RTX 5060 Ti, scripts/eval/check_track_fast.py)
-      [--tracker_size N]   SAM3 tracker input resolution (default 1008, the trained one; 672 = 3x faster tracking, masks
-                           not identical: scripts/eval/check_track_res.py, utils/sam3_track_fast.build_tracker_at)
-      [--triton_attn]      the tracker's memory attention through utils/triton_attn (PyTorch's Windows wheels have no
-                           flash kernel): 323 -> 270 ms/frame at 1008, 111 -> 95 at 672; masks not bit-identical (IoU
-                           0.994-0.999 vs SDPA on downtown_bar, scripts/eval/check_track_fast.py --attn)
+      [--tracker_size N]   SAM3 tracker input resolution (default 672; 1008 is the trained one). 672: 3x faster
+                           tracking, mask IoU vs 1008 0.96-0.98, joints ~7 mm, avatar output judged visually fine
+                           (scripts/eval/check_track_res.py, utils/sam3_track_fast.build_tracker_at)
+      [--sdpa_attn]        the tracker's memory attention through PyTorch SDPA. Default: utils/triton_attn (PyTorch's
+                           Windows wheels have no flash kernel): 323 -> 270 ms/frame at 1008, 111 -> 95 at 672; masks
+                           not bit-identical (IoU 0.994-0.999 vs SDPA, scripts/eval/check_track_fast.py --attn)
+      (--tracker_size 1008 --sdpa_attn --slow_tracker: the original tracking, bit for bit)
 """
 import argparse
 import contextlib
@@ -404,12 +406,12 @@ def inference_lite(args):
 
     # 2. SAM3 tracking (tracker + vision backbone; frames on CPU)
     with Stage("sam3_load"):
-        size = getattr(args, "tracker_size", 1008)
+        size = getattr(args, "tracker_size", 672)
         app.predictor = (build_sam3_tracker(cfg.sam3["ckpt_path"]) if size == 1008
                          else sam3_track_fast.build_tracker_at(cfg.sam3["ckpt_path"], size))
         if not getattr(args, "slow_tracker", False):
             sam3_track_fast.install(app.predictor)
-        if getattr(args, "triton_attn", False):
+        if not getattr(args, "sdpa_attn", False):
             from utils import triton_attn
             triton_attn.install()
     with Stage("sam3_init_state"):
@@ -515,8 +517,8 @@ if __name__ == "__main__":
     p.add_argument("--preload_frames", action="store_true")
     p.add_argument("--keep_tracker_memory", action="store_true")
     p.add_argument("--slow_tracker", action="store_true")
-    p.add_argument("--tracker_size", type=int, default=1008)
-    p.add_argument("--triton_attn", action="store_true")
+    p.add_argument("--tracker_size", type=int, default=672)
+    p.add_argument("--sdpa_attn", action="store_true")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
