@@ -35,7 +35,7 @@ import numpy as np
 
 ME = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ME)
-from r3common import local_gpu, REPO  # noqa: E402
+from r3common import local_gpu, REPO, ckpt  # noqa: E402
 import disk_arrays  # noqa: E402
 sys.path.insert(0, REPO)
 from utils.skip_init import skip_random_init  # noqa: E402
@@ -243,7 +243,7 @@ def _sam3_build(compile_decoder):
     from sam3.model_builder import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
     with skip_random_init():
-        model = build_sam3_image_model(checkpoint_path="C:/VScodeFiles/checkpoints/sam3/sam3.pt",
+        model = build_sam3_image_model(checkpoint_path=ckpt("sam3/sam3.pt"),
                                        load_from_HF=False, enable_inst_interactivity=True)
     if BF16_WEIGHTS:
         # Every model call below runs under bf16 autocast: one bf16 copy of the Linear / Conv weights instead of fp32
@@ -517,7 +517,7 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
         if need_moge:
             from moge.model.v2 import MoGeModel
             with skip_random_init():
-                moge = MoGeModel.from_pretrained("C:/VScodeFiles/checkpoints/moge-2-vitl-normal/model.pt").cuda().eval()
+                moge = MoGeModel.from_pretrained(ckpt("moge-2-vitl-normal/model.pt")).cuda().eval()
             # Only points and mask are used. MoGe's forward skips a head the model lacks, and the normal head reads
             # the shared neck features without writing to them: the other outputs are unchanged (~10% of a frame).
             del moge.normal_head

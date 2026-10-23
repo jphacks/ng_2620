@@ -23,6 +23,16 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.a
 _GL = np.array([1.0, -1.0, -1.0])  # OpenGL <-> OpenCV camera axes
 
 
+def ckpt(rel):
+    """<ckpt_root>/<rel>: paths.ckpt_root of configs/body4d.yaml (the root the mesh pipeline reads its checkpoints
+    from), overridden by $BODY4D_CKPT_ROOT."""
+    root = os.environ.get("BODY4D_CKPT_ROOT")
+    if not root:
+        from omegaconf import OmegaConf
+        root = OmegaConf.load(f"{REPO}/configs/body4d.yaml").paths.ckpt_root
+    return f"{root}/{rel}"
+
+
 class Run:
     def __init__(self, pout, name=None):
         self.pout = os.path.abspath(pout).replace("\\", "/")
