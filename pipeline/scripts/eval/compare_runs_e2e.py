@@ -51,6 +51,8 @@ def main(a, b):
     for x, y in zip(fa, fb):
         ia, ib = cv2.imread(x), cv2.imread(y)
         diff.append((cv2.absdiff(ia, ib).max(2) > 24).mean() * 100)
+    if not diff:
+        return
     diff = np.array(diff)
     print(f"avatar frames: differing pixels mean {diff.mean():.2f}% max {diff.max():.2f}% (frame {diff.argmax()})")
 

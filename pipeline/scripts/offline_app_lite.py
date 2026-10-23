@@ -51,6 +51,8 @@ usage (repo root):
                            Windows wheels have no flash kernel): 323 -> 270 ms/frame at 1008, 111 -> 95 at 672; masks
                            not bit-identical (IoU 0.994-0.999 vs SDPA, scripts/eval/check_track_fast.py --attn)
       (--tracker_size 1008 --sdpa_attn --slow_tracker: the original tracking, bit for bit)
+      [--hmr_stride K]     SAM 3D Body on every K-th frame (and where the tracked persons change); the frames in between
+                           interpolated from their keyframes (utils/hmr_stride.py). Default 1 (every frame)
       [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
                            (scripts/occlusion/moge_ahead.py; the same bytes as fusion's own MoGe, which then skips it).
                            Off by default: on an RTX 5060 Ti the two processes share the GPU by time slicing, HMR grew
@@ -510,7 +512,12 @@ def inference_lite(args):
     app.RUNTIME["out_obj_ids"] = obj_ids
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
-            app.on_4d_generation()
+            stride = getattr(args, "hmr_stride", 1)
+            if stride > 1:   # HMR on keyframes, the frames in between interpolated (utils/hmr_stride.py)
+                from utils import hmr_stride
+                print("[hmr_stride]", hmr_stride.run(app, stride), flush=True)
+            else:
+                app.on_4d_generation()
     if ahead is not None:
         t0 = time.perf_counter()
         if glob.glob(os.path.join(app.OUTPUT_DIR, "focal_4d_individual", "*", "*.json")):
@@ -545,6 +552,7 @@ if __name__ == "__main__":
     p.add_argument("--tracker_size", type=int, default=672)
     p.add_argument("--sdpa_attn", action="store_true")
     p.add_argument("--moge_ahead", action="store_true")
+    p.add_argument("--hmr_stride", type=int, default=1)
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
