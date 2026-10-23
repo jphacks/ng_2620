@@ -95,6 +95,20 @@ def render_depth(verts_cv, faces, focal, W, H):
     return d.astype(np.float32)
 
 
+def render_depth_fast(verts_cv, faces, focal, W, H):
+    """render_depth without the vertex normals that pyrender.Mesh.from_trimesh computes (smooth shading, ~7 ms per
+    mesh, half of the call): a depth-only render reads only positions and indices, so the depth is the same
+    (scripts/eval/check_prep_fast.py)."""
+    import pyrender
+    scene = pyrender.Scene()
+    prim = pyrender.Primitive(positions=(verts_cv * _GL).astype(np.float32), indices=np.asarray(faces, np.uint32),
+                              mode=pyrender.constants.GLTF.TRIANGLES)
+    scene.add(pyrender.Mesh([prim]))
+    scene.add(pyrender.IntrinsicsCamera(fx=focal, fy=focal, cx=W / 2, cy=H / 2, zfar=1e4), pose=np.eye(4))
+    d = _renderer(W, H).render(scene, flags=pyrender.RenderFlags.DEPTH_ONLY)
+    return d.astype(np.float32)
+
+
 def save_hide(method_dir, run, pid, i, hide):
     d = f"{method_dir}/hide/{run.name}/{pid}"
     os.makedirs(d, exist_ok=True)

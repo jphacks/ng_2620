@@ -51,6 +51,10 @@ usage (repo root):
                            Windows wheels have no flash kernel): 323 -> 270 ms/frame at 1008, 111 -> 95 at 672; masks
                            not bit-identical (IoU 0.994-0.999 vs SDPA, scripts/eval/check_track_fast.py --attn)
       (--tracker_size 1008 --sdpa_attn --slow_tracker: the original tracking, bit for bit)
+      [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
+                           (scripts/occlusion/moge_ahead.py; the same bytes as fusion's own MoGe, which then skips it).
+                           Off by default: on an RTX 5060 Ti the two processes share the GPU by time slicing, HMR grew
+                           17.7 -> 29.0 s, and the end-to-end time only moved 111.9 -> 111.3 s (downtown_bar)
 """
 import argparse
 import contextlib
@@ -450,6 +454,17 @@ def inference_lite(args):
     del state
     free_gpu()
 
+    # --moge_ahead: fusion v2's MoGe-2 depth needs only images/ and the focal length, so a second process can compute
+    # it while HMR runs; avatar_app's fusion then takes the file instead of running MoGe itself
+    ahead = None
+    if getattr(args, "moge_ahead", False):
+        import subprocess
+        for f in glob.glob(os.path.join(app.OUTPUT_DIR, "moge_level*.npz")):   # a previous run's
+            os.remove(f)
+        ahead = subprocess.Popen([sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                     "occlusion", "moge_ahead.py"),
+                                  "--pipeline_out", app.OUTPUT_DIR])
+
     # 3. HMR (SAM-3D-Body; MoGe-2 only for the single intrinsics call inside on_4d_generation, run ahead of the load)
     dev = torch.device("cuda")
     fov = StagedFOV(cfg.sam_3d_body["fov_path"], dev)
@@ -496,6 +511,16 @@ def inference_lite(args):
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
             app.on_4d_generation()
+    if ahead is not None:
+        t0 = time.perf_counter()
+        if glob.glob(os.path.join(app.OUTPUT_DIR, "focal_4d_individual", "*", "*.json")):
+            ahead.wait()
+        else:   # no person was meshed: nothing for MoGe to wait for
+            ahead.kill()
+        print(f"[STAGE][moge_ahead_wait] time={time.perf_counter() - t0:.2f} s, peak_alloc=0.00 GB "
+              f"(exit code {ahead.returncode})", flush=True)
+        CAPTURE["stages"]["moge_ahead_wait"] = dict(time_s=time.perf_counter() - t0, peak_alloc_GB=0.0,
+                                                    peak_reserved_GB=0.0)
 
 
 if __name__ == "__main__":
@@ -519,6 +544,7 @@ if __name__ == "__main__":
     p.add_argument("--slow_tracker", action="store_true")
     p.add_argument("--tracker_size", type=int, default=672)
     p.add_argument("--sdpa_attn", action="store_true")
+    p.add_argument("--moge_ahead", action="store_true")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)

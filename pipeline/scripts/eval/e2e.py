@@ -77,7 +77,8 @@ def main(a, extra):
                  ("    cpu (evidence, decision, render)", fp["cpu"])]
     rows += [("  removal (thread, overlapped)", s.get("removal_s", 0)), ("  removal wait after fusion", s.get("removal_wait_s", 0)),
              ("  retarget + render", s.get("render_s", 0)), ("  hide", s.get("hide_s", 0)),
-             ("  composite + encode", s.get("composite_s", 0)), ("  avatar_app total (in process)", s.get("total_s", 0)),
+             ("  composite (+ encode before Sinks)", s.get("composite_s", 0)),
+             ("  wait for queued writes / encodes", s.get("write_wait_s", 0)), ("  avatar_app total (in process)", s.get("total_s", 0)),
              ("TOTAL", res["total_wall_s"])]
     print(f"{name}: {n} frames, pipeline {s['size'][0]}x{s['size'][1]}, output {s['out_size'][0]}x{s['out_size'][1]}")
     for k, v in rows:

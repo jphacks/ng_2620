@@ -479,6 +479,58 @@ def _save_moge(path, Z, fov_x, level):
     os.replace(tmp, path)
 
 
+def moge_depth(run, Z, fov_x):
+    """MoGe-2 metric depth of every frame of run into Z (T, H, W) float32; 0 where invalid or masked."""
+    import torch
+    from moge.model.v2 import MoGeModel
+    with skip_random_init():
+        moge = MoGeModel.from_pretrained(ckpt("moge-2-vitl-normal/model.pt")).cuda().eval()
+    # Only points and mask are used. MoGe's forward skips a head the model lacks, and the normal head reads
+    # the shared neck features without writing to them: the other outputs are unchanged (~10% of a frame).
+    del moge.normal_head
+    for i in range(len(run)):
+        rgb = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
+        t = torch.tensor(rgb / 255.0, dtype=torch.float32, device="cuda").permute(2, 0, 1)
+        with torch.no_grad():
+            o = moge.infer(t, fov_x=fov_x, apply_mask=False, resolution_level=MOGE_LEVEL)
+        z = o["points"][..., 2].float().cpu().numpy()
+        z[~np.isfinite(z)] = 0
+        z[~o["mask"].cpu().numpy().astype(bool)] = 0
+        Z[i] = z
+        # Z now owns the CPU result; the input and other GPU outputs
+        # must not survive into the next image or the SAM3 stage.
+        del o, t
+    del moge
+    torch.cuda.empty_cache()
+
+
+def ahead_path(run):
+    """Where scripts/occlusion/moge_ahead.py leaves the MoGe depth it computed during the mesh stage (MOGE_LEVEL)."""
+    return f"{run.pout}/moge_level{MOGE_LEVEL}.npz"
+
+
+def moge_fov_x(run):
+    """The horizontal FoV run_gpu gives MoGe: the pipeline's focal length (the first frame / person that has one)."""
+    f = next(run.focal(p, i) for i in range(len(run)) for p in run.pids if run.focal(p, i))
+    return math.degrees(2 * math.atan(run.W / 2 / f))
+
+
+def _take_ahead(run, cache):
+    """moge.npz from moge_ahead.py's file when it was made for this run's FoV and MOGE_LEVEL (the same model, input,
+    settings and process-wide TF32 / autocast state as run_gpu's own loop: the same bytes). -> True if taken."""
+    src = ahead_path(run)
+    if not os.path.exists(src):
+        return False
+    with np.load(src) as z:
+        ok = ("masked" in z.files and int(z["level"]) == MOGE_LEVEL
+              and float(z["fov_x"]) == moge_fov_x(run) and z["Z"].shape == (len(run), run.H, run.W))
+    if ok:
+        import shutil
+        shutil.copyfile(src, f"{cache}/moge.npz.part")
+        os.replace(f"{cache}/moge.npz.part", f"{cache}/moge.npz")
+    return ok
+
+
 @contextlib.contextmanager
 def _vram_cap(margin=0.5 * 2**30):
     """Cap PyTorch's CUDA memory at what the GPU physically has free for this process.
@@ -529,6 +581,8 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
             os.replace(f"{cache}/cands.npz", f"{cache}/cands_{old.replace('+', '_')}.npz")
             if os.path.exists(f"{cache}/evidence.pkl"):
                 os.remove(f"{cache}/evidence.pkl")
+    if not os.path.exists(f"{cache}/moge.npz") and _take_ahead(run, cache):
+        print(run.name, "moge from the mesh stage (moge_ahead.py)", flush=True)
     if os.path.exists(f"{cache}/moge.npz") and os.path.exists(f"{cache}/cands.npz"):
         return  # cached
     D = disk_arrays.npz_member(f"{cache}/mesh.npz", "D")                 # prep's mesh depth (T,P,H,W), memory-mapped
@@ -542,32 +596,12 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
         if need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
             loader = _SAM3Loader(compile_decoder)   # builds SAM3 while MoGe runs
         if need_moge:
-            from moge.model.v2 import MoGeModel
-            with skip_random_init():
-                moge = MoGeModel.from_pretrained(ckpt("moge-2-vitl-normal/model.pt")).cuda().eval()
-            # Only points and mask are used. MoGe's forward skips a head the model lacks, and the normal head reads
-            # the shared neck features without writing to them: the other outputs are unchanged (~10% of a frame).
-            del moge.normal_head
-            f = next(run.focal(p, i) for i in range(T) for p in run.pids if run.focal(p, i))
-            fov_x = math.degrees(2 * math.atan(W / 2 / f))
+            fov_x = moge_fov_x(run)
             Z = disk_arrays.scratch(f"{cache}/_moge_Z.npy", (T, H, W), np.float32)   # np.zeros, on disk
-            for i in range(T):
-                rgb = cv2.cvtColor(run.image(i), cv2.COLOR_BGR2RGB)
-                t = torch.tensor(rgb / 255.0, dtype=torch.float32, device="cuda").permute(2, 0, 1)
-                with torch.no_grad():
-                    o = moge.infer(t, fov_x=fov_x, apply_mask=False, resolution_level=MOGE_LEVEL)
-                z = o["points"][..., 2].float().cpu().numpy()
-                z[~np.isfinite(z)] = 0
-                z[~o["mask"].cpu().numpy().astype(bool)] = 0
-                Z[i] = z
-                # Z now owns the CPU result; the input and other GPU outputs
-                # must not survive into the next image or the SAM3 stage.
-                del o, t
+            moge_depth(run, Z, fov_x)
             # The same file, compressed in a thread while SAM3 runs (4.4 s per 100 frames at 854x480); joined below.
             saver = threading.Thread(target=_save_moge, args=(f"{cache}/moge.npz", Z, fov_x, MOGE_LEVEL))
             saver.start()
-            del moge
-            torch.cuda.empty_cache()
             print(run.name, "moge", round(time.time() - t0, 1), flush=True)
         if not os.path.exists(f"{cache}/cands.npz"):
             over = False

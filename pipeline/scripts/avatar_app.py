@@ -152,6 +152,42 @@ def composite_gpu(base, layers, s):
     return res
 
 
+class Sink:
+    """Runs fn(*args) calls in order on one worker thread, at most `depth` waiting: the frames' PNG / JPEG writes and
+    the two mp4 encodes (28 + 23 + 70 ms per 1080x1920 frame) leave the render loop and overlap with it. Same calls,
+    same order, same files."""
+
+    def __init__(self, depth=4):
+        import queue
+        import threading
+        self.q = queue.Queue(depth)
+        self.err = None
+        self.t = threading.Thread(target=self._run, daemon=True)
+        self.t.start()
+
+    def _run(self):
+        while True:
+            job = self.q.get()
+            if job is None:
+                return
+            if self.err is None:
+                try:
+                    job[0](*job[1:])
+                except BaseException as e:   # re-raised by put / close on the main thread
+                    self.err = e
+
+    def put(self, fn, *args):
+        if self.err is not None:
+            raise self.err
+        self.q.put((fn, *args))
+
+    def close(self):
+        self.q.put(None)
+        self.t.join()
+        if self.err is not None:
+            raise self.err
+
+
 def composite(base, layers):
     """layers: [(bgr float32, alpha (H,W) 0..1, depth (H,W) inf=empty)] -> back-to-front over base.
     Only the bounding box of the layers' coverage is computed: outside it every alpha is 0, where the blend
@@ -364,6 +400,14 @@ def main(a):
     crf = a.crf if a.crf is not None else (12 if a.source else None)
     outs = Mp4Writer(os.path.join(a.out, f"avatar_{run.name}.mp4"), fps=a.fps, crf=crf)
     comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf)
+    sinks = [Sink() for _ in range(3)]   # frame files, avatar mp4, compare mp4
+
+    def compare_row(j, out):
+        mesh = cv2.imread(f"{run.pout}/rendered_frames/{stems[j]}.jpg")
+        if mesh is not None and sc != 1 and mesh.shape[:2] == (H, W):
+            mesh = cv2.resize(mesh, (OW, OH), interpolation=cv2.INTER_LINEAR)
+        row = [frames[j]] + ([mesh] if mesh is not None and mesh.shape == out.shape else []) + [out]
+        comps.append(cv2.cvtColor(np.hstack(row), cv2.COLOR_BGR2RGB))
     hidden_px = cov_px = 0
     t_render = t_hide = t_comp = t_gpu = 0.0
     bufs, raws = {}, {}
@@ -397,21 +441,21 @@ def main(a):
         out = composite_gpu(base, layers, ss)
         t_gpu += time.perf_counter() - t0
         if a.source:
-            cv2.imwrite(os.path.join(fdir, f"{stems[j]}.png"), out)
+            sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.png"), out)
         else:
-            cv2.imwrite(os.path.join(fdir, f"{stems[j]}.jpg"), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        outs.append(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
-        mesh = cv2.imread(f"{run.pout}/rendered_frames/{stems[j]}.jpg")
-        if mesh is not None and sc != 1 and mesh.shape[:2] == (H, W):
-            mesh = cv2.resize(mesh, (OW, OH), interpolation=cv2.INTER_LINEAR)
-        row = [frames[j]] + ([mesh] if mesh is not None and mesh.shape == out.shape else []) + [out]
-        comps.append(cv2.cvtColor(np.hstack(row), cv2.COLOR_BGR2RGB))
+            sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.jpg"), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        sinks[1].put(lambda o: outs.append(cv2.cvtColor(o, cv2.COLOR_BGR2RGB)), out)
+        sinks[2].put(compare_row, j, out)
         bufs.pop(j)
         raws.pop(j - 1, None)
         t_comp += time.perf_counter() - t0
     stats["render_s"] = round(t_setup + t_render, 1)
     stats["hide_s"] = round(t_hide, 1)
-    stats["composite_s"] = round(t_comp, 1)          # incl. the GPU composite, the PNG / JPEG and both mp4s
+    t0 = time.perf_counter()
+    for k in sinks:   # the writes / encodes still queued
+        k.close()
+    stats["write_wait_s"] = round(time.perf_counter() - t0, 1)
+    stats["composite_s"] = round(t_comp, 1)          # incl. the GPU composite; the writes and encodes run in Sinks
     stats["composite_gpu_s"] = round(t_gpu, 1)
     if hider is not None:
         stats["hidden_avatar_%"] = round(100 * hidden_px / max(cov_px, 1), 2)
@@ -423,7 +467,7 @@ def main(a):
                       if k.startswith("ik_")), flush=True)
     outs.close()
     comps.close()
-    del frames, plates, removal, base, row, hider, fus   # every view of the scratch arrays, so the files can go
+    del frames, plates, removal, base, hider, fus   # every view of the scratch arrays, so the files can go
     for f in ("frames", "person_masks", "removal_holes", "removal_excl", "removal_grays", "removal_plates"):
         release(f"{sdir}/{f}.npy")
     try:

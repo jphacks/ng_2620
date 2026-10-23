@@ -75,7 +75,7 @@ class SpringBoneSim:
     MAX_DT = 1.0 / 30  # 積分の刻みの上限。低 fps ではこの刻みでサブステップを回し fps 非依存にする
 
     def __init__(self, model: VrmModel, center: str = "none",
-                 max_collider_ratio: float = 0.25):
+                 max_collider_ratio: float = 0.25, vectorized: bool = True):
         """max_collider_ratio: 身長に対するこの比を超える半径の球コライダは無視する。
 
         VRoid の VRMSkirtTool は半径 1.0m の球を体の前後 0.9m に置く（スカートの
@@ -137,6 +137,9 @@ class SpringBoneSim:
             self.group_sph.append(np.array(sorted(set(ids)), np.int64))
         self.hips = model.humanoid.get("hips")
         self.initialized = False
+        self.vectorized = vectorized
+        if vectorized:
+            self._build_levels()
 
     @property
     def n_joints(self) -> int:
@@ -195,6 +198,8 @@ class SpringBoneSim:
         return G
 
     def _init_tails(self, G: np.ndarray, off: np.ndarray) -> None:
+        if getattr(self, "vectorized", False):
+            self.state = None    # rebuilt from the joints' cur / prev on the next _advance
         for j in self.joints:
             head = G[j.node][:3, 3] + off
             rest_rot = G[j.parent][:3, :3] @ j.local_rot
@@ -202,7 +207,114 @@ class SpringBoneSim:
             j.cur = tail.astype(np.float32)
             j.prev = tail.astype(np.float32)
 
+    # ------------------------------------------------------------------
+    # Vectorized _advance: the same update per joint, computed for all joints of one tree level at once (a joint's
+    # parent is either not a spring joint or a spring joint of an earlier level, so the order the loop depends on is
+    # kept). Float rounding differs from the loop (scripts/eval/check_springbone.py measures both).
+    def _build_levels(self) -> None:
+        J = self.joints
+        n = len(J)
+        self.jnode = np.array([j.node for j in J], np.int64)
+        self.jparent = np.array([j.parent for j in J], np.int64)
+        self.jlen = np.array([j.length for j in J], np.float64)
+        self.jlpos4 = np.array([np.append(j.local_pos, 1.0) for j in J], np.float64).reshape(n, 4)
+        self.jlpos = np.array([j.local_pos for j in J], np.float32).reshape(n, 3)
+        self.jlscale = np.array([j.local_scale for j in J], np.float32).reshape(n, 3)
+        self.jlrot = np.array([j.local_rot for j in J], np.float32).reshape(n, 3, 3)
+        self.jaxis = np.array([j.bone_axis for j in J], np.float32).reshape(n, 3)
+        gr = [self.groups[j.group] for j in J]
+        self.jdrag = np.array([g["drag"] for g in gr], np.float64)
+        self.jstiff = np.array([g["stiffness"] for g in gr], np.float64)
+        self.jgrav = np.array([np.asarray(g["gravity_dir"], np.float64) * g["gravity_power"] for g in gr]).reshape(n, 3)
+        self.jhit = np.array([g["hit_radius"] for g in gr], np.float64)
+        ms = max([len(self.group_sph[j.group]) for j in J] + [0])
+        self.jsph = np.full((n, ms), -1, np.int64)
+        for k, j in enumerate(J):
+            ids = self.group_sph[j.group]
+            self.jsph[k, :len(ids)] = ids
+        self.jzero_local = {j.node: self.m.local_matrix(j.node, None) for j in J if j.length < 1e-4}
+        lvl = {}
+        for j in J:    # topological order: a spring parent already has its level
+            pj = self.by_node.get(j.parent)
+            lvl[j.node] = lvl[pj.node] + 1 if pj is not None else 0
+        depth = np.array([lvl[j.node] for j in J])
+        self.levels = [np.nonzero(depth == d)[0] for d in range(depth.max() + 1)] if n else []
+        # the non-spring descendants of spring nodes, in _topo order, with their rest local matrices
+        spring = set(self.by_node)
+        dirty = set(spring)
+        self.follow = []
+        for i in _topo(self.m.nodes):
+            p = self.parent.get(i)
+            if p is None or i in spring or p not in dirty:
+                continue
+            self.follow.append((i, p, self.m.local_matrix(i, None)))
+            dirty.add(i)
+        self.state = None
+
+    def _advance_vec(self, G: np.ndarray, off: np.ndarray, dt: float) -> np.ndarray:
+        if self.state is None:
+            self.state = (np.array([j.cur for j in self.joints], np.float32).reshape(-1, 3),
+                          np.array([j.prev for j in self.joints], np.float32).reshape(-1, 3))
+        cur, prev = self.state
+        if len(self.sph_nodes):
+            sph_pos = (np.einsum("nij,nj->ni", G[self.sph_nodes], self.sph_off)[:, :3]
+                       + off[None, :]).astype(np.float32)
+        else:
+            sph_pos = np.zeros((0, 3), np.float32)
+        for idx in self.levels:
+            zero = self.jlen[idx] < 1e-4
+            for k in idx[zero]:
+                G[self.jnode[k]] = G[self.jparent[k]] @ self.jzero_local[self.jnode[k]]
+            idx = idx[~zero]
+            if not len(idx):
+                continue
+            Pm = G[self.jparent[idx]]
+            pr = Pm[:, :3, :3]
+            sc = np.linalg.norm(pr, axis=1)                                  # column norms
+            bad = np.any(np.abs(sc - 1.0) > 1e-3, axis=1)
+            if bad.any():
+                pr = pr.copy()
+                pr[bad] = pr[bad] / np.maximum(sc[bad], 1e-6)[:, None, :]
+            head = np.einsum("nij,nj->ni", Pm, self.jlpos4[idx])[:, :3] + off
+            rest_rot = pr @ self.jlrot[idx]
+            rest_dir = np.einsum("nij,nj->ni", rest_rot, self.jaxis[idx])
+            c, pv = cur[idx], prev[idx]
+            nxt = (c + (c - pv) * (1.0 - self.jdrag[idx])[:, None]
+                   + rest_dir * (self.jstiff[idx] * dt)[:, None] + self.jgrav[idx] * dt)
+            L = self.jlen[idx][:, None]
+            d = nxt - head
+            nxt = head + d / np.maximum(np.linalg.norm(d, axis=1), 1e-6)[:, None] * L
+            sid = self.jsph[idx]
+            if sid.shape[1]:
+                valid = sid >= 0
+                P = sph_pos[np.maximum(sid, 0)]                              # (n, S, 3)
+                r = self.sph_rad[np.maximum(sid, 0)] + self.jhit[idx][:, None]
+                hit0 = valid & (np.linalg.norm(nxt[:, None, :] - P, axis=2) < r)
+                for k in range(sid.shape[1]):     # as the loop: the first test's hits, pushed in sphere order
+                    h = hit0[:, k]
+                    if not h.any():
+                        continue
+                    dv = nxt[h] - P[h, k]
+                    nrm = dv / np.maximum(np.linalg.norm(dv, axis=1), 1e-6)[:, None]
+                    d = P[h, k] + nrm * r[h, k][:, None] - head[h]
+                    nxt[h] = head[h] + d / np.maximum(np.linalg.norm(d, axis=1), 1e-6)[:, None] * L[h]
+            prev[idx] = c
+            cur[idx] = nxt.astype(np.float32)
+            nd = nxt - head
+            nd = (nd / np.maximum(np.linalg.norm(nd, axis=1), 1e-6)[:, None]).astype(np.float32)
+            R = _from_to_batch(rest_dir.astype(np.float32), nd)
+            local_rot = np.swapaxes(pr, 1, 2) @ (R @ rest_rot)
+            Lm = np.tile(np.eye(4, dtype=np.float32), (len(idx), 1, 1))
+            Lm[:, :3, :3] = local_rot * self.jlscale[idx][:, None, :]
+            Lm[:, :3, 3] = self.jlpos[idx]
+            G[self.jnode[idx]] = Pm @ Lm
+        for i, p, Lr in self.follow:
+            G[i] = G[p] @ Lr
+        return G
+
     def _advance(self, G: np.ndarray, off: np.ndarray, dt: float) -> np.ndarray:
+        if self.vectorized:
+            return self._advance_vec(G, off, dt)
         # コライダのワールド位置（人体ボーン上なので Spring の影響を受けない）
         if len(self.sph_nodes):
             sph_pos = (np.einsum("nij,nj->ni", G[self.sph_nodes], self.sph_off)[:, :3]
@@ -270,6 +382,26 @@ class SpringBoneSim:
                 G[i] = G[p] @ self.m.local_matrix(i, None)
                 dirty.add(i)
         return G
+
+
+def _from_to_batch(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """_from_to for (n, 3) unit vectors a, b -> (n, 3, 3)."""
+    n = len(a)
+    a64, b64 = a.astype(np.float64), b.astype(np.float64)
+    v = np.cross(a64, b64)
+    s = np.linalg.norm(v, axis=1)
+    c = np.einsum("ni,ni->n", a64, b64)
+    out = np.tile(np.eye(3), (n, 1, 1))
+    gen = s >= 1e-8
+    if gen.any():
+        k = v[gen] / s[gen][:, None]
+        K = np.zeros((len(k), 3, 3))
+        K[:, 0, 1], K[:, 0, 2], K[:, 1, 2] = -k[:, 2], k[:, 1], -k[:, 0]
+        K[:, 1, 0], K[:, 2, 0], K[:, 2, 1] = k[:, 2], -k[:, 1], k[:, 0]
+        out[gen] = np.eye(3) + s[gen][:, None, None] * K + (1.0 - c[gen])[:, None, None] * (K @ K)
+    for i in np.nonzero(~gen & (c <= 0))[0]:   # opposite directions: the loop's special case
+        out[i] = _from_to(a[i], b[i])
+    return out.astype(np.float32)
 
 
 def _rest_height(model: VrmModel) -> float:
