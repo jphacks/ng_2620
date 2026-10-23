@@ -361,6 +361,10 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
     # array: same bytes, no whole-video copy in RAM; 4.6 GB for a 5-minute clip)
     rows_path = f"{cache}/_cands_rows.bin"
     rows_f, n_rows = open(rows_path, "wb"), 0
+    kfr = None
+    if points.startswith("kf_"):   # grid on keyframes only, candidates carried in between (keyframes.py)
+        import keyframes
+        kfr = keyframes.Keyframer(points[3:])
     frame_idx, scores, inV = [], [], []
     pm, pf, ps = [], [], []
     for i in range(T):
@@ -385,7 +389,10 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
             if g_pool is not None:
                 g_stream.wait_stream(torch.cuda.current_stream())   # the image features are ready
                 fut = g_pool.submit(ground_async, st)
-            if points == "full":
+            carried = kfr.carry(i, img, inner, st) if kfr is not None else None
+            if carried is not None:
+                pass
+            elif points == "full":
                 _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
             else:
                 # coarse grid first; then only the fine points that no passing coarse mask covers
@@ -409,10 +416,16 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
                 pm.append(np.packbits(mk.reshape(-1)))
                 pf.append(i)
                 ps.append(float(sc))
-        order = sorted(range(len(keep)), key=lambda j: -keep[j][0])   # = frozen keep.sort (stable)
-        keep = [keep[j] for j in order]
-        half = [half[j] for j in order]
-        sel = _dedup_gpu(keep, half)
+        if carried is not None:
+            keep = sorted(carried, key=lambda c: -c[0])
+            sel = range(len(keep))
+        else:
+            order = sorted(range(len(keep)), key=lambda j: -keep[j][0])   # = frozen keep.sort (stable)
+            keep = [keep[j] for j in order]
+            half = [half[j] for j in order]
+            sel = _dedup_gpu(keep, half)
+            if kfr is not None:
+                kfr.start(i, img, [keep[j] for j in sel], lab, run.pids, list(gm), sil, inner, st)
         for j in sel:
             rows_f.write(np.packbits(keep[j][1].reshape(-1)).tobytes())
             n_rows += 1
@@ -420,7 +433,7 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
             scores.append(keep[j][0])
             inV.append(keep[j][2])
         if i % 10 == 0:
-            print(run.name, i, "pts", len(pts), "raw", len(keep), "kept", len(sel),
+            print(run.name, i, "pts", 0 if carried is not None else len(pts), "raw", len(keep), "kept", len(sel),
                   round(time.time() - t0, 1), flush=True)
         # r aliases st, including this image's backbone features. Both
         # must be released before set_image allocates the next state.
@@ -430,7 +443,8 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
     rows_f.close()
     allm = np.memmap(rows_path, np.uint8, "r", shape=(n_rows, nb)) if n_rows else np.zeros((0, nb), np.uint8)
     np.savez_compressed(f"{cache}/cands.npz", masks=allm, frame=np.array(frame_idx),
-                        score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]), mode=np.array(mode))
+                        score=np.array(scores), inV=np.array(inV), shape=np.array([H, W]), mode=np.array(mode),
+                        keyframes=np.array(kfr.keyframes if kfr is not None else [], int))
     del allm
     disk_arrays.release(rows_path)
     np.savez_compressed(f"{cache}/person.npz",
@@ -438,7 +452,7 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
                         frame=np.array(pf, int), score=np.array(ps), shape=np.array([H, W]))
     if g_pool is not None:
         g_pool.shutdown()
-    del model, proc, dec, text_person
+    del model, proc, dec, text_person, kfr
     # The bound predict_masks method forms a decoder self-cycle. Also
     # release BF16 weight copies held by SAM3's outer autocast context
     # before the following CPU/avatar stages. No per-frame cache flush.
@@ -477,9 +491,11 @@ def _vram_cap(margin=0.5 * 2**30):
 def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False):
     """points: "full" = the frozen point grid (bit-identical to gpu_stage); "c2f" = coarse-to-fine (see
     _c2f_points; not bit-identical, same F1 pass count on dev 18 and held-out test4, LEDGER 2026-10-14).
+    "kf_flow" / "kf_sam3" = c2f on keyframes, candidates carried in between by optical flow / the SAM3 tracker
+    (keyframes.py; kf_flow is the pipeline default, run_fusion_v2.run_fusion).
     compile_decoder: torch.compile the SAM mask decoder (not bit-identical; ~0.03% of mask pixels flip)."""
     import torch
-    assert points in ("full", "c2f")
+    assert points in ("full", "c2f", "kf_flow", "kf_sam3")
     os.makedirs(cache, exist_ok=True)
     T, H, W = len(run), run.H, run.W
     mode = _cands_mode(points, compile_decoder)

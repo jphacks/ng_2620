@@ -12,8 +12,10 @@ Stages: prep (CPU) -> gpu_stage (MoGe-2 depth, class-agnostic SAM3 candidates, S
 The GPU stage and the evidence run through gpu_stage_fast / evidence_fast, which produce bit-identical caches and
 evidence with less time and VRAM (see their docstrings), and shared_cache memoizes the cache loads and ground masks that
 the CPU stages repeat; --reference runs the frozen gpu_stage / evidence instead.
-By default the SAM3 point prompts are coarse-to-fine (--points c2f: ~2.8x fewer decoder calls, not bit-identical; same
-F1 pass count on dev 18 and the held-out test4, LEDGER 2026-10-14); --points full keeps the frozen grid.
+By default the SAM3 point grid runs on keyframes only and the candidates are carried by optical flow in between
+(--points kf_flow, fusion_v2/keyframes.py: fusion GPU stage -28..-54%, whole pipeline -16..-30% on 4 occluded 3DPW clips
+on an L4, avatar output unchanged by eye, testdata/2026-10-23). --points c2f prompts every frame coarse-to-fine (~2.8x
+fewer decoder calls than the frozen grid, LEDGER 2026-10-14); --points full keeps the frozen grid.
 """
 import argparse
 import os
@@ -34,7 +36,7 @@ import fusion  # noqa: E402
 import shared_cache  # noqa: E402
 
 
-def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="c2f", compile_decoder=True):
+def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_flow", compile_decoder=True):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
     (ignored with reference=True)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
@@ -66,8 +68,10 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--name", default=None)
     ap.add_argument("--reference", action="store_true", help="run the frozen gpu_stage / evidence")
-    ap.add_argument("--points", choices=["full", "c2f"], default="c2f",
-                    help="SAM3 point prompts: coarse-to-fine (default; faster, not bit-identical) or the frozen grid")
+    ap.add_argument("--points", choices=["full", "c2f", "kf_flow", "kf_sam3"], default="kf_flow",
+                    help="SAM3 point prompts: kf_flow (default) = coarse-to-fine on keyframes, candidates carried by "
+                         "optical flow in between (fusion_v2/keyframes.py); c2f = coarse-to-fine on every frame; "
+                         "full = the frozen grid; kf_sam3 = keyframes carried by the SAM3 tracker (slower)")
     ap.add_argument("--no_compile_decoder", dest="compile_decoder", action="store_false",
                     help="eager SAM mask decoder (the default torch.compiles it; not bit-identical)")
     a = ap.parse_args()
