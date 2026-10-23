@@ -41,6 +41,14 @@ usage (repo root):
       [--save_workers N]   threads saving meshes / overlays while HMR runs (default 2; GL drawing stays on one thread)
       [--keep_rejected_hands] run the hand pass on every hand crop, as the original does (default: skip the crops
                            run_inference rejects by box size anyway; see skip_rejected_hands)
+      [--slow_tracker]     SAM3 tracking without utils/sam3_track_fast (bf16 backbone weights, the tracker's neck only,
+                           frames decoded ahead): masks bit-identical either way, 341 -> 310 ms/frame on downtown_bar
+                           (RTX 5060 Ti, scripts/eval/check_track_fast.py)
+      [--tracker_size N]   SAM3 tracker input resolution (default 1008, the trained one; 672 = 3x faster tracking, masks
+                           not identical: scripts/eval/check_track_res.py, utils/sam3_track_fast.build_tracker_at)
+      [--triton_attn]      the tracker's memory attention through utils/triton_attn (PyTorch's Windows wheels have no
+                           flash kernel): 323 -> 270 ms/frame at 1008, 111 -> 95 at 672; masks not bit-identical (IoU
+                           0.994-0.999 vs SDPA on downtown_bar, scripts/eval/check_track_fast.py --attn)
 """
 import argparse
 import contextlib
@@ -65,6 +73,8 @@ from utils.stream_blocks import stream_blocks  # noqa: E402
 from utils.compile_cache import use_persistent_compile_cache  # noqa: E402
 from utils.lazy_frames import lazy_jpeg_frames  # noqa: E402
 from utils.tracker_prune import prune_propagation  # noqa: E402
+from utils import sam3_track_fast  # noqa: E402
+from utils.lazy_frames import LazyFrames  # noqa: E402
 import hmr_fast  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
 
@@ -394,13 +404,22 @@ def inference_lite(args):
 
     # 2. SAM3 tracking (tracker + vision backbone; frames on CPU)
     with Stage("sam3_load"):
-        app.predictor = build_sam3_tracker(cfg.sam3["ckpt_path"])
+        size = getattr(args, "tracker_size", 1008)
+        app.predictor = (build_sam3_tracker(cfg.sam3["ckpt_path"]) if size == 1008
+                         else sam3_track_fast.build_tracker_at(cfg.sam3["ckpt_path"], size))
+        if not getattr(args, "slow_tracker", False):
+            sam3_track_fast.install(app.predictor)
+        if getattr(args, "triton_attn", False):
+            from utils import triton_attn
+            triton_attn.install()
     with Stage("sam3_init_state"):
         # frames are rebuilt on access from their JPEG bytes (bit-identical): preloading them as 1008^2 float32
         # takes 12.2 MB per frame, 21.9 GB for a 60 s clip
         with (contextlib.nullcontext() if getattr(args, "preload_frames", False) else lazy_jpeg_frames()):
             state = app.predictor.init_state(video_path=args.input_video if image_list is None else image_list,
                                              offload_video_to_cpu=True, offload_state_to_cpu=args.offload_state)
+        if not getattr(args, "slow_tracker", False) and isinstance(state["images"], LazyFrames):
+            state["images"] = sam3_track_fast.Prefetch(state["images"])
         app.predictor.clear_all_points_in_video(state)
         app.RUNTIME["inference_state"] = state
         app.RUNTIME["out_obj_ids"] = []
@@ -417,6 +436,12 @@ def inference_lite(args):
         # to 1801 frames run exactly as before.
         app.on_mask_generation(start_frame_idx=0, max_frame_num_to_track=max(1800, state["num_frames"]))
         app.predictor.__dict__.pop("propagate_in_video", None)   # the wrapper references the tracker: drop it
+        if size != 1008:   # images/ as a 1008 tracker writes them (sam3_track_fast.write_images_as_1008)
+            frames = getattr(state["images"], "frames", state["images"])
+            if isinstance(frames, LazyFrames):
+                sam3_track_fast.write_images_as_1008(frames, app.OUTPUT_DIR, state["video_height"], state["video_width"])
+            else:
+                print(f"[tracker_size {size}] images/ written from the {size} frames (not a JPEG folder input)")
     obj_ids = list(app.RUNTIME["out_obj_ids"])
     app.RUNTIME["inference_state"] = None
     app.predictor = None
@@ -489,6 +514,9 @@ if __name__ == "__main__":
     p.add_argument("--resident_backbone", action="store_true")
     p.add_argument("--preload_frames", action="store_true")
     p.add_argument("--keep_tracker_memory", action="store_true")
+    p.add_argument("--slow_tracker", action="store_true")
+    p.add_argument("--tracker_size", type=int, default=1008)
+    p.add_argument("--triton_attn", action="store_true")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
