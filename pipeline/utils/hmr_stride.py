@@ -85,9 +85,10 @@ def run(app, stride):
     retry = []
     save = app._save_frame
 
-    def emit(t):
+    def emit(t, ka, kb):
+        """ka, kb: done[a], done[b] (taken under the lock: another thread may drop them afterwards)."""
         a, b = nxt[t]
-        (oa_, ida), (ob, idb) = done[a], done[b]
+        (oa_, ida), (ob, idb) = ka, kb
         ids = sorted(labs[t])
         if oa_ is None or ob is None or sorted(ida or []) != ids or sorted(idb or []) != ids:
             if ids or oa_ is not None or ob is not None:
@@ -107,10 +108,10 @@ def run(app, stride):
             return
         with lock:
             done[i] = (mask_output, list(id_current) if id_current is not None else None)
-            ready = [t for t in pending if all(x in done for x in nxt[t])]
-            pending.difference_update(ready)
-        for t in ready:
-            if not emit(t):
+            ready = [(t, done[nxt[t][0]], done[nxt[t][1]]) for t in pending if all(x in done for x in nxt[t])]
+            pending.difference_update(t for t, _, _ in ready)
+        for t, ka, kb in ready:
+            if not emit(t, ka, kb):
                 with lock:
                     retry.append(t)
         with lock:   # drop the keyframe outputs no pending in-between frame needs

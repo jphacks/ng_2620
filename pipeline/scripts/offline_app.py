@@ -234,13 +234,15 @@ class OfflineApp:
             rend_img.astype(np.uint8),
         )
 
-        # save rendered frames for individual person
-        rend_img_list = visualize_sample(img, mask_output, self.sam3_3d_body_model.faces, id_current)
-        for ri, rend_img in enumerate(rend_img_list):
-            cv2.imwrite(
-                f"{self.OUTPUT_DIR}/rendered_frames_individual/{id_current[ri]}/{os.path.basename(image_path)[:-4]}_{id_current[ri]}.jpg",
-                rend_img.astype(np.uint8),
-            )
+        # save rendered frames for individual person (RUNTIME['individual_overlays'] False: skipped; nothing in the
+        # pipeline reads them, and their four views per person were ~45 ms of every frame's save)
+        if self.RUNTIME.get('individual_overlays', True):
+            rend_img_list = visualize_sample(img, mask_output, self.sam3_3d_body_model.faces, id_current)
+            for ri, rend_img in enumerate(rend_img_list):
+                cv2.imwrite(
+                    f"{self.OUTPUT_DIR}/rendered_frames_individual/{id_current[ri]}/{os.path.basename(image_path)[:-4]}_{id_current[ri]}.jpg",
+                    rend_img.astype(np.uint8),
+                )
         # save mesh for individual person
         save_mesh_results(
             outputs=mask_output, 

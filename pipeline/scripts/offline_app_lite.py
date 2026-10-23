@@ -53,6 +53,8 @@ usage (repo root):
       (--tracker_size 1008 --sdpa_attn --slow_tracker: the original tracking, bit for bit)
       [--hmr_stride K]     SAM 3D Body on every K-th frame (and where the tracked persons change); the frames in between
                            interpolated from their keyframes (utils/hmr_stride.py). Default 1 (every frame)
+      [--individual_overlays] also save rendered_frames_individual/ (four views per person per frame; not read by the
+                           pipeline, ~45 ms per frame of saving)
       [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
                            (scripts/occlusion/moge_ahead.py; the same bytes as fusion's own MoGe, which then skips it).
                            Off by default: on an RTX 5060 Ti the two processes share the GPU by time slicing, HMR grew
@@ -364,6 +366,7 @@ def build_app(cfg, output_dir):
         "completion_resolution": cfg.completion.get("completion_resolution", [512, 1024]),
         "smpl_export": cfg.runtime.get("smpl_export", False),
         "async_save": True,      # save batch b (CPU / OpenGL) while the GPU runs batch b+1
+        "individual_overlays": False,   # rendered_frames_individual/: debug views nothing downstream reads
         "save_workers": 2,       # saving threads (one job per frame); see offline_app.on_4d_generation
         "bboxes": None,
     }
@@ -400,6 +403,7 @@ def inference_lite(args):
     cfg = OmegaConf.load(os.path.join(oa.ROOT, "configs", "body4d.yaml"))
     app = build_app(cfg, args.output_dir)
     app.RUNTIME["save_workers"] = getattr(args, "save_workers", 2)
+    app.RUNTIME["individual_overlays"] = getattr(args, "individual_overlays", False)
     if not getattr(args, "autocast_cache", False):
         # SAM3's process-wide bf16 autocast would cache a bf16 copy of every fp32 weight it casts (SAM3, MoGe):
         # recast per call instead. Same casts, same values; masks bit-identical, -0.9 GB in sam3, -0.6 GB in fov.
@@ -552,6 +556,7 @@ if __name__ == "__main__":
     p.add_argument("--tracker_size", type=int, default=672)
     p.add_argument("--sdpa_attn", action="store_true")
     p.add_argument("--moge_ahead", action="store_true")
+    p.add_argument("--individual_overlays", action="store_true")
     p.add_argument("--hmr_stride", type=int, default=1)
     args = p.parse_args()
     if not os.path.exists(args.input_video):
