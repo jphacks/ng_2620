@@ -254,7 +254,7 @@ def main(a):
         t0 = time.perf_counter()
         fus = run_fusion(run.pout, os.path.join(a.out, "occlusion"), run.name, save=False,
                          reference=getattr(a, "fusion_reference", False),
-                         points=getattr(a, "fusion_points", "kf_flow"),
+                         points=getattr(a, "fusion_points", "kf_lite"),
                          compile_decoder=getattr(a, "fusion_compile_decoder", True))
         fus.pop("hide", None)   # fusion.render's own hide masks (save=False): the avatar computes its own (AvatarHider)
         stats["fusion_s"] = round(time.perf_counter() - t0, 1)
@@ -466,10 +466,11 @@ if __name__ == "__main__":
     ap.add_argument("--no_ik", action="store_true")
     ap.add_argument("--fusion_reference", action="store_true",
                     help="run fusion v2's frozen gpu_stage / evidence instead of the bit-identical fast ones")
-    ap.add_argument("--fusion_points", choices=["full", "c2f", "kf_flow", "kf_sam3"], default="kf_flow",
-                    help="fusion v2 SAM3 point prompts: kf_flow (default) = coarse-to-fine on keyframes, candidates "
-                         "carried by optical flow in between; c2f = coarse-to-fine on every frame; full = the frozen "
-                         "grid; kf_sam3 = keyframes carried by the SAM3 tracker (slower)")
+    ap.add_argument("--fusion_points", choices=["full", "c2f", "kf_flow", "kf_lite", "kf_sam3"], default="kf_lite",
+                    help="fusion v2 SAM3 point prompts: kf_lite (default) = coarse-to-fine on keyframes, no SAM3 call "
+                         "in between (candidates and the 'person' refinement carried by optical flow); kf_flow = the "
+                         "same with set_image and grounding on every frame; c2f = coarse-to-fine on every frame; full = "
+                         "the frozen grid; kf_sam3 = keyframes carried by the SAM3 tracker (slower)")
     ap.add_argument("--no_fusion_compile_decoder", dest="fusion_compile_decoder", action="store_false",
                     help="eager SAM mask decoder in fusion v2. The default torch.compiles it: SAM3 -29%% on penn1765 with "
                          "a warm inductor cache, not bit-identical (dev 40: worst F1 -0.009, pass 35 -> 34; adopted "

@@ -316,7 +316,7 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--name", default=None, help="run name (default: basename of --out)")
     ap.add_argument("--phase", choices=["all", "mesh", "fusion", "snap"], default="all")
-    ap.add_argument("--points", choices=["full", "c2f", "kf_flow", "kf_sam3"], default="kf_flow")
+    ap.add_argument("--points", choices=["full", "c2f", "kf_flow", "kf_lite", "kf_sam3"], default="kf_lite")
     ap.add_argument("--snapshots", type=int, default=4)
     a = ap.parse_args()
     a.out = os.path.abspath(a.out)

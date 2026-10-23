@@ -383,39 +383,49 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
         src = np.concatenate([np.zeros(len(pts_in) + len(pts_o), bool), np.ones(len(pts_v), bool)])
         keep = []   # (score, CPU bool mask, from_visible), same order as the frozen list
         half = []   # 2x-downsampled masks on the GPU, for dedup
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            st = proc.set_image(Image.fromarray(img))
-            fut = None
-            if g_pool is not None:
-                g_stream.wait_stream(torch.cuda.current_stream())   # the image features are ready
-                fut = g_pool.submit(ground_async, st)
-            carried = kfr.carry(i, img, inner, st) if kfr is not None else None
-            if carried is not None:
-                pass
-            elif points == "full":
-                _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
-            else:
-                # coarse grid first; then only the fine points that no passing coarse mask covers
-                c_in, c_o = grid_points(inner, C2F_STRIDE), grid_points(region & ~sil & ~Vd, C2F_STRIDE)
-                c_v = grid_points(inv, C2F_STRIDE, off=2)
-                cp = np.concatenate([c_in, c_o, c_v])
-                csrc = np.concatenate([np.zeros(len(c_in) + len(c_o), bool), np.ones(len(c_v), bool)])
-                cover = torch.zeros((H, W), dtype=torch.bool, device="cuda")
-                _prompt_points(model, st, cp, csrc, H, W, keep, half, cover=cover, pad=compile_decoder)
-                pi = pts.astype(int)
-                unc = ~cover.cpu().numpy()[pi[:, 1], pi[:, 0]] if len(pts) else np.zeros(0, bool)
-                _prompt_points(model, st, pts[unc], src[unc], H, W, keep, half, pad=compile_decoder)
-            if fut is not None:
-                r = None
-                gm, gs = fut.result()
-            else:
-                proc.reset_all_prompts(st)
-                r = person_prompt(st)
-                gm, gs = r["masks"][:, 0].cpu().numpy().astype(bool), r["scores"].float().cpu().numpy()
-            for mk, sc in zip(gm, gs):
+        carried = st = r = None
+        if kfr is not None and kfr.carry_dets:   # kf_lite: a carried frame makes no SAM3 call at all
+            carried = kfr.carry(i, img, inner, None, lab=lab)
+        if carried is not None:
+            for mk, sc in zip(kfr.dets, kfr.det_scores):
                 pm.append(np.packbits(mk.reshape(-1)))
                 pf.append(i)
                 ps.append(float(sc))
+        else:
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                st = proc.set_image(Image.fromarray(img))
+                fut = None
+                if g_pool is not None:
+                    g_stream.wait_stream(torch.cuda.current_stream())   # the image features are ready
+                    fut = g_pool.submit(ground_async, st)
+                if kfr is not None and not kfr.carry_dets:
+                    carried = kfr.carry(i, img, inner, st)
+                if carried is not None:
+                    pass
+                elif points == "full":
+                    _prompt_points(model, st, pts, src, H, W, keep, half, pad=compile_decoder)
+                else:
+                    # coarse grid first; then only the fine points that no passing coarse mask covers
+                    c_in, c_o = grid_points(inner, C2F_STRIDE), grid_points(region & ~sil & ~Vd, C2F_STRIDE)
+                    c_v = grid_points(inv, C2F_STRIDE, off=2)
+                    cp = np.concatenate([c_in, c_o, c_v])
+                    csrc = np.concatenate([np.zeros(len(c_in) + len(c_o), bool), np.ones(len(c_v), bool)])
+                    cover = torch.zeros((H, W), dtype=torch.bool, device="cuda")
+                    _prompt_points(model, st, cp, csrc, H, W, keep, half, cover=cover, pad=compile_decoder)
+                    pi = pts.astype(int)
+                    unc = ~cover.cpu().numpy()[pi[:, 1], pi[:, 0]] if len(pts) else np.zeros(0, bool)
+                    _prompt_points(model, st, pts[unc], src[unc], H, W, keep, half, pad=compile_decoder)
+                if fut is not None:
+                    r = None
+                    gm, gs = fut.result()
+                else:
+                    proc.reset_all_prompts(st)
+                    r = person_prompt(st)
+                    gm, gs = r["masks"][:, 0].cpu().numpy().astype(bool), r["scores"].float().cpu().numpy()
+                for mk, sc in zip(gm, gs):
+                    pm.append(np.packbits(mk.reshape(-1)))
+                    pf.append(i)
+                    ps.append(float(sc))
         if carried is not None:
             keep = sorted(carried, key=lambda c: -c[0])
             sel = range(len(keep))
@@ -491,11 +501,12 @@ def _vram_cap(margin=0.5 * 2**30):
 def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False):
     """points: "full" = the frozen point grid (bit-identical to gpu_stage); "c2f" = coarse-to-fine (see
     _c2f_points; not bit-identical, same F1 pass count on dev 18 and held-out test4, LEDGER 2026-10-14).
-    "kf_flow" / "kf_sam3" = c2f on keyframes, candidates carried in between by optical flow / the SAM3 tracker
-    (keyframes.py; kf_flow is the pipeline default, run_fusion_v2.run_fusion).
+    "kf_flow" / "kf_sam3" = c2f on keyframes, candidates carried in between by optical flow / the SAM3 tracker;
+    "kf_lite" = kf_flow without any SAM3 call between keyframes (keyframes.py; the pipeline default,
+    run_fusion_v2.run_fusion).
     compile_decoder: torch.compile the SAM mask decoder (not bit-identical; ~0.03% of mask pixels flip)."""
     import torch
-    assert points in ("full", "c2f", "kf_flow", "kf_sam3")
+    assert points in ("full", "c2f", "kf_flow", "kf_lite", "kf_sam3")
     os.makedirs(cache, exist_ok=True)
     T, H, W = len(run), run.H, run.W
     mode = _cands_mode(points, compile_decoder)

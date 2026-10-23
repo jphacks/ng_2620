@@ -12,10 +12,14 @@ Stages: prep (CPU) -> gpu_stage (MoGe-2 depth, class-agnostic SAM3 candidates, S
 The GPU stage and the evidence run through gpu_stage_fast / evidence_fast, which produce bit-identical caches and
 evidence with less time and VRAM (see their docstrings), and shared_cache memoizes the cache loads and ground masks that
 the CPU stages repeat; --reference runs the frozen gpu_stage / evidence instead.
-By default the SAM3 point grid runs on keyframes only and the candidates are carried by optical flow in between
-(--points kf_flow, fusion_v2/keyframes.py: fusion GPU stage -28..-54%, whole pipeline -16..-30% on 4 occluded 3DPW clips
-on an L4, avatar output unchanged by eye, testdata/2026-10-23). --points c2f prompts every frame coarse-to-fine (~2.8x
-fewer decoder calls than the frozen grid, LEDGER 2026-10-14); --points full keeps the frozen grid.
+By default the SAM3 point grid runs on keyframes only and frames in between make no SAM3 call: the keyframe's
+candidates and its 'person' refinement of the visible masks are carried by optical flow (--points kf_lite,
+fusion_v2/keyframes.py; 3 clips of testdata/2026-10-18 on an RTX 5060 Ti: fusion 119 -> 41 s, 88 -> 38 s, 527 -> 226 s,
+clip hide IoU vs c2f 0.993 / 0.969 / 0.782 (the last on ~45 hidden px per 1080x1920 frame); downtown_bar avatar
+154 -> 77 s). --points kf_flow carries the candidates but still runs set_image and the grounding on every frame
+(fusion GPU stage -28..-54% vs c2f on 4 occluded 3DPW clips on an L4, testdata/2026-10-23). --points c2f prompts every
+frame coarse-to-fine (~2.8x fewer decoder calls than the frozen grid, LEDGER 2026-10-14); --points full keeps the
+frozen grid.
 """
 import argparse
 import os
@@ -36,7 +40,7 @@ import fusion  # noqa: E402
 import shared_cache  # noqa: E402
 
 
-def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_flow", compile_decoder=True):
+def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
     (ignored with reference=True)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
@@ -68,10 +72,12 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--name", default=None)
     ap.add_argument("--reference", action="store_true", help="run the frozen gpu_stage / evidence")
-    ap.add_argument("--points", choices=["full", "c2f", "kf_flow", "kf_sam3"], default="kf_flow",
-                    help="SAM3 point prompts: kf_flow (default) = coarse-to-fine on keyframes, candidates carried by "
-                         "optical flow in between (fusion_v2/keyframes.py); c2f = coarse-to-fine on every frame; "
-                         "full = the frozen grid; kf_sam3 = keyframes carried by the SAM3 tracker (slower)")
+    ap.add_argument("--points", choices=["full", "c2f", "kf_flow", "kf_lite", "kf_sam3"], default="kf_lite",
+                    help="SAM3 point prompts: kf_lite (default) = coarse-to-fine on keyframes, no SAM3 call in between "
+                         "(candidates and the 'person' refinement carried by optical flow; fusion_v2/keyframes.py); "
+                         "kf_flow = the same carrying with set_image and grounding still on every frame; c2f = "
+                         "coarse-to-fine on every frame; full = the frozen grid; kf_sam3 = keyframes carried by the "
+                         "SAM3 tracker (slower)")
     ap.add_argument("--no_compile_decoder", dest="compile_decoder", action="store_false",
                     help="eager SAM mask decoder (the default torch.compiles it; not bit-identical)")
     a = ap.parse_args()

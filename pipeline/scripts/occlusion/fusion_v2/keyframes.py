@@ -23,11 +23,13 @@ Carriers:
          predictor and the tracker share weights; Sam3VideoBase feeds its tracker the same way). ~40 ms per mask per
          frame on an L4 (scripts/eval/tracker_cost.py).
 """
+import os
+
 import cv2
 import numpy as np
 
-KF_MAX = 10        # frames between forced keyframes
-KF_GROW = 300      # px of newly uncovered occluded mesh that make a keyframe (480x854 frames)
+KF_MAX = int(os.environ.get("FUSION_KF_MAX", "10"))      # frames between forced keyframes
+KF_GROW = int(os.environ.get("FUSION_KF_GROW", "300"))   # px of newly uncovered occluded mesh that make a keyframe (480x854)
 OWN_MAX = 0.5
 MIN_PX = 30        # a carried mask smaller than this is dropped (gpu_stage.MIN_PX)
 
@@ -131,21 +133,37 @@ def tracker_feats(st):
 
 class Keyframer:
     """Per-frame driver. carry(i, img, inner, st) -> None (frame i is a keyframe: run the grid) or the carried
-    candidates [(score, mask, inV)]; after a keyframe's grid, start(i, img, cands, lab, pids, dets, sil, inner, st)."""
+    candidates [(score, mask, inV)]; after a keyframe's grid, start(i, img, cands, lab, pids, dets, sil, inner, st).
+
+    carrier "lite": the flow carrier, and a frame between keyframes makes no SAM3 call at all (st is None there): its
+    set_image (~200 ms/frame at 480x270 on an RTX 5060 Ti) and 'person' grounding (~50 ms) only fed the grounding,
+    whose masks only refine the visible masks (evidence.refine_visible). What is carried instead is the keyframe's
+    refinement itself, per person p: R = the tracked mask's pixels the refinement removed (a held object), A = the
+    pixels it added (a missed head or arm). On a carried frame p's 'person' detection is rebuilt as
+    (tracked mask of p & ~R) | A, so refine_visible gives back the frame's own tracked mask edited by R and A only.
+    Carrying the whole detection instead let its drifting outline cut the tracked mask's edges (more hidden pixels:
+    clip hide IoU vs c2f 0.927 on courtyard_basketball, 0.801 on 3dpw courtyard_arguing)."""
 
     def __init__(self, carrier):
-        self.c = {"flow": _Flow, "sam3": _SAM3}[carrier]()
+        self.carry_dets = carrier == "lite"
+        self.c = {"flow": _Flow, "lite": _Flow, "sam3": _SAM3}[carrier]()
         self.carrier = carrier
         self.last = None
         self.meta = []
         self.base_unc = 0
         self.keyframes = []
+        self.dets = self.det_scores = None
+        self.pids = []
 
-    def carry(self, i, img, inner, st):
+    def carry(self, i, img, inner, st, lab=None):
         if self.last is None or i - self.last >= KF_MAX:
             return None
         feats = tracker_feats(st) if self.carrier == "sam3" else None
         masks = self.c.step(i, img, feats)
+        if self.carry_dets:
+            masks, ra = masks[:len(self.meta)], masks[len(self.meta):]
+            self.dets = [((lab == p) & ~ra[2 * k]) | ra[2 * k + 1] for k, p in enumerate(self.pids)]
+            self.det_scores = [1.0] * len(self.dets)
         cov = np.zeros(inner.shape, bool)
         out = []
         for (sc, inv), m in zip(self.meta, masks):
@@ -164,6 +182,13 @@ class Keyframer:
         for m in masks:
             cov |= m
         self.base_unc = int((inner & ~cov).sum())
+        if self.carry_dets:
+            from evidence import refine_visible
+            Vr = refine_visible(lab, pids, dets)
+            self.pids = list(pids)
+            for p in pids:
+                V0 = lab == p
+                masks = masks + [V0 & ~Vr[p], Vr[p] & ~V0]   # R, A
         self.c.start(i, img, masks, tracker_feats(st) if self.carrier == "sam3" else None)
         self.last = i
         self.keyframes.append(i)
