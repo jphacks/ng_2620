@@ -59,6 +59,7 @@ usage (repo root):
       [--individual_overlays] also save rendered_frames_individual/ (four views per person per frame; not read by the
                            pipeline, ~45 ms per frame of saving)
       [--no_overlay]       no rendered_frames/ or 4d_*.mp4 (mesh overlays read only by avatar_app's compare video)
+      [--target_point x,y] only the person whose detected box holds this point (first frame with a person)
       [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
                            (scripts/occlusion/moge_ahead.py; the same bytes as fusion's own MoGe, which then skips it).
                            Off by default: on an RTX 5060 Ti the two processes share the GPU by time slicing, HMR grew
@@ -356,6 +357,21 @@ def detect_first_frame(cfg, input_video):
         free_gpu()
 
 
+def pick_target(boxes, point):
+    """Index of the detected box that holds point "x,y" (input frame pixels; the smallest such box), else the box
+    whose centre is nearest: the one person to track and mesh."""
+    x, y = (float(v) for v in point.split(","))
+    b = np.asarray(boxes, np.float64)
+    inside = (b[:, 0] <= x) & (x <= b[:, 2]) & (b[:, 1] <= y) & (y <= b[:, 3])
+    area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+    if inside.any():
+        k = int(np.argmin(np.where(inside, area, np.inf)))
+    else:
+        k = int(np.argmin(np.hypot((b[:, 0] + b[:, 2]) / 2 - x, (b[:, 1] + b[:, 3]) / 2 - y)))
+    print(f"[TARGETS] {len(boxes)} people detected, tracking box {k} at {point}: {b[k].round(1).tolist()}", flush=True)
+    return k
+
+
 def build_app(cfg, output_dir):
     """An OfflineApp with no models loaded; models are attached per stage."""
     app = oa.OfflineApp.__new__(oa.OfflineApp)
@@ -417,8 +433,11 @@ def inference_lite(args):
     # 1. person boxes on the first frame with a person (ViTDet only)
     with Stage("detect"):
         start_idx, boxes, width, height, image_list = detect_first_frame(cfg, args.input_video)
-        max_targets = args.max_targets or cfg.runtime.get("max_targets", 2)
-        boxes = [boxes[i] for i in oa.select_targets(boxes, max_targets)]
+        if getattr(args, "target_point", None) and len(boxes):
+            boxes = [boxes[pick_target(boxes, args.target_point)]]
+        else:
+            max_targets = args.max_targets or cfg.runtime.get("max_targets", 2)
+            boxes = [boxes[i] for i in oa.select_targets(boxes, max_targets)]
 
     # 2. SAM3 tracking (tracker + vision backbone; frames on CPU)
     with Stage("sam3_load"):
@@ -585,6 +604,9 @@ if __name__ == "__main__":
     p.add_argument("--sdpa_attn", action="store_true")
     p.add_argument("--moge_ahead", action="store_true")
     p.add_argument("--individual_overlays", action="store_true")
+    p.add_argument("--target_point", default=None,
+                   help="x,y in input frame pixels on the first frame with a person: track and mesh only the detected "
+                        "person whose box holds it (default: the max_targets largest boxes)")
     p.add_argument("--no_overlay", action="store_true",
                    help="no rendered_frames/ and 4d_*.mp4 (mesh overlays: a review aid that only avatar_app's compare "
                         "video reads; 6.6 s of saving-thread time per 120 frames, hmr_4d -1.6 s)")
