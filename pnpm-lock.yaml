@@ -111,6 +111,9 @@ importers:
       eslint:
         specifier: ^9.15.0
         version: 9.39.5(jiti@1.21.7)
+      eslint-formatter-gha:
+        specifier: ^2.0.1
+        version: 2.0.1
       eslint-import-resolver-typescript:
         specifier: ^3.6.3
         version: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@1.21.7))
@@ -1792,6 +1795,17 @@ packages:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
 
+  eslint-formatter-gha@2.0.1:
+    resolution: {integrity: sha512-HbiPXXjIley/JRcQ9zRZ4HJhhU8ZIf0wVLbfyQKm/7HIcbvOsA2xwl/Lblyd8fhYalUWxKcodJOwsOwxw7O0Cw==}
+
+  eslint-formatter-json@9.0.1:
+    resolution: {integrity: sha512-EQ/X+bPjiOUDo4frNbkY+5R6emaHTL7t2jHsJw5s8p8w1BTJ6ao6S7g/PaRyx/CqqaYcjJkWAPHH/onNyFlJBQ==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  eslint-formatter-stylish@9.0.1:
+    resolution: {integrity: sha512-FlhMRUiDUHztGj+bhm3pYo5DJ6Gbjh/FGPClcDENme7f9+Sc3+HZg6wMq80KJmRD8/oj/Ib6gy4D/ppjmHfGVA==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
   eslint-import-resolver-node@0.3.10:
     resolution: {integrity: sha512-tRrKqFyCaKict5hOd244sL6EQFNycnMQnBe+j8uqGNXYzsImGbGUU4ibtoaBmv5FLwJwcFJNeg1GeVjQfbMrDQ==}
 
@@ -2798,6 +2812,10 @@ packages:
     resolution: {integrity: sha512-UXSH262CSZY1tfu3G3Secr6uGLCFVPMhIqHjlgCUtCCcgihYc/xKs9djMTMUOb2j1mVSeU8EU6NWc/iQKU6Gfg==}
     engines: {node: '>= 0.4'}
 
+  strip-ansi@6.0.1:
+    resolution: {integrity: sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A==}
+    engines: {node: '>=8'}
+
   strip-bom@3.0.0:
     resolution: {integrity: sha512-vavAMRXOgBVNF6nyEEmL3DBK19iRpDcoIwW+swQ+CbGiu7lju6t+JklA1MHweoWtadgt4ISVUsXLyDq34ddcwA==}
     engines: {node: '>=4'}
@@ -2826,6 +2844,9 @@ packages:
     resolution: {integrity: sha512-3ofp+LL8E+pK/JuPLPggVAIaEuhvIz4qNcf3nA1Xn2o/7fb7s/TYpHhwGDv1ZU3PkBluUVaF8PyCHcm48cKLWQ==}
     engines: {node: '>=14.0.0'}
     hasBin: true
+
+  text-table@0.2.0:
+    resolution: {integrity: sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==}
 
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
@@ -4746,6 +4767,19 @@ snapshots:
 
   escape-string-regexp@4.0.0: {}
 
+  eslint-formatter-gha@2.0.1:
+    dependencies:
+      eslint-formatter-json: 9.0.1
+      eslint-formatter-stylish: 9.0.1
+
+  eslint-formatter-json@9.0.1: {}
+
+  eslint-formatter-stylish@9.0.1:
+    dependencies:
+      chalk: 4.1.2
+      strip-ansi: 6.0.1
+      text-table: 0.2.0
+
   eslint-import-resolver-node@0.3.10:
     dependencies:
       debug: 3.2.7
@@ -5823,6 +5857,10 @@ snapshots:
       define-properties: 1.2.1
       es-object-atoms: 1.1.2
 
+  strip-ansi@6.0.1:
+    dependencies:
+      ansi-regex: 5.0.1
+
   strip-bom@3.0.0: {}
 
   strip-json-comments@3.1.1: {}
@@ -5872,6 +5910,8 @@ snapshots:
     transitivePeerDependencies:
       - tsx
       - yaml
+
+  text-table@0.2.0: {}
 
   thenify-all@1.6.0:
     dependencies:
