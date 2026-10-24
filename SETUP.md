@@ -15,15 +15,15 @@
 
 | ツール | 版 | 何に要る | 入れ方（macOS） |
 |---|---|---|---|
-| Node.js | 22 | アプリ | `brew install node@22` |
-| pnpm | 9 | アプリ | `corepack enable`（または `npm i -g pnpm@9`） |
+| Node.js | 26 | アプリ | `brew install node@26` |
+| pnpm | 9 | アプリ | `npm i -g pnpm@9`（Node 25 以降は corepack が同梱されない。corepack を使うなら `npm i -g corepack && corepack enable`） |
 | Rust（stable） | 1.80 以上 | アプリ（Tauri のネイティブ部分） | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` → 新しいターミナルを開く |
 | Xcode Command Line Tools | — | アプリ（macOS） | `xcode-select --install` |
 | Python | 3.10 以上 | サーバー・モック | `brew install python@3.11` |
 | uv | 推奨 | サーバー・モックの環境づくり | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | ffmpeg | 6 以上 | サーバー・モック（動画の検証と変換） | `brew install ffmpeg` |
 
-Windows：Node 22・pnpm・Rust（rustup、MSVC ビルドツール）・Python・ffmpeg（`winget install Gyan.FFmpeg`）・WebView2（Windows 11 は標準）。
+Windows：Node 26・pnpm・Rust（rustup、MSVC ビルドツール）・Python・ffmpeg（`winget install Gyan.FFmpeg`）・WebView2（Windows 11 は標準）。
 
 ## いちばん早い確認：Mac でアプリ ＋ モック（GPU なし）
 

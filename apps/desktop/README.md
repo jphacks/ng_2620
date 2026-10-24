@@ -5,7 +5,7 @@
 
 ## 起動
 
-前提：Node 22、pnpm 9（`corepack enable` か `npx pnpm@9`）。Tauri で動かすときだけ Rust（stable）も必要。
+前提：Node 26、pnpm 9（`npm i -g pnpm@9` か `npx pnpm@9`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
 
 ```sh
 pnpm install                         # リポジトリのルートで
