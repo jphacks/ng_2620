@@ -1,0 +1,71 @@
+name: スライドの PDF
+
+# develop に入ったとき、または手動（Run workflow でブランチを選ぶ）で、
+# docs/slide/*.md を PDF にして、GitHub Release（プレリリース）に添付する。
+# Release は slide-<実行番号>-<SHA> のタグで毎回作る。不要になったら
+# Releases の画面、または `gh release delete <タグ> --cleanup-tag` で消せる。
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'docs/slide/**'
+      - 'designdocs/brand/**'
+      - '.github/workflows/slide-pdf.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: slide-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Release とタグを作るため
+
+jobs:
+  pdf:
+    name: Marp で PDF にする
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: 日本語フォント（Google Fonts が読めなかったときの代わり）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+      - name: PDF に書き出す
+        run: |
+          shopt -s nullglob
+          files=(docs/slide/*.md)
+          # README.md はスライドではない
+          slides=()
+          for f in "${files[@]}"; do
+            [ "$(basename "$f")" = "README.md" ] || slides+=("$f")
+          done
+          if [ ${#slides[@]} -eq 0 ]; then
+            echo "docs/slide/ にスライドの md が無い" >&2
+            exit 1
+          fi
+          mkdir -p out
+          # --output にディレクトリは渡せない（1 本だと EISDIR、2 本以上だと
+          # "Output path cannot specify with processing multiple files" で落ちる）ので、1 本ずつファイル名まで指定する
+          for f in "${slides[@]}"; do
+            npx -y @marp-team/marp-cli@4 \
+              --theme-set docs/slide/themes/virtualtwin.css \
+              --allow-local-files \
+              --pdf \
+              --output "out/$(basename "$f" .md).pdf" \
+              "$f"
+          done
+          ls -la out
+      - name: Release に添付する
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          tag="slide-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          gh release create "$tag" out/*.pdf \
+            --target "$GITHUB_SHA" \
+            --title "スライド PDF（$BRANCH @ ${GITHUB_SHA::7}）" \
+            --notes "ブランチ \`$BRANCH\` のコミット $GITHUB_SHA から自動で作ったスライドの PDF。不要になったら消してよい。" \
+            --prerelease
