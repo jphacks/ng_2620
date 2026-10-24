@@ -61,15 +61,13 @@ function Boot({ children }: { children: ReactNode }) {
 export function AppRoot({ services }: { services: Services }) {
   useEffect(() => {
     // 起動時の自己診断（F15）：WebGL2 と fetch のストリーム（SSE）
-    void services
-      .diagnose()
-      .then((d) =>
-        console.info("[self-check]", {
-          runtime: services.env.isTauri ? "tauri" : "browser",
-          backend: services.env.backendMode,
-          ...d,
-        }),
-      );
+    void services.diagnose().then((d) =>
+      console.info("[self-check]", {
+        runtime: services.env.isTauri ? "tauri" : "browser",
+        backend: services.env.backendMode,
+        ...d,
+      }),
+    );
   }, [services]);
   return (
     <ServicesProvider services={services}>

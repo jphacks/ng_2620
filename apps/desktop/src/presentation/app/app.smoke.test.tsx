@@ -119,18 +119,16 @@ describe("アプリ全体（シミュレーター）", () => {
     const src = "/mem/drops/t/clip.mp4";
     await services.platform.files.writeBytes(src, new Uint8Array(1000).fill(7));
     const project = await act(() =>
-      useProjectStore
-        .getState()
-        .createFrom(src, {
-          durationSec: 2,
-          width: 540,
-          height: 960,
-          rotation: 0,
-          codec: "h264",
-          fps: 30,
-          hasAudio: false,
-          sizeBytes: 1000,
-        }),
+      useProjectStore.getState().createFrom(src, {
+        durationSec: 2,
+        width: 540,
+        height: 960,
+        rotation: 0,
+        codec: "h264",
+        fps: 30,
+        hasAudio: false,
+        sizeBytes: 1000,
+      }),
     );
     expect(project.name).toBe("clip");
     await go(`#/project/${project.id}/import`);
