@@ -41,6 +41,10 @@ ARKIT = ["_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterU
          "mouthUpperUpLeft", "mouthUpperUpRight", "noseSneerLeft", "noseSneerRight"]
 IDX = {n: k for k, n in enumerate(ARKIT)}
 EYES = [k for k, n in enumerate(ARKIT) if n.startswith("eye")]
+# denoising (expression_tracks): noise level of a coefficient that gets the smallest smoothing (1 frame); twice it and
+# more gets the largest (2 frames; 1.5 for the blinks, which last 3-5 frames)
+NOISE_REF = 0.05
+BLINKS = [IDX["eyeBlinkLeft"], IDX["eyeBlinkRight"]]
 # landmark subset the blendshape model reads (mediapipe/tasks/cc/vision/face_landmarker/face_blendshapes_graph.cc)
 SUBSET = np.array([0, 1, 4, 5, 6, 7, 8, 10, 13, 14, 17, 21, 33, 37, 39, 40, 46, 52, 53, 54, 55, 58, 61, 63, 65, 66, 67,
                    70, 78, 80, 81, 82, 84, 87, 88, 91, 93, 95, 103, 105, 107, 109, 127, 132, 133, 136, 144, 145, 146,
@@ -92,7 +96,8 @@ class FaceModel:
 
     def face(self, img, head, f, cx, cy, refine=1):
         """img: BGR frame; head: (5, 3) camera-space nose, eyes, ears (MHR70 0-4); f, cx, cy: intrinsics of img.
-        -> (52 coefficients, presence) or None (skipped, module docstring)."""
+        -> (52 coefficients, presence, face size: the final crop's half size in img pixels) or None (skipped,
+        module docstring)."""
         if np.any(head[:, 2] <= 0.05) or head[0, 2] > head[3:5, 2].mean():   # behind the camera / facing away
             return None
         u = f * head[:, 0] / head[:, 2] + cx
@@ -120,12 +125,12 @@ class FaceModel:
             lo, hi = Q.min(0), Q.max(0)
             c = ((lo + hi) / 2) @ np.linalg.inv(R).T
             half = 0.75 * float((hi - lo).max())
-        return self.blendshapes(L), pres
+        return self.blendshapes(L), pres, half / 1.5
 
 
 def track_faces(frames, heads, f, cx, cy, log=print):
     """frames[i]: BGR frame i; heads: {(pid, i): (5, 3) camera-space head points}; f, cx, cy: the frames' intrinsics.
-    -> {(pid, i): (52 raw coefficients, presence)} (skipped faces absent)."""
+    -> {(pid, i): (52 raw coefficients, presence, face size px)} (skipped faces absent)."""
     import time
     t0 = time.perf_counter()
     m = FaceModel()
@@ -139,13 +144,23 @@ def track_faces(frames, heads, f, cx, cy, log=print):
             r = m.face(img, h, f, cx, cy)
             if r is not None:
                 out[(pid, i)] = r
-    good = sum(p > 0.5 for _, p in out.values())
+    good = sum(r[1] > 0.5 for r in out.values())
     log(f"[face] {len(heads)} heads, {len(out)} faces read, {good} with presence > 0.5 "
         f"({time.perf_counter() - t0:.1f} s)", flush=True)
     return out
 
 
-def expression_tracks(raw, pids, n, sigma=1.0, p0=0.2, p1=0.7, tracked=None, hold=15.0, fade=0.3):
+def _noise(C, ok):
+    """Noise level of each coefficient of C (T, K): the median absolute second difference over the frames whose
+    neighbours are reliable too, as the standard deviation of white noise (x 1.4826 / sqrt(1.5)); None if fewer
+    than 10 such frames."""
+    k = np.nonzero(ok[1:-1] & ok[:-2] & ok[2:])[0] + 1
+    if len(k) < 10:
+        return None
+    return np.median(np.abs(C[k] - (C[k - 1] + C[k + 1]) / 2), 0) * 1.4826 / np.sqrt(1.5)
+
+
+def expression_tracks(raw, pids, n, sigma=1.0, p0=0.2, p1=0.7, tracked=None, hold=15.0, fade=0.3, denoise=True):
     """raw: track_faces' output -> {(pid, i): 52 coefficients} for every tracked frame of each person.
     tracked: the (pid, i) keys where the person is tracked (default: raw's keys); frames with no face read count
     with confidence 0. Per run of tracked frames, with w = clip((presence - p0) / (p1 - p0)):
@@ -155,7 +170,12 @@ def expression_tracks(raw, pids, n, sigma=1.0, p0=0.2, p1=0.7, tracked=None, hol
       value   fine where G_sigma(w) >= 0.5, blended into coarse below; times the envelope
               min(1, G_hold(w) / fade), so only a long stretch with no reliable face eases to neutral, over ~hold
               frames, instead of switching at once
-    The eyes' coefficients are taken relative to the track's median over reliable frames (module docstring)."""
+    The eyes' coefficients are taken relative to the track's median over reliable frames (module docstring).
+    denoise: a far or blurred face's coefficients wobble (noise 0.08-0.17 on the gaze, brows, blinks and smile of
+      the ~90 px faces of the test clips): per track and coefficient the noise level is measured (_noise), then
+      a 3-frame median (spikes; a blink of 5 frames keeps its peak), the fine smoothing with sigma
+      clip(noise / NOISE_REF, 1, 2) frames (1.5 at most for the blinks), and a dead zone of half the noise level
+      (at most 0.08; max(0, x - d) / (1 - d)): the small wobble at rest goes, an expression above it stays."""
     from .smooth import _gauss, _runs
     keys = set(raw) if tracked is None else set(tracked)
     out = {}
@@ -173,15 +193,35 @@ def expression_tracks(raw, pids, n, sigma=1.0, p0=0.2, p1=0.7, tracked=None, hol
         if good.sum() >= 5:   # the eyes' resting values of this track
             base = np.median(C[good][:, EYES], 0)
             C[:, EYES] = np.clip((C[:, EYES] - base) / np.maximum(1 - base, 0.2), 0, 1)
+        sig = np.full(len(ARKIT), float(sigma))
+        dead = np.zeros(len(ARKIT))
+        if denoise:
+            nz = _noise(C, good)   # on the coefficients as read
+            if nz is None:         # too few reliable frames to tell: as for a far face
+                nz = np.full(len(ARKIT), 2 * NOISE_REF)
+            sig = sigma * np.clip(nz / NOISE_REF, 1.0, 2.0)
+            sig[BLINKS] = np.minimum(sig[BLINKS], 1.5 * sigma)
+            sig = np.round(sig * 4) / 4   # a few distinct sigmas: one smoothing pass each
+            dead = np.minimum(0.5 * nz, 0.08)
+            read = w > 0
+            k = np.nonzero(read[1:-1] & read[:-2] & read[2:])[0] + 1   # 3-frame median where all three were read
+            C[k] = np.median(np.stack([C[k - 1], C[k], C[k + 1]]), 0)
         pos = {fr: k for k, fr in enumerate(t)}
         for run in _runs(t):
             ks = np.array([pos[fr] for fr in run])
             wr, Cr = w[ks], C[ks] * w[ks][:, None]
-            ws, wl = _gauss(wr, sigma), _gauss(wr, hold)
-            fine = _gauss(Cr, sigma) / np.maximum(ws, 1e-6)[:, None]
+            wl = _gauss(wr, hold)
+            fine = np.zeros_like(Cr)
+            ws = np.zeros_like(Cr)
+            for sg in np.unique(sig):
+                cols = sig == sg
+                g = _gauss(wr, sg)
+                fine[:, cols] = _gauss(Cr[:, cols], sg) / np.maximum(g, 1e-6)[:, None]
+                ws[:, cols] = g[:, None]
             coarse = _gauss(Cr, hold) / np.maximum(wl, 1e-6)[:, None]
-            a = np.clip(ws / 0.5, 0, 1)[:, None]
+            a = np.clip(ws / 0.5, 0, 1)
             val = (a * fine + (1 - a) * coarse) * np.clip(wl / fade, 0, 1)[:, None]
+            val = np.maximum(val - dead, 0) / (1 - dead)
             for j, fr in enumerate(run):
                 out[(pid, fr)] = np.clip(val[j], 0, 1).astype(np.float32)
     return out

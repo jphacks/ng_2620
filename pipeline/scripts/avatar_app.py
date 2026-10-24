@@ -395,7 +395,7 @@ def main(a):
             stats["face_s"] = round(fr["s"], 1)                            # its own run time (overlapped)
             stats["face_wait_s"] = round(time.perf_counter() - t0, 1)      # what it still added
             stats["face_read"] = len(fr["raw"])
-            stats["face_confident"] = int(sum(p > 0.5 for _, p in fr["raw"].values()))
+            stats["face_confident"] = int(sum(r[1] > 0.5 for r in fr["raw"].values()))
 
     hider = None
     if fus is not None:
