@@ -117,20 +117,20 @@ def build_tracker_at(ckpt_path, image_size):
     return tracker.to("cuda").eval()
 
 
-def write_images_as_1008(frames, out_dir, out_h, out_w, start=0):
+def write_images_as_1008(frames, out_dir, out_h, out_w, start=0, indices=None):
     """Rewrite <out_dir>/images/*.jpg as offline_app.on_mask_generation writes them from a 1008 tracker.
 
     on_mask_generation saves images/ (what HMR, fusion and the avatar read) from the tracker's own input frames,
     scaled back to the video size. With a lower tracker resolution (build_tracker_at) those frames are blurrier, which
     moved HMR's depth by ~4 cm on downtown_bar. frames: the run's LazyFrames; its JPEG bytes are rebuilt at 1008 and
-    written with on_mask_generation's ops, so images/ is byte-identical to a 1008 run's."""
+    written with on_mask_generation's ops, so images/ is byte-identical to a 1008 run's. indices: these frames only."""
     import copy
     import os
     import torch.nn.functional as F
     from PIL import Image
     f = copy.copy(frames)
     f.image_size = 1008
-    for i in range(len(f)):
+    for i in (range(len(f)) if indices is None else indices):
         img = ((f[i].float() + 1) / 2).clamp(0, 1)
         img = F.interpolate(img.unsqueeze(0), size=(out_h, out_w), mode="bilinear", align_corners=False).squeeze(0)
         img = (img.permute(1, 2, 0).numpy() * 255).astype("uint8")

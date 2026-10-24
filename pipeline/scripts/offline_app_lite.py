@@ -58,6 +58,7 @@ usage (repo root):
                            indistinguishable by eye from K=1 on downtown_bar / courtyard_basketball); 1 = every frame
       [--individual_overlays] also save rendered_frames_individual/ (four views per person per frame; not read by the
                            pipeline, ~45 ms per frame of saving)
+      [--no_overlay]       no rendered_frames/ or 4d_*.mp4 (mesh overlays read only by avatar_app's compare video)
       [--moge_ahead]       compute fusion v2's MoGe-2 depth in a second process while HMR runs
                            (scripts/occlusion/moge_ahead.py; the same bytes as fusion's own MoGe, which then skips it).
                            Off by default: on an RTX 5060 Ti the two processes share the GPU by time slicing, HMR grew
@@ -407,6 +408,7 @@ def inference_lite(args):
     app = build_app(cfg, args.output_dir)
     app.RUNTIME["save_workers"] = getattr(args, "save_workers", 2)
     app.RUNTIME["individual_overlays"] = getattr(args, "individual_overlays", False)
+    app.RUNTIME["overlays"] = not getattr(args, "no_overlay", False)
     if not getattr(args, "autocast_cache", False):
         # SAM3's process-wide bf16 autocast would cache a bf16 copy of every fp32 weight it casts (SAM3, MoGe):
         # recast per call instead. Same casts, same values; masks bit-identical, -0.9 GB in sam3, -0.6 GB in fov.
@@ -443,6 +445,7 @@ def inference_lite(args):
             rel_box = np.array([[xmin / width, ymin / height, xmax / width, ymax / height]], dtype=np.float32)
             _, app.RUNTIME["out_obj_ids"], _, _ = app.predictor.add_new_points_or_box(
                 inference_state=state, frame_idx=start_idx, obj_id=obj_id + 1, box=rel_box)
+    rewrite = None
     with Stage("sam3_propagate"):
         if not getattr(args, "keep_tracker_memory", False):
             # outputs of past frames that no later frame can select are dropped as the propagation goes
@@ -455,7 +458,20 @@ def inference_lite(args):
         if size != 1008:   # images/ as a 1008 tracker writes them (sam3_track_fast.write_images_as_1008)
             frames = getattr(state["images"], "frames", state["images"])
             if isinstance(frames, LazyFrames):
-                sam3_track_fast.write_images_as_1008(frames, app.OUTPUT_DIR, state["video_height"], state["video_width"])
+                # frame 0 now (the fov stage reads it); the rest on a thread beside fov / hmr_load, joined before HMR
+                # reads images/ (2.2 s per 120 frames on the CPU)
+                import threading
+                vh, vw = state["video_height"], state["video_width"]
+                sam3_track_fast.write_images_as_1008(frames, app.OUTPUT_DIR, vh, vw, indices=[0])
+                rewrite = {}
+
+                def _rest():
+                    try:
+                        sam3_track_fast.write_images_as_1008(frames, app.OUTPUT_DIR, vh, vw, indices=range(1, len(frames)))
+                    except BaseException as e:   # re-raised on the main thread at the join
+                        rewrite["err"] = e
+                rewrite["t"] = threading.Thread(target=_rest, daemon=True)
+                rewrite["t"].start()
             else:
                 print(f"[tracker_size {size}] images/ written from the {size} frames (not a JPEG folder input)")
     obj_ids = list(app.RUNTIME["out_obj_ids"])
@@ -469,6 +485,8 @@ def inference_lite(args):
     ahead = None
     if getattr(args, "moge_ahead", False):
         import subprocess
+        if rewrite is not None:   # moge_ahead.py reads all of images/
+            rewrite["t"].join()
         for f in glob.glob(os.path.join(app.OUTPUT_DIR, "moge_level*.npz")):   # a previous run's
             os.remove(f)
         ahead = subprocess.Popen([sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -518,6 +536,10 @@ def inference_lite(args):
         if not getattr(args, "keep_rejected_hands", False):
             skip_rejected_hands(model)
     app.RUNTIME["out_obj_ids"] = obj_ids
+    if rewrite is not None:
+        rewrite["t"].join()
+        if "err" in rewrite:
+            raise rewrite["err"]
     with Stage("hmr_4d"):
         with torch.autocast("cuda", enabled=False):
             stride = getattr(args, "hmr_stride", 3)
@@ -563,6 +585,9 @@ if __name__ == "__main__":
     p.add_argument("--sdpa_attn", action="store_true")
     p.add_argument("--moge_ahead", action="store_true")
     p.add_argument("--individual_overlays", action="store_true")
+    p.add_argument("--no_overlay", action="store_true",
+                   help="no rendered_frames/ and 4d_*.mp4 (mesh overlays: a review aid that only avatar_app's compare "
+                        "video reads; 6.6 s of saving-thread time per 120 frames, hmr_4d -1.6 s)")
     p.add_argument("--hmr_stride", type=int, default=3)
     p.add_argument("--max_targets", type=int, default=None,
                    help="people tracked: the N largest boxes on the first frame with a person (default: "
