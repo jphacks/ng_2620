@@ -1,0 +1,60 @@
+name: スライドの PDF
+
+# develop に入ったとき、または手動（Run workflow でブランチを選ぶ）で、
+# docs/slide/*.md を PDF にして、成果物（artifact）に残す。
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'docs/slide/**'
+      - 'designdocs/brand/**'
+      - '.github/workflows/slide-pdf.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: slide-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pdf:
+    name: Marp で PDF にする
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: 日本語フォント（Google Fonts が読めなかったときの代わり）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+      - name: PDF に書き出す
+        run: |
+          shopt -s nullglob
+          files=(docs/slide/*.md)
+          # README.md はスライドではない
+          slides=()
+          for f in "${files[@]}"; do
+            [ "$(basename "$f")" = "README.md" ] || slides+=("$f")
+          done
+          if [ ${#slides[@]} -eq 0 ]; then
+            echo "docs/slide/ にスライドの md が無い" >&2
+            exit 1
+          fi
+          mkdir -p out
+          npx -y @marp-team/marp-cli@4 \
+            --theme-set docs/slide/themes/virtualtwin.css \
+            --allow-local-files \
+            --pdf \
+            --output out/ \
+            "${slides[@]}"
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slide-pdf-${{ github.sha }}
+          path: out/*.pdf
+          if-no-files-found: error
+          retention-days: 90
