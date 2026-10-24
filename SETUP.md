@@ -29,14 +29,15 @@ Windows：Node 22・pnpm・Rust（rustup、MSVC ビルドツール）・Python�
 
 ```sh
 # ターミナル 1：モックサーバー（初回は環境づくりで 1 分ほど）
-sh services/mock_server/run.sh                 # = pnpm mock。http://127.0.0.1:8766、トークン mock
+pnpm mock                                      # = sh services/mock_server/run.sh（Windows は pnpm mock:win）。http://127.0.0.1:8766、トークン mock
 
 # ターミナル 2：アプリ
 pnpm install
 pnpm tauri dev                                 # 初回は Rust のコンパイルで 1〜2 分
 ```
 
-アプリの接続先は開発ビルドでは「開発用モック」が最初から入っている。緑のランプが点けば接続できている。
+アプリの「設定（右上の歯車）> 接続」で「開発用モック」を選んで「既定にする」（開発ビルドには最初から登録されている。起動時に選ばせたいなら
+`VITE_BACKEND=mock pnpm tauri dev`）。ステータスバー左のランプが緑になれば接続できている。
 サーバーなしで画面だけ見るなら `pnpm --filter @vvlog/desktop dev:memory`（ブラウザ、シミュレーター）。詳しくは `apps/desktop/README.md`。
 
 ## 本物の推論：GPU 機でサーバー ＋ Mac のアプリ
@@ -52,8 +53,9 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 | 接続先 | URL | トークン | どう用意するか |
 |---|---|---|---|
 | 開発用シミュレーター | `memory://sim` | — | アプリの中だけで動く（サーバー不要、成果物は合成画像）。開発ビルドに最初から入っている |
-| 開発用モック | `http://127.0.0.1:8766` | `mock` | `sh services/mock_server/run.sh`。開発ビルドに最初から入っている |
-| GPU サーバー（同じ PC） | `http://127.0.0.1:8765` | サーバーの `VVLOG_API_TOKEN` | `services/gpu_server/README.md` §4 で起動して、プロファイルを追加 |
+| 開発用モック | `http://127.0.0.1:8766` | `mock` | `pnpm mock`。開発ビルドに最初から入っている |
+| この PC（アプリが起動） | `http://127.0.0.1:<ポート>` | アプリが自動で作る | 設定 > 接続 >「この PC の GPU サーバー」で `services/gpu_server` のフォルダと推論用 Python を選んで［起動］。接続「この PC」が自動で登録・既定になる（Windows で確認済み。事前に `services/gpu_server/.venv` が要る：README §1） |
+| GPU サーバー（同じ PC、手で起動） | `http://127.0.0.1:8765` | サーバーの `VVLOG_API_TOKEN` | `services/gpu_server/README.md` §4 で起動して、プロファイルを追加 |
 | GPU サーバー（別の PC） | `https://<機名>.<tailnet>.ts.net` | 同上 | GPU 機で起動 ＋ Tailscale（`DEPLOY.md` §4）して、プロファイルを追加 |
 
 **アプリでの操作**：右上の歯車（設定）→「接続」→「プロファイルを追加」→ 名前・種別（ローカル / リモート）・URL・トークンを入れる →
@@ -64,7 +66,7 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 
 | モード | ファイル | `VITE_BACKEND` | 既定の接続 |
 |---|---|---|---|
-| `pnpm tauri dev` / `pnpm dev` | `.env.development` | `mock` | 開発用モック |
+| `pnpm tauri dev` / `pnpm dev` | `.env.development` | `http` | 登録した接続（開発用の 2 つも一覧に出る。`VITE_BACKEND=mock` を付けると開発用モックを既定に） |
 | `pnpm --filter @vvlog/desktop dev:memory` | `.env.memory` | `memory` | 開発用シミュレーター |
 | 製品ビルド | `.env.production` | `http` | 登録したプロファイルだけ（開発用の 2 つは出ない） |
 
