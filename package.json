@@ -1,10 +1,14 @@
 {
   "name": "vvlog",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.34.8",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "dev": "pnpm --filter @vvlog/desktop dev",
     "tauri": "pnpm --filter @vvlog/desktop tauri",
+    "build": "pnpm --filter @vvlog/desktop build",
     "test": "pnpm --filter @vvlog/desktop test",
     "lint": "pnpm --filter @vvlog/desktop lint",
     "typecheck": "pnpm --filter @vvlog/desktop typecheck",

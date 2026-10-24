@@ -32,5 +32,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
+    // Node 25 以降は Node 自身が globalThis.localStorage を持ち（--localstorage-file なしでは使えない）、
+    // jsdom の localStorage を隠してしまう。テストのワーカーでは Node の Web Storage を切る
+    execArgv: ["--no-experimental-webstorage"],
   },
 });

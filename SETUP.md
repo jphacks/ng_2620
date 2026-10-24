@@ -11,19 +11,34 @@
 
 設計は [designdocs/](designdocs/README.md)、アプリとサーバーの約束（API）は [packages/contracts/CLIENT_GUIDE.md](packages/contracts/CLIENT_GUIDE.md)。
 
+## まず：make setup（macOS / Linux）
+
+```sh
+make doctor     # 何も入れずに、足りないもの（NG）と版を一覧にする。足りなければ失敗で終わる
+make setup      # 足りないものを入れる：Node（.nvmrc）・pnpm・Rust・Xcode CLT・Python 環境・ffmpeg、最後に pnpm install
+make help       # ほかのコマンド（make dev / make mock / make test …）
+```
+
+`make setup`（= `scripts/setup.sh`）は、ネットのスクリプトを実行するもの（rustup、uv）とシステムに入れるもの（`brew install ffmpeg`、Xcode CLT）を
+実行する前に y/N で聞く（`make setup ARGS=--yes` で聞かない。アプリだけなら `ARGS=--app-only`）。Node は nvm か fnm で入れるので、
+どちらも無ければ案内して止まる。`pipeline/` の環境 B（GPU 機だけ）は作らない。
+終わったら、今のシェルで `nvm use`（Node を切り替えたとき）と、新しいターミナル（Rust を入れたとき）。
+
+**Windows は make / sh の対象外**。下の表のツールを手で入れて、`pnpm install` → `pnpm tauri dev`。
+
 ## 前提のツール
 
 | ツール | 版 | 何に要る | 入れ方（macOS） |
 |---|---|---|---|
-| Node.js | 22 | アプリ | `brew install node@22` |
-| pnpm | 9 | アプリ | `corepack enable`（または `npm i -g pnpm@9`） |
+| Node.js | 26 | アプリ | `brew install node@26`（nvm・fnm はリポジトリ直下の `.nvmrc`・`.node-version` を読むので `nvm install && nvm use` / `fnm use` でよい。mise は `mise settings add idiomatic_version_file_enable_tools node` で読むようになる） |
+| pnpm | 10 | アプリ | `npm i -g pnpm@10`（Node 25 以降は corepack が同梱されない。pnpm 10 以降なら `package.json` の `packageManager` の版に自動で切り替わる） |
 | Rust（stable） | 1.80 以上 | アプリ（Tauri のネイティブ部分） | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` → 新しいターミナルを開く |
 | Xcode Command Line Tools | — | アプリ（macOS） | `xcode-select --install` |
 | Python | 3.10 以上 | サーバー・モック | `brew install python@3.11` |
 | uv | 推奨 | サーバー・モックの環境づくり | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | ffmpeg | 6 以上 | サーバー・モック（動画の検証と変換） | `brew install ffmpeg` |
 
-Windows：Node 22・pnpm・Rust（rustup、MSVC ビルドツール）・Python・ffmpeg（`winget install Gyan.FFmpeg`）・WebView2（Windows 11 は標準）。
+Windows：Node 26・pnpm・Rust（rustup、MSVC ビルドツール）・Python・ffmpeg（`winget install Gyan.FFmpeg`）・WebView2（Windows 11 は標準）。
 
 ## いちばん早い確認：Mac でアプリ ＋ モック（GPU なし）
 
@@ -91,8 +106,10 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 
 | 症状 | 対処 |
 |---|---|
-| `pnpm tauri dev` で `cargo: command not found` | Rust を入れたあと新しいターミナルを開く（または `source ~/.cargo/env`） |
+| `pnpm tauri dev` が `failed to run 'cargo metadata' command ... No such file or directory (os error 2)`（または `cargo: command not found`）で止まる | Rust が入っていないか、PATH に無い。`make doctor` で確かめ、無ければ `make setup`。入れたあとは新しいターミナルを開く（または `source ~/.cargo/env`。VS Code の中なら VS Code ごと起動し直す） |
 | アプリで動画を入れると「動画として読めません」 | サーバー（モック）側の ffprobe が PATH に無い。`brew install ffmpeg` してモックを再起動 |
 | モックが `ModuleNotFoundError: fastapi` | `python -m mock_server` を素の Python で起動している。`sh services/mock_server/run.sh` を使う |
+| `pnpm` が `WARN Unsupported engine: wanted: {"node":">=26"}` と出す | Node が 26 より古い（止まりはしない）。`nvm use`（`.nvmrc` を読む）などで 26 に切り替える |
+| `pnpm install` が「modules directories will be removed and reinstalled」と聞く | 古い pnpm（9 以下）で入れた `node_modules` が残っている。そのまま進めてよい。`pnpm -v` が 10 以上かも確認 |
 | 接続先のランプが赤 | モック / サーバーが起動していない、URL・トークン違い。`curl http://127.0.0.1:8766/v1/health` で確認 |
 | GPU サーバーのジョブが失敗する | `services/gpu_server/README.md` の「つまずきやすい点」 |
