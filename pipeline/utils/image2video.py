@@ -6,6 +6,45 @@ import imageio.v2 as imageio
 from typing import List 
 
 
+class Mp4Writer:
+    """images_to_mp4 one frame at a time: append() as frames are produced, close() at the end. Each frame goes
+    through the same conversions as in images_to_mp4 (which uses this class), so the encoder gets the same input
+    without the caller holding every frame (a 60 s compare video at 1440x480: 3.7 GB)."""
+
+    def __init__(self, output_path: str, fps: int = 25, crf: int = None):
+        self.output_path, self.fps, self.crf = output_path, fps, crf
+        self.writer, self.size = None, None
+
+    def append(self, img: np.ndarray):
+        if self.writer is None:
+            h, w = img.shape[:2]
+            self.size = (w, h)
+            os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
+            self.writer = imageio.get_writer(
+                self.output_path,
+                fps=int(self.fps),
+                format="FFMPEG",
+                codec="libx264",
+                pixelformat="yuv420p",
+                **({} if self.crf is None else {"quality": None, "macro_block_size": 2,   # yuv420p needs even sizes only: no stretch to x16
+                                               "output_params": ["-crf", str(self.crf), "-preset", "slow"]})
+            )
+        if img.ndim == 2:  # Gray → 3 channels
+            img = np.stack([img] * 3, axis=-1)
+        img = cv2.resize(img, self.size)
+        if img.shape[2] == 4:
+            img = img[..., :3]  # Remove alpha
+        if img.dtype != np.uint8:
+            img = np.clip(img, 0, 255).astype(np.uint8)
+        self.writer.append_data(img)
+
+    def close(self):
+        if self.writer is None:
+            raise ValueError("Image frame list is empty.")
+        self.writer.close()
+        print(f"[OK] Saved video: {self.output_path}")
+
+
 def images_to_mp4(images: List[np.ndarray], output_path: str, fps: int = 25):
     """
     Convert a list of images into an HTML5-compatible MP4 video.
@@ -15,35 +54,10 @@ def images_to_mp4(images: List[np.ndarray], output_path: str, fps: int = 25):
     """
     if len(images) == 0:
         raise ValueError("Image frame list is empty.")
-
-    first = images[0]
-    if first.ndim == 2:
-        h, w = first.shape
-    else:
-        h, w, _ = first.shape
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    writer = imageio.get_writer(
-        output_path,
-        fps=int(fps),
-        format="FFMPEG",
-        codec="libx264",
-        pixelformat="yuv420p"
-    )
-
+    w = Mp4Writer(output_path, fps)
     for img in images:
-        if img.ndim == 2:  # Gray → 3 channels
-            img = np.stack([img] * 3, axis=-1)
-        img = cv2.resize(img, (w, h))
-        if img.shape[2] == 4:
-            img = img[..., :3]  # Remove alpha
-        if img.dtype != np.uint8:
-            img = np.clip(img, 0, 255).astype(np.uint8)
-        writer.append_data(img)
-
-    writer.close()
-    print(f"[OK] Saved video: {output_path}")
+        w.append(img)
+    w.close()
 
 
 def jpg_folder_to_mp4(folder: str, output_filename: str, fps: int = 25):

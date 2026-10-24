@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vvlog.local/contracts/overrides.schema.json",
+  "title": "overrides.json (designdocs/architecture/contracts.md §6.2)",
+  "type": "object",
+  "required": ["schemaVersion", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "items": { "type": "array", "items": { "$ref": "#/$defs/override" } }
+  },
+  "$defs": {
+    "override": {
+      "type": "object",
+      "required": ["id", "kind", "personId", "mode"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^ovr_" },
+        "kind": { "enum": ["unit", "brush"] },
+        "personId": { "type": "integer", "minimum": 1 },
+        "mode": { "enum": ["front", "behind"] },
+        "createdAt": { "type": "string" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": { "const": "unit" },
+            "unitId": { "type": "integer", "minimum": 1 },
+            "range": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 }
+          },
+          "required": ["unitId", "range"]
+        },
+        {
+          "properties": {
+            "kind": { "const": "brush" },
+            "frame": { "type": "integer", "minimum": 0 },
+            "mask": { "type": "string", "description": "brush/<id>.png in the project; base64 PNG inside ExportParams" }
+          },
+          "required": ["frame", "mask"]
+        }
+      ]
+    }
+  }
+}

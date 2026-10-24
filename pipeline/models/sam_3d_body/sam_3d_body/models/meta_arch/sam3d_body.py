@@ -1663,6 +1663,8 @@ class SAM3DBody(BaseModel):
                 ...
             ] = 0  # pred_pose_raw is not valid anymore
             pose_output["mhr"]["mhr_model_params"] = mhr_model_params
+            # keep the joint rotations in sync with the re-run forward (pred_global_rots was the pre-refinement pose)
+            pose_output["mhr"]["joint_global_rots"] = joint_global_rots
 
         ########################################################
         # Project to 2D
@@ -2193,14 +2195,21 @@ class SAM3DBody(BaseModel):
             # Reshape to (T, N, D) so that we can index by (frame, human)
             scale_3d = scale.view(num_frames, num_human, D_scale)   # (T, N, 28)
             shape_3d = shape.view(num_frames, num_human, D_shape)   # (T, N, 45)
-            # For each human id, use its scale/shape from the first frame (t=0)
+            # For each human id, use its scale/shape from the first usable frame
             # and assign it to all frames for that human.
+            # A frame where the person is absent (empty mask -> zero-size box) gives NaN shape/scale; storing that
+            # would turn every later mesh of this person into NaN (exported as an empty .ply), so skip such frames.
+            box_size = batch["bbox_scale"].view(num_frames, num_human, -1)[..., 0]  # (T, N)
             for hid in range(num_human):
-                # (28,) and (45,), values at t=0 for this human
                 if hid not in mhr_shape_scale_dict:
-                    mhr_shape_scale_dict[hid] = [scale_3d[0, hid].clone(), shape_3d[0, hid].clone()]
-                    first_scale = scale_3d[0, hid].clone()
-                    first_shape = shape_3d[0, hid].clone()
+                    usable = (torch.isfinite(scale_3d[:, hid]).all(-1) & torch.isfinite(shape_3d[:, hid]).all(-1)
+                              & (box_size[:, hid] > 1))
+                    if not usable.any():
+                        continue  # nobody usable in this batch: keep per-frame values, try again next batch
+                    t0 = int(usable.nonzero()[0])
+                    mhr_shape_scale_dict[hid] = [scale_3d[t0, hid].clone(), shape_3d[t0, hid].clone()]
+                    first_scale = scale_3d[t0, hid].clone()
+                    first_shape = shape_3d[t0, hid].clone()
                 else:
                     first_scale, first_shape = mhr_shape_scale_dict[hid]
                 # Broadcast to all time steps for this human
@@ -2246,6 +2255,8 @@ class SAM3DBody(BaseModel):
                 ...
             ] = 0  # pred_pose_raw is not valid anymore
             pose_output["mhr"]["mhr_model_params"] = mhr_model_params
+            # keep the joint rotations in sync with the re-run forward (pred_global_rots was the pre-refinement pose)
+            pose_output["mhr"]["joint_global_rots"] = joint_global_rots
 
         ########################################################
         # Project to 2D

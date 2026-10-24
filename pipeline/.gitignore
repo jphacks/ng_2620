@@ -1,4 +1,5 @@
 .vscode/
+.venv/
 __pycache__/
 gradio_tmp/
 outputs/
@@ -9,3 +10,7 @@ save_video.py
 img_vid_concat.py
 build/
 mhr_smpl_conversion/
+testdata/
+
+# VRM avatars: each model has its own license (e.g. redistribution prohibited); never commit them
+assets/vrm_models/

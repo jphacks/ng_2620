@@ -31,7 +31,7 @@ from omegaconf import OmegaConf
 from utils import draw_point_marker, mask_painter, images_to_mp4, DAVIS_PALETTE, jpg_folder_to_mp4, is_super_long_or_wide, keep_largest_component, is_skinny_mask, bbox_from_mask, gpu_profile, resize_mask_with_unique_label
 
 from models.sam_3d_body.sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
-from models.sam_3d_body.notebook.utils import process_image_with_mask, save_mesh_results
+from models.sam_3d_body.notebook.utils import process_image_with_mask, save_mesh_results, save_skeleton_results
 from models.sam_3d_body.tools.vis_utils import visualize_sample_together, visualize_sample
 from models.diffusion_vas.demo import init_amodal_segmentation_model, init_rgb_model, init_depth_model, load_and_transform_masks, load_and_transform_rgbs, rgb_to_depth
 
@@ -210,6 +210,61 @@ class OfflineApp:
 
         return out_video_path
 
+    def _save_jobs(self, batch_images, mask_outputs, id_batch, empty_frame_list):
+        """One (image_path, mask_output, id_current) per frame of an HMR batch."""
+        jobs = []
+        num_empth_ids = 0
+        for frame_id in range(len(batch_images)):
+            if frame_id in empty_frame_list:
+                mask_output = None
+                id_current = None
+                num_empth_ids += 1
+            else:
+                mask_output = mask_outputs[frame_id-num_empth_ids]
+                id_current = id_batch[frame_id-num_empth_ids]
+            jobs.append((batch_images[frame_id], mask_output, id_current))
+        return jobs
+
+    def _save_frame(self, image_path, mask_output, id_current):
+        """Mesh overlays, meshes, focal lengths and skeleton of one frame."""
+        img = cv2.imread(image_path)
+        rend_img = visualize_sample_together(img, mask_output, self.sam3_3d_body_model.faces, id_current)
+        cv2.imwrite(
+            f"{self.OUTPUT_DIR}/rendered_frames/{os.path.basename(image_path)[:-4]}.jpg",
+            rend_img.astype(np.uint8),
+        )
+
+        # save rendered frames for individual person (RUNTIME['individual_overlays'] False: skipped; nothing in the
+        # pipeline reads them, and their four views per person were ~45 ms of every frame's save)
+        if self.RUNTIME.get('individual_overlays', True):
+            rend_img_list = visualize_sample(img, mask_output, self.sam3_3d_body_model.faces, id_current)
+            for ri, rend_img in enumerate(rend_img_list):
+                cv2.imwrite(
+                    f"{self.OUTPUT_DIR}/rendered_frames_individual/{id_current[ri]}/{os.path.basename(image_path)[:-4]}_{id_current[ri]}.jpg",
+                    rend_img.astype(np.uint8),
+                )
+        # save mesh for individual person
+        save_mesh_results(
+            outputs=mask_output, 
+            faces=self.sam3_3d_body_model.faces, 
+            save_dir=f"{self.OUTPUT_DIR}/mesh_4d_individual",
+            focal_dir = f"{self.OUTPUT_DIR}/focal_4d_individual",
+            image_path=image_path,
+            id_current=id_current,
+        )
+        # save the skeleton (bones the mesh is skinned from) for avatar retargeting
+        save_skeleton_results(
+            outputs=mask_output,
+            save_dir=f"{self.OUTPUT_DIR}/skeleton_4d_individual",
+            image_path=image_path,
+            id_current=id_current,
+        )
+
+    def _save_batch(self, batch_images, mask_outputs, id_batch, empty_frame_list):
+        """Per frame of one HMR batch: mesh overlays, meshes, focal lengths and skeletons."""
+        for job in self._save_jobs(batch_images, mask_outputs, id_batch, empty_frame_list):
+            self._save_frame(*job)
+
     def on_4d_generation(self, video_path: str=None):
         """
         Placeholder for 4D generation.
@@ -254,6 +309,13 @@ class OfflineApp:
 
         batch_size = self.RUNTIME['batch_size']
         n = len(images_list)
+        # RUNTIME['async_save'] (lite): worker threads save batch b frame by frame while the GPU runs batch b+1.
+        # RUNTIME['save_workers'] threads (default 1); every frame is an independent job writing its own files, and
+        # each thread keeps its own pyrender context (renderer._offscreen).
+        save_pool, save_jobs = None, []
+        if self.RUNTIME.get('async_save', False):
+            from concurrent.futures import ThreadPoolExecutor
+            save_pool = ThreadPoolExecutor(max_workers=self.RUNTIME.get('save_workers', 1))
         
         # Optional, detect occlusions
         pred_res = self.RUNTIME['detection_resolution']
@@ -268,6 +330,11 @@ class OfflineApp:
 
         mhr_shape_scale_dict = {}   # each element is a list storing input parameters for mhr_forward
         obj_ratio_dict = {}         # avoid fake completion by obj ratio on the first frame
+
+        # estimate camera intrinsics once for the whole video (same as app.py, uni-cam-int)
+        print("Running FOV estimator ...")
+        input_image = np.array(Image.open(images_list[0])).astype('uint8')
+        cam_int = self.sam3_3d_body_model.fov_estimator.get_cam_intrinsics(input_image)
 
         for i in tqdm(range(0, n, batch_size)):
             batch_images = images_list[i:i + batch_size]
@@ -440,51 +507,39 @@ class OfflineApp:
                     occ_dict[obj_id] = [1] * len(batch_masks)
 
             # Process with external mask
-            mask_outputs, id_batch, empty_frame_list = process_image_with_mask(self.sam3_3d_body_model, batch_images, batch_masks, idx_path, idx_dict, mhr_shape_scale_dict, occ_dict)
+            mask_outputs, id_batch, empty_frame_list = process_image_with_mask(self.sam3_3d_body_model, batch_images, batch_masks, idx_path, idx_dict, mhr_shape_scale_dict, occ_dict, cam_int=cam_int)
             
-            num_empth_ids = 0
-            for frame_id in range(len(batch_images)):
-                image_path = batch_images[frame_id]
-                if frame_id in empty_frame_list:
-                    mask_output = None
-                    id_current = None
-                    num_empth_ids += 1
-                else:
-                    mask_output = mask_outputs[frame_id-num_empth_ids]
-                    id_current = id_batch[frame_id-num_empth_ids]
-                img = cv2.imread(image_path)
-                rend_img = visualize_sample_together(img, mask_output, self.sam3_3d_body_model.faces, id_current)
-                cv2.imwrite(
-                    f"{self.OUTPUT_DIR}/rendered_frames/{os.path.basename(image_path)[:-4]}.jpg",
-                    rend_img.astype(np.uint8),
-                )
+            if save_pool is not None:   # overlap the CPU/GL saving with the next batch's GPU inference
+                save_jobs += [save_pool.submit(self._save_frame, *job)
+                              for job in self._save_jobs(batch_images, mask_outputs, id_batch, empty_frame_list)]
+            else:
+                self._save_batch(batch_images, mask_outputs, id_batch, empty_frame_list)
 
-                # save rendered frames for individual person
-                rend_img_list = visualize_sample(img, mask_output, self.sam3_3d_body_model.faces, id_current)
-                for ri, rend_img in enumerate(rend_img_list):
-                    cv2.imwrite(
-                        f"{self.OUTPUT_DIR}/rendered_frames_individual/{ri+1}/{os.path.basename(image_path)[:-4]}_{ri+1}.jpg",
-                        rend_img.astype(np.uint8),
-                    )
-                # save mesh for individual person
-                save_mesh_results(
-                    outputs=mask_output, 
-                    faces=self.sam3_3d_body_model.faces, 
-                    save_dir=f"{self.OUTPUT_DIR}/mesh_4d_individual",
-                    focal_dir = f"{self.OUTPUT_DIR}/focal_4d_individual",
-                    image_path=image_path,
-                    id_current=id_current,
-                )
-
+        if save_pool is not None:
+            for job in save_jobs:
+                job.result()                 # re-raise any error from the saving thread
+            save_pool.shutdown()
         out_4d_path = os.path.join(self.OUTPUT_DIR, f"4d_{time.time():.0f}.mp4")
         jpg_folder_to_mp4(f"{self.OUTPUT_DIR}/rendered_frames", out_4d_path)
 
         return out_4d_path
 
 
+def select_targets(boxes, max_targets):
+    """Indices of the people to track and mesh: the max_targets largest boxes (area), in detection order.
+    Everyone else is left to the scene (background / objects in front of the targets)."""
+    if max_targets is None or len(boxes) <= max_targets:
+        return list(range(len(boxes)))
+    area = [(b[2] - b[0]) * (b[3] - b[1]) for b in boxes]
+    keep = sorted(range(len(boxes)), key=lambda i: -area[i])[:max_targets]
+    print(f"[TARGETS] {len(boxes)} people detected, meshing the {max_targets} largest: boxes {sorted(keep)}")
+    return sorted(keep)
+
+
 def inference(args):
     # init configs and cover with cmd options
     predictor = OfflineApp()
+    max_targets = predictor.CONFIG.runtime.get('max_targets', 2)
     if args.output_dir is not None:
         predictor.OUTPUT_DIR = args.output_dir
         os.makedirs(predictor.OUTPUT_DIR, exist_ok=True)
@@ -499,7 +554,8 @@ def inference(args):
             outputs = predictor.sam3_3d_body_model.process_one_image(image, bbox_thr=0.6,)
             if len(outputs) > 0:
                 break
-        
+        outputs = [outputs[i] for i in select_targets([o['bbox'] for o in outputs], max_targets)]
+
         inference_state = predictor.predictor.init_state(video_path=args.input_video)
         predictor.predictor.clear_all_points_in_video(inference_state)
         predictor.RUNTIME['inference_state'] = inference_state
@@ -530,6 +586,7 @@ def inference(args):
             if len(outputs) > 0:
                 break
             starting_frame_idx += 1
+        outputs = [outputs[i] for i in select_targets([o['bbox'] for o in outputs], max_targets)]
 
         inference_state = predictor.predictor.init_state(video_path=image_list)
         predictor.predictor.clear_all_points_in_video(inference_state)
