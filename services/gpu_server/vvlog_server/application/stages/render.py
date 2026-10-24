@@ -96,9 +96,9 @@ class RenderStage:
         zipped = await asyncio.to_thread(self.outputs.zip_layers, layers, pub / "layers.zip")
         r.progress("layers", 0.7, force=True)
         r.artifact("layers", zipped)
-        if any((av / "frames").glob("*.jpg")):
-            r.artifact("preview_video", await asyncio.to_thread(self.outputs.frames_to_h264, av / "frames",
-                                                                meta["fps"], pub / "preview.mp4"))
+        preview = await asyncio.to_thread(self.outputs.frames_to_h264, av / "frames", meta["fps"], pub / "preview.mp4")
+        if preview is not None:
+            r.artifact("preview_video", preview)
         if (av / "stats.json").is_file():
             r.artifact("stats", av / "stats.json")
         r.stage_finished("layers")

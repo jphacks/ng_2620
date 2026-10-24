@@ -1,6 +1,8 @@
 import asyncio
 import json
+import shutil
 import struct
+import subprocess
 
 import pytest
 
@@ -90,3 +92,29 @@ def test_queue_fifo():
     q.enqueue("a")
     assert q.items() == ["a", "b", "c"] and q.position("c") == 2
     assert q.remove("b") and not q.remove("b") and q.items() == ["a", "c"]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg is required")
+def test_frames_to_h264_with_gaps_and_quote(tmp_path):
+    """Real ffmpeg: no glob (absent on Windows builds), stems need not be gapless, ' in the path is escaped."""
+    from PIL import Image
+    from vvlog_server.adapters.pipeline_outputs import frames_to_h264
+
+    frames = tmp_path / "it's" / "frames"
+    frames.mkdir(parents=True)
+    for stem in (3, 4, 7, 10, 11):
+        Image.new("RGB", (63, 35), (stem * 20, 0, 0)).save(frames / f"{stem:08d}.jpg")
+    out = frames_to_h264(frames, 15.0, tmp_path / "preview.mp4")
+    probe = json.loads(subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-print_format", "json",
+                                       "-show_streams", str(out)], check=True, capture_output=True, text=True).stdout)
+    s = probe["streams"][0]
+    assert (s["codec_name"], s["width"], s["height"], s["nb_read_frames"]) == ("h264", 64, 36, "5")
+    assert s["avg_frame_rate"] == "15/1"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["it's", "preview.mp4"]  # the list file is removed
+
+
+def test_frames_to_h264_without_frames(tmp_path):
+    from vvlog_server.adapters.pipeline_outputs import frames_to_h264
+
+    (tmp_path / "frames").mkdir()
+    assert frames_to_h264(tmp_path / "frames", 15.0, tmp_path / "preview.mp4") is None

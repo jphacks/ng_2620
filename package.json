@@ -1,0 +1,13 @@
+{
+  "name": "vvlog",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @vvlog/desktop dev",
+    "tauri": "pnpm --filter @vvlog/desktop tauri",
+    "test": "pnpm --filter @vvlog/desktop test",
+    "lint": "pnpm --filter @vvlog/desktop lint",
+    "typecheck": "pnpm --filter @vvlog/desktop typecheck",
+    "mock": "cd services/mock_server && python -m mock_server --port 8766"
+  }
+}

@@ -1,0 +1,27 @@
+[package]
+name = "vvlog-desktop"
+version = "0.1.0"
+description = "vvlog — 実写動画の人物を VRM アバターに置き換えるデスクトップアプリ"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "vvlog_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-http = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+trash = "5"
+tokio = { version = "1", features = ["fs", "io-util"] }
