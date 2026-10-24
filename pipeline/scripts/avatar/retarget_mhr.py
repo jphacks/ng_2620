@@ -188,17 +188,31 @@ class MhrToVrm:
         """avatar scale = person's leg (hip..sole) / avatar's leg (hip..sole), median over frames."""
         return float(np.median([self.mhr_leg(c) for c in coords_frames])) / self.vrm_leg
 
-    def head_scale(self, frames):
-        """avatar scale = person's neck -> crown / avatar's, median over frames = [(joint_rots, joint coords, mesh
-        vertices)], all in camera coords. The person's crown: the mesh vertex near the head farthest along the head's
-        up axis from the neck joint (the bones end at the head joint, far below the crown)."""
+    def crown_height(self, frames):
+        """The person's neck -> crown [m], median over frames = [(joint_rots, joint coords, mesh vertices)], all in
+        camera coords: the mesh vertex near the head farthest along the head's up axis from the neck joint (the bones
+        end at the head joint, far below the crown). None without frames."""
         h = []
         for G, c, V in frames:
             up = S_CAM @ (G[113] @ self.G0[113].T @ np.array([0, 1, 0], np.float32))
             near = np.linalg.norm(V - c[113], axis=1) < 0.35
             if near.any():
                 h.append(float(((V[near] - c[110]) @ up).max()))
-        return float(np.median(h)) / self.vrm_head_h if h else None
+        return float(np.median(h)) if h else None
+
+    def head_scale(self, frames):
+        """avatar scale = person's neck -> crown / avatar's (crown_height)."""
+        h = self.crown_height(frames)
+        return h / self.vrm_head_h if h is not None else None
+
+    def height_scale(self, coords_frames, crown):
+        """avatar scale = person's sole -> crown / avatar's, both as the sum of pose-independent lengths: leg (hip ..
+        sole, mhr_leg / vrm_leg), trunk (hips joint .. neck joint) and neck .. crown (crown: crown_height)."""
+        trunk = float(np.median([np.linalg.norm(c[110] - c[1]) for c in coords_frames]))
+        leg = float(np.median([self.mhr_leg(c) for c in coords_frames]))
+        hb = self.m.humanoid
+        vtrunk = float(np.linalg.norm(self.prest[hb["neck"]] - self.prest[hb["hips"]]))
+        return (leg + trunk + crown) / (self.vrm_leg + vtrunk + self.vrm_head_h)
 
     # --- pose ------------------------------------------------------------
     def targets(self, G: np.ndarray) -> dict[int, np.ndarray]:
@@ -217,24 +231,26 @@ class MhrToVrm:
         """-> node global matrices (N,4,4) in glTF space (unscaled, untranslated), rotation transfer only."""
         return self.m.global_matrices(self.locals_(self.targets(np.asarray(G, np.float32))))
 
-    def placement(self, g: np.ndarray, scale: float, coords_cam: np.ndarray, near: float = 0.0) -> np.ndarray:
+    def placement(self, g: np.ndarray, scale: float, coords_cam: np.ndarray, near: float = 0.0,
+                  anchor: float = 0.0) -> np.ndarray:
         """Camera-space translation t (v_cam = scale * A v_gltf + t): the avatar's hips on the person's hips, or
-        with near > 0 blended towards its neck on the person's neck."""
+        blended towards its neck on the person's neck by anchor (0 hips .. 1 neck) and, closer to that, by near."""
         t = coords_cam[1] - scale * (self.A @ g[self.hips][:3, 3])
-        if near > 0:
-            t = (1 - near) * t + near * (coords_cam[110] - scale * (self.A @ g[self.neck][:3, 3]))
+        w = anchor + (1 - anchor) * near
+        if w > 0:
+            t = (1 - w) * t + w * (coords_cam[110] - scale * (self.A @ g[self.neck][:3, 3]))
         return t.astype(np.float32)
 
     def sole_y(self, g: np.ndarray, scale: float, t: np.ndarray) -> float:
         """Camera y of the avatar's lower sole (y points down)."""
         return max(float((scale * (self.A @ (g[n] @ q)[:3]) + t)[1]) for n, q in self.sole_local.items())
 
-    def solve(self, G, coords_cam, scale, arm_ik=True, leg_ik=True, reach=0.995, near=0.0):
+    def solve(self, G, coords_cam, scale, arm_ik=True, leg_ik=True, reach=0.995, near=0.0, anchor=0.0):
         """One frame: -> (node globals (N,4,4) glTF, translation t, {limb: end-effector error before IK [m]})."""
         T = self.targets(np.asarray(G, np.float32))
         loc = self.locals_(T)
         g = self.m.global_matrices(loc)
-        t = self.placement(g, scale, coords_cam, near)
+        t = self.placement(g, scale, coords_cam, near, anchor)
         err = {}
         limbs = ([("arm", s, "upper_arm", "lower_arm", "hand", "hand") for s in ("left", "right")] * bool(arm_ik)
                  + [("leg", s, "upper_leg", "lower_leg", "foot", "ankle") for s in ("left", "right")] * bool(leg_ik))

@@ -374,23 +374,29 @@ def main(a):
         coords = [sk[(pid, i)]["joint_coords"] for i in range(n) if (pid, i) in sk]
         act = AvatarActor(models[vrm_of[pid]], rz, scale=1.0, fps=a.fps, spring=not a.no_spring)
         act.scale = act.rt.leg_scale(coords)
+        fi = [i for i in range(n) if (pid, i) in sk]
+
+        def crown_frames(idx):   # (rotations, joints, mesh) of these frames for crown_height; the unsmoothed skeleton
+            out = []
+            for i in idx:
+                z = np.load(f"{run.pout}/skeleton_4d_individual/{pid}/{stems[i]}.npz")
+                m = run.mesh(pid, i)
+                if m is not None:
+                    out.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
+            return out
+        if getattr(a, "fit", "legs") == "height":   # sole -> crown instead of the legs (retarget_mhr.height_scale)
+            crown = act.rt.crown_height(crown_frames([fi[k] for k in np.linspace(0, len(fi) - 1, 8).astype(int)]))
+            if crown is not None:
+                act.scale = act.rt.height_scale(coords, crown)
         actors[pid] = act
         stats[f"scale_{pid}"] = round(act.scale, 4)
         print(f"[avatar] target {pid}: avatar scale {act.scale:.3f} (avatar height "
               f"{act.scale * act.rt.height_m:.2f} m), {len(coords)} frames", flush=True)
         # a person close to the camera: placement at the neck and the head's scale (retarget_mhr near_weights)
-        fi = [i for i in range(n) if (pid, i) in sk]
         w = near_weights([sk[(pid, i)]["joint_coords"][113, 2] + sk[(pid, i)]["cam_t"][2] for i in fi], a.fps)
         hs = None
         if w.max() > 0:
-            top = [fi[k] for k in np.argsort(-w, kind="stable")[:8]]
-            meas = []
-            for i in top:   # the unsmoothed skeleton: the mesh's frame
-                z = np.load(f"{run.pout}/skeleton_4d_individual/{pid}/{stems[i]}.npz")
-                m = run.mesh(pid, i)
-                if m is not None:
-                    meas.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
-            hs = act.rt.head_scale(meas)
+            hs = act.rt.head_scale(crown_frames([fi[k] for k in np.argsort(-w, kind="stable")[:8]]))
         if hs is None:
             w = np.zeros(len(fi))
         near[pid] = (act.scale, hs, {i: float(x) for i, x in zip(fi, w) if x > 0})
@@ -474,7 +480,8 @@ def main(a):
             wn = nw.get(i, 0.0)
             act.scale = (1 - wn) * s_leg + wn * s_head if wn > 0 else s_leg
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
-                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn)
+                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn,
+                     anchor=getattr(a, "anchor", 0.0))
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
             hb = act.bone_cam("head")
@@ -677,6 +684,11 @@ if __name__ == "__main__":
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
+    ap.add_argument("--fit", choices=["legs", "height"], default="legs",
+                    help="avatar scale from the leg length (hips and soles land on the person's) or from the whole height "
+                         "(sole .. crown; retarget_mhr.height_scale)")
+    ap.add_argument("--anchor", type=float, default=0.0,
+                    help="placement point: 0 = the hips on the person's hips .. 1 = the neck on the person's neck")
     ap.add_argument("--no_compare", action="store_true",
                     help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
     ap.add_argument("--no_frames", action="store_true",
