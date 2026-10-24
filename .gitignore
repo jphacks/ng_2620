@@ -14,6 +14,7 @@ __pycache__/
 .venv/
 *.egg-info/
 .pytest_cache/
+build/
 
 # server data and weights (designdocs/adr/0008: weights are fetched, never committed)
 services/gpu_server/data/
