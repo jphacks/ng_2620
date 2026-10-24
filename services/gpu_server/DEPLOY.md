@@ -8,7 +8,7 @@ designdocs/features/gpu-server-runtime・ADR-0002 / 0012 / 0014。サーバー�
 | 機械 | 手順 |
 |---|---|
 | Windows（RTX 5060 Ti） | `pipeline/` に既存の `.venv` 構成（`pip install -e pipeline/models/sam3` など、pipeline/README.md）。Triton は `triton-windows` |
-| Linux GPU VM（L4 など） | Python 3.11〜3.13 の venv に `pipeline/pyproject.toml` の依存。確認済みのピン：`transformers~=4.57.3`、`diffusers==0.29.1`、`roma~=1.5.4`、`huggingface-hub<1.0`、`eva-decord`、detectron2 `a1ce2f9`、`moderngl`。MoGe は `git+https://github.com/microsoft/MoGe.git` の後に `utils3d_moge` を外して upstream `utils3d` |
+| Linux GPU VM（L4 など） | Python 3.11〜3.13 の venv に `pipeline/pyproject.toml` の依存。確認済みのピン：`ai-edge-litert`（表情）、`transformers~=4.57.3`、`diffusers==0.29.1`、`roma~=1.5.4`、`huggingface-hub<1.0`、`eva-decord`、detectron2 `a1ce2f9`、`moderngl`。MoGe は `git+https://github.com/microsoft/MoGe.git` の後に `utils3d_moge` を外して upstream `utils3d` |
 
 ## 2. 重み
 

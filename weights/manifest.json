@@ -1,22 +1,71 @@
 {
   "comment": "designdocs/adr/0008: weights are never committed. weights/fetch.py downloads them to VVLOG_CKPT_ROOT. sha256 null = not pinned yet (fetch.py prints the value to pin).",
   "files": [
-    {"dest": "sam3/sam3.pt", "source": "hf", "repo": "facebook/sam3", "filename": "sam3.pt", "gated": true,
-     "license": "SAM License", "sha256": null},
-    {"dest": "sam-3d-body-dinov3/model.ckpt", "source": "hf", "repo": "facebook/sam-3d-body-dinov3",
-     "filename": "model.ckpt", "gated": true, "license": "SAM License", "sha256": null},
-    {"dest": "sam-3d-body-dinov3/model_config.yaml", "source": "hf", "repo": "facebook/sam-3d-body-dinov3",
-     "filename": "model_config.yaml", "gated": true, "license": "SAM License", "sha256": null},
-    {"dest": "sam-3d-body-dinov3/assets/mhr_model.pt", "source": "hf", "repo": "facebook/sam-3d-body-dinov3",
-     "filename": "assets/mhr_model.pt", "gated": true, "license": "SAM License", "sha256": null},
-    {"dest": "moge-2-vitl-normal/model.pt", "source": "hf", "repo": "Ruicheng/moge-2-vitl-normal",
-     "filename": "model.pt", "gated": false, "license": "MIT (code) / see the model card", "sha256": null},
-    {"dest": "vitdet/model_final_f05665.pkl", "source": "url",
-     "url": "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_vitdet_h/f328730692/model_final_f05665.pkl",
-     "license": "Apache-2.0 (detectron2)", "sha256": null}
+    {
+      "dest": "sam3/sam3.pt",
+      "source": "hf",
+      "repo": "facebook/sam3",
+      "filename": "sam3.pt",
+      "gated": true,
+      "license": "SAM License",
+      "sha256": null
+    },
+    {
+      "dest": "sam-3d-body-dinov3/model.ckpt",
+      "source": "hf",
+      "repo": "facebook/sam-3d-body-dinov3",
+      "filename": "model.ckpt",
+      "gated": true,
+      "license": "SAM License",
+      "sha256": null
+    },
+    {
+      "dest": "sam-3d-body-dinov3/model_config.yaml",
+      "source": "hf",
+      "repo": "facebook/sam-3d-body-dinov3",
+      "filename": "model_config.yaml",
+      "gated": true,
+      "license": "SAM License",
+      "sha256": null
+    },
+    {
+      "dest": "sam-3d-body-dinov3/assets/mhr_model.pt",
+      "source": "hf",
+      "repo": "facebook/sam-3d-body-dinov3",
+      "filename": "assets/mhr_model.pt",
+      "gated": true,
+      "license": "SAM License",
+      "sha256": null
+    },
+    {
+      "dest": "moge-2-vitl-normal/model.pt",
+      "source": "hf",
+      "repo": "Ruicheng/moge-2-vitl-normal",
+      "filename": "model.pt",
+      "gated": false,
+      "license": "MIT (code) / see the model card",
+      "sha256": null
+    },
+    {
+      "dest": "vitdet/model_final_f05665.pkl",
+      "source": "url",
+      "url": "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_vitdet_h/f328730692/model_final_f05665.pkl",
+      "license": "Apache-2.0 (detectron2)",
+      "sha256": null
+    },
+    {
+      "dest": "mediapipe/face_landmarker.task",
+      "source": "url",
+      "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+      "license": "Apache-2.0 (MediaPipe)",
+      "sha256": null
+    }
   ],
   "hf_cache": [
-    {"repo": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf", "license": "Apache-2.0",
-     "comment": "fusion v2's scene depth (FUSION_DEPTH=da2_indoor_s), loaded with transformers from the HF cache"}
+    {
+      "repo": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
+      "license": "Apache-2.0",
+      "comment": "fusion v2's scene depth (FUSION_DEPTH=da2_indoor_s), loaded with transformers from the HF cache"
+    }
   ]
 }
