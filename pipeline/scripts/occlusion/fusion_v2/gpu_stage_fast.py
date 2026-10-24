@@ -241,7 +241,10 @@ def _prompt_points(model, st, pts, src, H, W, keep, half, cover=None, pad=False)
         del m
 
 
-def _cands_mode(points, compile_decoder):
+def _cands_mode(points, compile_decoder, keyframe=False):
+    if keyframe:
+        import keyframe_stage
+        return "kf+thin" if keyframe_stage.THIN else "kf"
     return points + ("+compile" if compile_decoder else "")
 
 
@@ -324,14 +327,10 @@ def enable_sam3_globals():
     torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 
 
-def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None):
-    """SAM3 point-prompt candidates and person masks -> cands.npz, person.npz. built: a list holding _sam3_build()'s
-    result (from _SAM3Loader; the caller has called enable_sam3_globals), emptied here so the model is freed at the
-    end; else the model is built here."""
+def _person_prompter(model, proc):
+    """-> (person_prompt(state) = Sam3Processor.set_text_prompt("person", state) with the text encoding computed once,
+    that encoding). The text encoder is moved off the GPU afterwards."""
     import torch
-    T, H, W = len(run), run.H, run.W
-    from PIL import Image
-    model, proc, dec = built.pop() if built else _sam3_build(compile_decoder)
     with torch.autocast("cuda", dtype=torch.bfloat16), torch.inference_mode():
         text_person = model.backbone.forward_text(["person"], device=proc.device)
     model.backbone.language_backbone.to("cpu")
@@ -343,11 +342,38 @@ def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None)
 
     @torch.inference_mode()
     def person_prompt(state):
-        """Sam3Processor.set_text_prompt("person", state) with the text encoding computed once."""
         state["backbone_out"].update(text_person)
         if "geometric_prompt" not in state:
             state["geometric_prompt"] = model._get_dummy_prompt()
         return proc._forward_grounding(state)
+    return person_prompt, text_person
+
+
+def _kf_stage(run, cache, built=None, moge_z=None):
+    """keyframe_stage.run_keyframes (cands.npz with tracks, person.npz on keyframes) with SAM3 built as for the c2f
+    stage, eager decoder (prompts run on keyframes only: compiling would cost more than it saves). moge_z: MoGe's Z
+    when it was just computed (moge.npz is still being written by _save_moge's thread)."""
+    import torch
+    import keyframe_stage
+    model, proc, dec = built.pop() if built else _sam3_build(False)
+    person_prompt, text_person = _person_prompter(model, proc)
+    keyframe_stage.run_keyframes(run, cache, model, proc, person_prompt, log=lambda s: print(s, flush=True),
+                                 moge_z=moge_z)
+    del model, proc, dec, text_person, person_prompt
+    gc.collect()
+    torch.clear_autocast_cache()
+    torch.cuda.empty_cache()
+
+
+def _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built=None):
+    """SAM3 point-prompt candidates and person masks -> cands.npz, person.npz. built: a list holding _sam3_build()'s
+    result (from _SAM3Loader; the caller has called enable_sam3_globals), emptied here so the model is freed at the
+    end; else the model is built here."""
+    import torch
+    T, H, W = len(run), run.H, run.W
+    from PIL import Image
+    model, proc, dec = built.pop() if built else _sam3_build(compile_decoder)
+    person_prompt, text_person = _person_prompter(model, proc)
     # The 'person' grounding is launch-bound: ~50 ms/frame of Python and small kernels with the GPU mostly idle
     # (golf 120 f: 52 ms call, 0.1 ms left to wait after it), while the point prompts keep the GPU busy (5 ms to
     # issue a 128-point batch, 62 ms on the GPU). So grounding runs in a worker thread on its own stream, issued
@@ -591,18 +617,21 @@ def _vram_cap(margin=0.5 * 2**30):
         torch.cuda.set_per_process_memory_fraction(1.0)
 
 
-def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False):
+def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False, keyframe=False):
     """points: "full" = the frozen point grid (bit-identical to gpu_stage); "c2f" = coarse-to-fine (see
     _c2f_points; not bit-identical, same F1 pass count on dev 18 and held-out test4, LEDGER 2026-10-14).
     "kf_flow" / "kf_sam3" = c2f on keyframes, candidates carried in between by optical flow / the SAM3 tracker;
     "kf_lite" = kf_flow without any SAM3 call between keyframes (keyframes.py; the pipeline default,
     run_fusion_v2.run_fusion).
-    compile_decoder: torch.compile the SAM mask decoder (not bit-identical; ~0.03% of mask pixels flip)."""
+    compile_decoder: torch.compile the SAM mask decoder (not bit-identical; ~0.03% of mask pixels flip).
+    keyframe: candidates from keyframe_stage instead (SAM3 c2f prompts and 'person' grounding on keyframes only,
+    EdgeTAM tracking in between, thin objects tracked by SAM3's tracker unless FUSION_KF_THIN=0; points /
+    compile_decoder are not used)."""
     import torch
     assert points in ("full", "c2f", "kf_flow", "kf_lite", "kf_sam3")
     os.makedirs(cache, exist_ok=True)
     T, H, W = len(run), run.H, run.W
-    mode = _cands_mode(points, compile_decoder)
+    mode = _cands_mode(points, compile_decoder, keyframe)
     # np.load keeps the file open until closed, and Windows cannot rename an open file: read, close, then replace
     masked, level, model = True, MOGE_LEVEL, DEPTH
     if os.path.exists(f"{cache}/moge.npz"):
@@ -632,17 +661,20 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
         print(run.name, "moge from the mesh stage (moge_ahead.py)", flush=True)
     if os.path.exists(f"{cache}/moge.npz") and os.path.exists(f"{cache}/cands.npz"):
         return  # cached
-    D = disk_arrays.npz_member(f"{cache}/mesh.npz", "D")                 # prep's mesh depth (T,P,H,W), memory-mapped
-    sils = [(D[i] > 0).any(0) for i in range(T)]
-    del D
+    sils = None   # keyframe_stage takes each frame's silhouettes from mesh.npz itself
+    if not keyframe:
+        D = disk_arrays.npz_member(f"{cache}/mesh.npz", "D")             # prep's mesh depth (T,P,H,W), memory-mapped
+        sils = [(D[i] > 0).any(0) for i in range(T)]
+        del D
     t0 = time.time()
     saver = None
+    Z = None
     with local_gpu(owner):
         need_moge = not os.path.exists(f"{cache}/moge.npz")
         loader = None
         loaded = hf_depth_load(DEPTH_MODELS[DEPTH]) if need_moge and DEPTH != "moge" else None   # before the thread
         if need_moge and not os.path.exists(f"{cache}/cands.npz") and PARALLEL_LOAD:
-            loader = _SAM3Loader(compile_decoder)   # builds SAM3 while MoGe runs
+            loader = _SAM3Loader(compile_decoder and not keyframe)   # builds SAM3 while MoGe runs
         if need_moge:
             fov_x = moge_fov_x(run)
             Z = disk_arrays.scratch(f"{cache}/_moge_Z.npy", (T, H, W), np.float32)   # np.zeros, on disk
@@ -665,7 +697,10 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
                 print(run.name, "sam3 ready", round(time.time() - t0, 1), flush=True)
             try:
                 with _vram_cap():
-                    _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built)
+                    if keyframe:
+                        _kf_stage(run, cache, built, Z)
+                    else:
+                        _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0, built)
             except torch.cuda.OutOfMemoryError:
                 over = True
             built.clear()   # normally emptied by _sam3_stage already
@@ -676,7 +711,10 @@ def run_gpu(run, cache, owner="R3_fusion", points="full", compile_decoder=False)
                 torch.clear_autocast_cache()
                 torch.cuda.empty_cache()
                 print(run.name, "SAM3 stage over the VRAM cap: rerun without it", flush=True)
-                _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0)
+                if keyframe:
+                    _kf_stage(run, cache, moge_z=Z)
+                else:
+                    _sam3_stage(run, cache, sils, points, compile_decoder, mode, t0)
         if saver is not None:
             saver.join()
             saver = Z = None

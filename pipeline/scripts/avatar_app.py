@@ -19,7 +19,7 @@ composited once frame t+1 is rendered (two frames of render buffers in memory, e
 usage (repo root):
   .venv/Scripts/python.exe scripts/avatar_app.py --pipeline_out <run>/pipeline_out --out <run>/avatar
       [--vrm assets/vrm_models/yuzuhako_Shuera.vrm] [--fps 30] [--no_occlusion] [--no_removal] [--no_spring]
-      [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock]
+      [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock] [--fusion_keyframe]
       [--targets 1,3] [--vrm_map 1=a.vrm,3=b.vrm] [--fusion_state <occ>/fusion_state.pkl] [--export_layers <dir>]
       [--overrides <overrides.json>]
 --targets: only these people are erased and replaced; the others stay real, and where one of them is in front of an
@@ -322,6 +322,7 @@ def main(a):
                          reference=getattr(a, "fusion_reference", False),
                          points=getattr(a, "fusion_points", "kf_lite"),
                          compile_decoder=getattr(a, "fusion_compile_decoder", True),
+                         keyframe=getattr(a, "fusion_keyframe", False),
                          render=False)   # fusion.render's own hide masks: the avatar draws its own (AvatarHider)
         fus.pop("hide", None)
         stats["fusion_s"] = round(time.perf_counter() - t0, 1)
@@ -578,5 +579,9 @@ if __name__ == "__main__":
                     help="eager SAM mask decoder in fusion v2. The default torch.compiles it: SAM3 -29%% on penn1765 with "
                          "a warm inductor cache, not bit-identical (dev 40: worst F1 -0.009, pass 35 -> 34; adopted "
                          "as an exception on 2026-10-15, LEDGER)")
+    ap.add_argument("--fusion_keyframe", action="store_true",
+                    help="fusion v2 occluder candidates from keyframes tracked by EdgeTAM (SAM3 prompts and person "
+                         "grounding on keyframes only; scripts/occlusion/fusion_v2/keyframe_stage.py; opt-in, not adopted on the "
+                         "held-out test7: misses objects held inside a person's visible mask)")
     use_persistent_compile_cache()
     main(ap.parse_args())

@@ -33,6 +33,8 @@ usage (repo root):
                            in a fresh process, after releasing this process's cached CUDA tensors and allocations
       [--vrm <file>]       avatar for --avatar_out (default: avatar_app.py's)
       [--avatar_hq]        --avatar_out at the input video's own quality (avatar_app.py --hq)
+      [--avatar_keyframe]  --avatar_out with fusion v2's keyframe-tracked occluder candidates (avatar_app.py
+                           --fusion_keyframe; EdgeTAM)
       [--compile_backbone] torch.compile the HMR backbone (faster HMR; not bit-identical to eager)
       (the hand head always shares the body head's MHR model, and both heads run hmr_fast's sync-free code)
       [--hmr_input_size N] HMR crop size (multiple of 16; default 384, trained at 512). On 11 3DPW clips 384 vs 512:
@@ -545,6 +547,8 @@ if __name__ == "__main__":
     p.add_argument("--avatar_out", default=None)
     p.add_argument("--avatar_hq", action="store_true",
                    help="avatar output over the original input frames, PNG frames, mp4 CRF 12 (avatar_app.py --hq)")
+    p.add_argument("--avatar_keyframe", action="store_true",
+                   help="fusion v2 occluders from keyframes tracked by EdgeTAM (avatar_app.py --fusion_keyframe)")
     p.add_argument("--vrm", default=None)
     p.add_argument("--compile_backbone", action="store_true")
     p.add_argument("--keep_rejected_hands", action="store_true")
@@ -600,5 +604,7 @@ if __name__ == "__main__":
               f"{pinned / 1024 ** 3:.2f} -> {torch.cuda.host_memory_stats().get('reserved_bytes.current', 0) / 1024 ** 3:.2f} GiB",
               flush=True)
         cmd = [sys.executable, "-u", os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatar_app.py"),
-               "--pipeline_out", args.output_dir, "--out", args.avatar_out] + (["--vrm", args.vrm] if args.vrm else [])             + (["--hq", args.input_video] if args.avatar_hq else [])
+               "--pipeline_out", args.output_dir, "--out", args.avatar_out]
+        cmd += (["--vrm", args.vrm] if args.vrm else []) + (["--hq", args.input_video] if args.avatar_hq else []) \
+            + (["--fusion_keyframe"] if args.avatar_keyframe else [])
         sys.exit(subprocess.call(cmd))

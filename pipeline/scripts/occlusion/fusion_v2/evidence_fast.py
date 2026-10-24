@@ -10,6 +10,8 @@ The frozen evidence.py stays the reference. Changes, none of which alter a value
   * link(): the 0/1 intersection matrices between frames t and t+g are computed on the GPU in float32 (exact:
     integer partial sums below 2^24) with each frame's masks converted once per pass; the IoU expression and the
     order-dependent union-find are the frozen ones.
+Candidates from keyframe_stage (run_gpu(keyframe=True)) are already tracked: their cands.npz 'track' ids replace
+link(), so a tracked object is one decision unit per (person, body part) over the frames it was followed.
 """
 import os
 import pickle
@@ -76,6 +78,13 @@ def link(masks, fr):
     return np.array([f(x) for x in range(n)])
 
 
+def _tracks(cache):
+    """The object id of every candidate when the candidate stage tracked them (keyframe_stage: cands.npz 'track');
+    None for per-frame segments, which link() joins by IoU."""
+    with np.load(f"{cache}/cands.npz") as c:
+        return c["track"].astype(int) if "track" in c.files else None
+
+
 def _out_entry(v):
     """evidence.compute's output form of one per[(i, p)] entry."""
     return dict(s=v["s"], sig=v["sig"], dv=v["dv"], Marea=v["Marea"], Varea=v["Varea"], parts=v["parts"],
@@ -114,7 +123,9 @@ def compute(run, cache):
     D_all, L, pids, has, foc = c["D"], c["L"], list(c["pids"]), c["has"], c["foc"]
     Zall = moge_z(cache)
     masks, fr, score, inV = load_cands(cache)
-    track = link(masks, fr) if len(masks) else np.zeros(0, int)
+    track = _tracks(cache)
+    if track is None:
+        track = link(masks, fr) if len(masks) else np.zeros(0, int)
     T, H, W = L.shape
     dets = _PersonDets(cache, T, H, W)
     Vr_all = {}

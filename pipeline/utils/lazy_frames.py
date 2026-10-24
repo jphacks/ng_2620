@@ -39,6 +39,33 @@ class LazyFrames:
         return img
 
 
+class DiskFrames:
+    """LazyFrames that keeps only the paths: frame i is read from its JPEG when asked for (one decode per access;
+    callers that walk a clip once, such as fusion v2's keyframe trackers, read each frame once). Same ops and dtypes
+    as LazyFrames / the preloading loaders, with the tracker's own image_size, mean and std (SAM3: 1008, 0.5, 0.5;
+    EdgeTAM: 1024, ImageNet), so the tensors are bit-identical (scripts/eval/check_edgetam_tracker.py)."""
+
+    def __init__(self, img_paths, image_size, img_mean, img_std):
+        self.paths, self.image_size = list(img_paths), image_size
+        self.img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
+        self.img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
+        with Image.open(self.paths[0]) as im:
+            self.video_width, self.video_height = im.size
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, index):
+        img_pil = Image.open(self.paths[index])
+        img_np = np.array(img_pil.convert("RGB").resize((self.image_size, self.image_size)))
+        if img_np.dtype != np.uint8:
+            raise RuntimeError(f"Unknown image dtype: {img_np.dtype} on {self.paths[index]}")
+        img = torch.from_numpy(img_np / 255.0).permute(2, 0, 1).to(torch.float32)
+        img -= self.img_mean
+        img /= self.img_std
+        return img
+
+
 def _lazy_loader(paths_of):
     def load(video_path, image_size, offload_video_to_cpu, img_mean=(0.5, 0.5, 0.5), img_std=(0.5, 0.5, 0.5),
              async_loading_frames=False, compute_device=torch.device("cuda")):

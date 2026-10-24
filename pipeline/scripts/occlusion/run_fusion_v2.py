@@ -20,6 +20,10 @@ clip hide IoU vs c2f 0.993 / 0.969 / 0.782 (the last on ~45 hidden px per 1080x1
 (fusion GPU stage -28..-54% vs c2f on 4 occluded 3DPW clips on an L4, testdata/2026-10-23). --points c2f prompts every
 frame coarse-to-fine (~2.8x fewer decoder calls than the frozen grid, LEDGER 2026-10-14); --points full keeps the
 frozen grid.
+--keyframe (opt-in): SAM3's prompts and 'person' grounding run on keyframes only and the occluders chosen there are
+tracked by EdgeTAM in between (fusion_v2/keyframe_stage.py; EdgeTAM is read from EDGETAM_ROOT, default
+C:/VScodeFiles/EdgeTAM). Evidence, decision and rendering are unchanged. Fusion -38% on the held-out test7, but not
+adopted there: held objects inside a person's visible mask are never tracked (keyframe_stage.py docstring).
 """
 import argparse
 import os
@@ -41,10 +45,10 @@ import shared_cache  # noqa: E402
 
 
 def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True,
-               render=True):
-    """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder: gpu_stage_fast.run_gpu
-    (ignored with reference=True). render=False skips fusion.render (hide=None; ~3 s per 120 frames): for callers
-    that draw the decisions themselves (avatar_app's AvatarHider)."""
+               keyframe=False, render=True):
+    """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder / keyframe:
+    gpu_stage_fast.run_gpu (ignored with reference=True). render=False skips fusion.render (hide=None; ~3 s per
+    120 frames): for callers that draw the decisions themselves (avatar_app's AvatarHider)."""
     gs, evm = (gpu_stage, evidence) if reference else (gpu_stage_fast, evidence_fast)
     if not reference:
         shared_cache.install()   # evidence / render / AvatarHider share cache loads and ground masks (same values)
@@ -57,7 +61,7 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     if reference:
         gs.run_gpu(run, cache, owner="fusion_v2")
     else:
-        gs.run_gpu(run, cache, owner="fusion_v2", points=points, compile_decoder=compile_decoder)
+        gs.run_gpu(run, cache, owner="fusion_v2", points=points, compile_decoder=compile_decoder, keyframe=keyframe)
     t2 = time.time()
     ev = evm.compute(run, cache)
     dec = fusion.decide(ev, fusion.P)
@@ -82,6 +86,8 @@ if __name__ == "__main__":
                          "SAM3 tracker (slower)")
     ap.add_argument("--no_compile_decoder", dest="compile_decoder", action="store_false",
                     help="eager SAM mask decoder (the default torch.compiles it; not bit-identical)")
+    ap.add_argument("--keyframe", action="store_true",
+                    help="occluder candidates from keyframes tracked by EdgeTAM (fusion_v2/keyframe_stage.py; opt-in)")
     a = ap.parse_args()
     run_fusion(a.pipeline_out, a.out, a.name, reference=a.reference, points=a.points,
-               compile_decoder=a.compile_decoder)
+               compile_decoder=a.compile_decoder, keyframe=a.keyframe)
