@@ -118,17 +118,34 @@ class AvatarHider:
         self.byf = {}
         for u in self.ev["units"]:
             self.byf.setdefault((u["i"], u["pid"]), []).append(u)
+        self._gnd = {}
 
-    def raw(self, i, alpha, depth):
-        """alpha / depth: {pid: (H,W)} of frame i (alpha 0..1, depth inf where empty) -> {pid: (hide, region)}."""
+    def _ground(self, i):
+        """Frame i's ground mask (or None) and its scene depth: independent of the avatars."""
         from evidence import ground_mask
-        P, c = self.P, self.c
+        c = self.c
         Zm = self.Zall[i].astype(np.float32)
         gnd = None
-        if P["GROUND"]:
+        if self.P["GROUND"]:
             fi = c["foc"][i][c["foc"][i] > 0]
             if len(fi):
                 gnd = ground_mask(Zm, float(fi[0]), c["L"][i])
+        return gnd, Zm
+
+    def prefetch(self, frames):
+        """Compute the ground masks of these frames in order on a worker thread, ahead of raw() (12 ms per frame
+        at 480x270 that raw() would otherwise spend first; the same function on the same inputs)."""
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(1)
+        for i in frames:
+            self._gnd[i] = pool.submit(self._ground, i)
+        pool.shutdown(wait=False)
+
+    def raw(self, i, alpha, depth):
+        """alpha / depth: {pid: (H,W)} of frame i (alpha 0..1, depth inf where empty) -> {pid: (hide, region)}."""
+        P, c = self.P, self.c
+        f = self._gnd.pop(i, None)
+        gnd, Zm = f.result() if f is not None else self._ground(i)
         out = {}
         for k, p in enumerate(self.pids):
             a = alpha.get(p)

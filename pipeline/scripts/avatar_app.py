@@ -149,12 +149,25 @@ def composite_gpu(base, layers, s):
             cols.append(col)
             als.append(al)
             deps.append(dep)
-        order = torch.argsort(-torch.stack(deps), dim=0, stable=True)      # farthest first
-        for k in range(len(layers)):
-            idx = order[k]
-            for p in range(len(layers)):
-                w = (als[p] * (idx == p))[..., None]
-                out = cols[p] * w + out * (1 - w)
+        # back to front: layer p's place in the farthest-first order of a stable argsort of -depth (the number of
+        # layers farther, or as far and listed before it); an argsort along a 2-long axis took 37 of 44 ms per frame
+        K = len(layers)
+        rank = []
+        for p in range(K):
+            r = torch.zeros((hU, wU), dtype=torch.int64, device=dev)
+            for q in range(K):
+                if q != p:
+                    r += (deps[q] > deps[p]) | ((deps[q] == deps[p]) & (q < p))
+            rank.append(r)
+        for k in range(K):
+            col, al = cols[0], als[0]
+            if K > 1:   # the layer at place k, per pixel (the other layers' blends were w = 0: out unchanged)
+                col, al = torch.zeros_like(cols[0]), torch.zeros_like(als[0])
+                for p in range(K):
+                    m = rank[p] == k
+                    col, al = torch.where(m[..., None], cols[p], col), torch.where(m, als[p], al)
+            w = al[..., None]
+            out = col * w + out * (1 - w)
         out = F.avg_pool2d(out.permute(2, 0, 1)[None], s)[0].permute(1, 2, 0)
         res = base.copy()
         res[uy0:uy1, ux0:ux1] = out.clamp(0, 255).to(torch.uint8).cpu().numpy()
@@ -420,14 +433,17 @@ def main(a):
             stats["face_read"] = len(fr["raw"])
             stats["face_confident"] = int(sum(r[1] > 0.5 for r in fr["raw"].values()))
 
-    hider = None
+    hider = hide_pool = None
     if fus is not None:
+        from concurrent.futures import ThreadPoolExecutor
         from avatar.occlusion import AvatarHider
         overrides = None
         if a.overrides:
             from avatar.occlusion import Overrides
             overrides = Overrides.load(a.overrides)
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
+        hider.prefetch(range(n))
+        hide_pool = ThreadPoolExecutor(1)   # raw hide masks of frame i beside the rendering of frame i + 1
     ik_err = {}
     head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
@@ -441,7 +457,7 @@ def main(a):
             raise SystemExit(f"GPU avatar path needs an integer --hq scale (got {sc:.3f}): use --cpu_avatar")
 
     def render_frame(i):
-        """-> {pid: (rgba ssaa, depth ssaa, native box, alpha native)}, raw hide masks of frame i (or None).
+        """-> {pid: (rgba ssaa, depth ssaa, native box, alpha native)}, a future of frame i's raw hide masks (or None).
         The supersampled buffers cover only the avatar's box (Actor.screen_box: its projected vertices), which is
         all that is read back from the GPU; outside it the avatar has no pixel."""
         buf, al, dp = {}, {}, {}
@@ -497,9 +513,10 @@ def main(a):
                 d_full = d_full[::k, ::k]
             al[pid], dp[pid] = a_full.cpu().numpy(), d_full.contiguous().cpu().numpy()
             buf[pid] = (im, d, box, a_box.cpu().numpy())
-        return buf, (hider.raw(i, al, dp) if hider is not None else None)
+        return buf, (hide_pool.submit(hider.raw, i, al, dp) if hider is not None else None)
 
-    # 4-6. render, hide, composite: frame j is composited once frame j+1 has been rendered
+    # 4-6. render, hide, composite: frame j is composited once frame j+1 has been rendered and its raw hide masks
+    # computed (on hide_pool, while frame j+2 renders)
     fdir = os.path.join(a.out, "frames")
     os.makedirs(fdir, exist_ok=True)
     SW, SH = OW * rz.ssaa, OH * rz.ssaa
@@ -527,12 +544,13 @@ def main(a):
     hidden_px = cov_px = 0
     t_render = t_hide = t_comp = t_gpu = 0.0
     bufs, raws, hides_j = {}, {}, {}
-    for i in range(n + 1):
+    raw = lambda k: raws[k].result() if raws.get(k) is not None else None
+    for i in range(n + 2):
         if i < n:
             t0 = time.perf_counter()
             bufs[i], raws[i] = render_frame(i)
             t_render += time.perf_counter() - t0
-        j = i - 1
+        j = i - 2
         if j < 0:
             continue
         t0 = time.perf_counter()
@@ -544,7 +562,7 @@ def main(a):
             cov_px += int((al_n > 0.02).sum())
             h = None
             if hider is not None:
-                h = hider.smooth(pid, raws.get(j - 1), raws[j], raws.get(j + 1))
+                h = hider.smooth(pid, raw(j - 1), raw(j), raw(j + 1))
                 h = np.clip(h, 0, 1).astype(np.float32)
                 if sc != 1:   # pipeline resolution -> output (the linear upscale also softens the hide edge)
                     h = cv2.resize(h, (OW, OH), interpolation=cv2.INTER_LINEAR)
@@ -571,6 +589,8 @@ def main(a):
         raws.pop(j - 1, None)
         t_comp += time.perf_counter() - t0
         print(f"[avatar] frame {j + 1}/{n}", flush=True)
+    if hide_pool is not None:
+        hide_pool.shutdown()
     stats["render_s"] = round(t_setup + t_render, 1)
     stats["hide_s"] = round(t_hide, 1)
     t0 = time.perf_counter()
