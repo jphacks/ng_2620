@@ -14,7 +14,8 @@ export function tauriTransport(fs: FileSystem): HttpTransport {
       if (onProgress) ch.onmessage = (p) => onProgress(p.received, p.total);
       await invoke("net_download", { url, headers, dest, onProgress: ch });
     },
-    uploadFile: (url, headers, path, offset, length) => invoke<{ status: number; body: string }>("net_upload_chunk", { url, headers, path, offset, length }),
+    uploadFile: (url, headers, path, offset, length) =>
+      invoke<{ status: number; body: string }>("net_upload_chunk", { url, headers, path, offset, length }),
     readChunk: (path, offset, length) => fs.readChunk(path, offset, length),
   };
 }

@@ -21,7 +21,12 @@ export function SettingsRoute() {
         <IconButton label={ja.common.back} icon={<ArrowLeft size={16} />} onClick={() => navigate(-1)} />
         <h2 className="text-lg font-semibold">{ja.settings.title}</h2>
       </div>
-      <Tabs value={current} onChange={(t) => navigate(`/settings/${t}`, { replace: true })} tabs={TABS.map((t) => ({ value: t, label: ja.settings.tabs[t] }))} className="mt-2 flex-1">
+      <Tabs
+        value={current}
+        onChange={(t) => navigate(`/settings/${t}`, { replace: true })}
+        tabs={TABS.map((t) => ({ value: t, label: ja.settings.tabs[t] }))}
+        className="mt-2 flex-1"
+      >
         <TabPanel value="connection">
           <ConnectionSettings />
         </TabPanel>

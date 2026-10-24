@@ -25,9 +25,14 @@ export interface LocalMediaInfo {
 }
 
 /** 回転を適用した表示上の寸法 */
-export function displaySize(info: Pick<LocalMediaInfo, "width" | "height" | "rotation">): { width: number; height: number } {
+export function displaySize(info: Pick<LocalMediaInfo, "width" | "height" | "rotation">): {
+  width: number;
+  height: number;
+} {
   const r = ((info.rotation % 360) + 360) % 360;
-  return r === 90 || r === 270 ? { width: info.height, height: info.width } : { width: info.width, height: info.height };
+  return r === 90 || r === 270
+    ? { width: info.height, height: info.width }
+    : { width: info.width, height: info.height };
 }
 
 export function normalizeCodec(codec: string | null | undefined): string | null {

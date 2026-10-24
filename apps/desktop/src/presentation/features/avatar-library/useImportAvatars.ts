@@ -21,7 +21,11 @@ export function useImportAvatars() {
     if (imported.length) toast({ kind: "success", title: ja.avatar.imported(imported.length) });
     if (failed.length) {
       const e = errorText(failed[0]!.error);
-      toast({ kind: "error", title: failed.length > 1 ? ja.avatar.importFailed(failed.length) : e.title, body: e.body });
+      toast({
+        kind: "error",
+        title: failed.length > 1 ? ja.avatar.importFailed(failed.length) : e.title,
+        body: e.body,
+      });
     }
     return imported;
   };

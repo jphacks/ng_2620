@@ -1,0 +1,89 @@
+# main に push（develop → main のマージ）されたら、tauri.conf.json の version で release/vX.Y.Z ブランチとタグを切り、
+# Windows(x64) と macOS(arm64 / x64) をビルドして GitHub Release に添付する（署名なし）。
+# 同じ version のタグが既にあれば何もしない（version を上げていないマージでは配布しない）。
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version は作成済みなのでリリースしません"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: release ブランチ・タグ・draft Release
+        if: steps.v.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          git push origin "HEAD:refs/heads/release/v$VERSION"
+          gh release view "v$VERSION" >/dev/null 2>&1 ||
+            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "vvlog v$VERSION" --generate-notes --draft
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { name: macos-x64, os: macos-15-intel, target: x86_64-apple-darwin }
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.target }}
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          tagName: v${{ needs.prepare.outputs.version }}
+          releaseDraft: true
+          args: --target ${{ matrix.target }}
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: draft を公開
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "v${{ needs.prepare.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false

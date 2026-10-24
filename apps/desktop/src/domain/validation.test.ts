@@ -22,7 +22,9 @@ describe("validateMedia", () => {
   });
 
   it("30 秒超は MEDIA_TOO_LONG", () => {
-    expect(validateMedia("a.mp4", info({ durationSec: 30.1 }))).toEqual([{ code: "MEDIA_TOO_LONG", durationSec: 30.1, limitSec: 30 }]);
+    expect(validateMedia("a.mp4", info({ durationSec: 30.1 }))).toEqual([
+      { code: "MEDIA_TOO_LONG", durationSec: 30.1, limitSec: 30 },
+    ]);
   });
 
   it("長辺 1920px 超は MEDIA_TOO_LARGE（縦動画も長辺で判定）", () => {
@@ -34,7 +36,9 @@ describe("validateMedia", () => {
   it("拡張子とコーデック", () => {
     expect(validateMedia("a.avi", info())).toEqual([{ code: "MEDIA_UNSUPPORTED", reason: "extension", value: "avi" }]);
     expect(validateMedia("a.MOV", info({ codec: "hvc1" }))).toEqual([]);
-    expect(validateMedia("a.mp4", info({ codec: "vp9" }))).toEqual([{ code: "MEDIA_UNSUPPORTED", reason: "codec", value: "vp9" }]);
+    expect(validateMedia("a.mp4", info({ codec: "vp9" }))).toEqual([
+      { code: "MEDIA_UNSUPPORTED", reason: "codec", value: "vp9" },
+    ]);
     // コーデックが読めないときはサーバーの ingest に任せる
     expect(validateMedia("a.mp4", info({ codec: null }))).toEqual([]);
     expect(isAcceptedVideoPath("C:\\x\\clip.MP4")).toBe(true);

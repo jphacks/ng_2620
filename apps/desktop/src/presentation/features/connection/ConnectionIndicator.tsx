@@ -24,7 +24,12 @@ export function useConnectionSummary() {
 export function ConnectionIndicator({ onOpenSettings }: { onOpenSettings(): void }) {
   const { tone, label } = useConnectionSummary();
   return (
-    <button type="button" onClick={onOpenSettings} title={ja.status.openConnection} className="flex min-w-0 items-center gap-1.5 px-2 hover:bg-raised">
+    <button
+      type="button"
+      onClick={onOpenSettings}
+      title={ja.status.openConnection}
+      className="flex min-w-0 items-center gap-1.5 px-2 hover:bg-raised"
+    >
       <StatusDot tone={tone} />
       <span className="truncate">{label}</span>
     </button>

@@ -32,7 +32,12 @@ export interface CompositeInput {
 }
 
 /** 画素 i で人物 p を隠すか（contracts §5 effectiveHide。ブラシは P1） */
-export function effectiveHide(layer: PersonLayer, i: number, units: Uint16Array | null | undefined, modeOf: ModeOf | undefined): boolean {
+export function effectiveHide(
+  layer: PersonLayer,
+  i: number,
+  units: Uint16Array | null | undefined,
+  modeOf: ModeOf | undefined,
+): boolean {
   let h = layer.hide ? layer.hide[i]! >= 128 : false;
   const u = units ? units[i]! : 0;
   if (u !== 0 && modeOf) {
@@ -78,7 +83,12 @@ export function diffRatio(a: ArrayLike<number>, b: ArrayLike<number>, threshold 
   let bad = 0;
   for (let i = 0; i < n; i++) {
     const o = i * 4;
-    if (Math.abs(a[o]! - b[o]!) > threshold || Math.abs(a[o + 1]! - b[o + 1]!) > threshold || Math.abs(a[o + 2]! - b[o + 2]!) > threshold) bad++;
+    if (
+      Math.abs(a[o]! - b[o]!) > threshold ||
+      Math.abs(a[o + 1]! - b[o + 1]!) > threshold ||
+      Math.abs(a[o + 2]! - b[o + 2]!) > threshold
+    )
+      bad++;
   }
   return bad / n;
 }

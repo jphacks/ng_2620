@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { compositeFrame, diffRatio } from "./composite";
 import { History } from "./history";
-import { defaultRange, explainWhy, modeKey, parseUnits, removeRange, resolveModes, setRange, subtractRange, upsertOverride } from "./occlusion";
+import {
+  defaultRange,
+  explainWhy,
+  modeKey,
+  parseUnits,
+  removeRange,
+  resolveModes,
+  setRange,
+  subtractRange,
+  upsertOverride,
+} from "./occlusion";
 import type { UnitOverride } from "./overrides";
 
 const ov = (id: string, range: [number, number], mode: "front" | "behind", personId = 1, unitId = 5): UnitOverride => ({
-  id, kind: "unit", personId, unitId, range, mode, createdAt: "t",
+  id,
+  kind: "unit",
+  personId,
+  unitId,
+  range,
+  mode,
+  createdAt: "t",
 });
 
 function ids() {
@@ -38,7 +54,14 @@ describe("compositeFrame（contracts §5）", () => {
     const a1 = new Uint8Array([100, 0, 0, 128]);
     const a2 = new Uint8Array([0, 0, 200, 128]);
     const one = { width: 1, height: 1, frame: new Uint8Array([0, 0, 0, 255]), clean: new Uint8Array([0, 0, 0, 255]) };
-    const out = compositeFrame({ ...one, persons: [{ personId: 1, avatar: a1 }, { personId: 2, avatar: a2 }], order: [1, 2] });
+    const out = compositeFrame({
+      ...one,
+      persons: [
+        { personId: 1, avatar: a1 },
+        { personId: 2, avatar: a2 },
+      ],
+      order: [1, 2],
+    });
     const a = 128 / 255;
     expect(Array.from(out)).toEqual([Math.round(100 * a * (1 - a)), 0, Math.round(200 * a), 255]);
   });
@@ -50,7 +73,10 @@ describe("compositeFrame（contracts §5）", () => {
 
 describe("手修正の区間演算", () => {
   it("subtractRange", () => {
-    expect(subtractRange([0, 10], [3, 5])).toEqual([[0, 2], [6, 10]]);
+    expect(subtractRange([0, 10], [3, 5])).toEqual([
+      [0, 2],
+      [6, 10],
+    ]);
     expect(subtractRange([0, 10], [0, 10])).toEqual([]);
     expect(subtractRange([0, 10], [20, 30])).toEqual([[0, 10]]);
   });
@@ -76,7 +102,10 @@ describe("手修正の区間演算", () => {
 
   it("removeRange と setRange", () => {
     const list = removeRange([ov("a", [0, 100], "front")], 1, 5, [10, 20], ids());
-    expect(list.map((x) => x.range)).toEqual([[0, 9], [21, 100]]);
+    expect(list.map((x) => x.range)).toEqual([
+      [0, 9],
+      [21, 100],
+    ]);
     expect(setRange(list, "a", [5, 2], 50)[0]!.range).toEqual([2, 5]);
     expect(setRange(list, "a", [-5, 900], 50)[0]!.range).toEqual([0, 50]);
   });
@@ -85,8 +114,17 @@ describe("手修正の区間演算", () => {
 describe("units.json", () => {
   const units = parseUnits({
     units: [
-      { unitId: 3, frames: [10, 80], label: "object", areaPx: 900, tracks: [1, 2],
-        perPerson: { "1": { auto: "front", why: "D+", confidence: 0.8, overlapFrames: [20, 40] }, "2": { auto: "none", why: "", confidence: 0, overlapFrames: [] } } },
+      {
+        unitId: 3,
+        frames: [10, 80],
+        label: "object",
+        areaPx: 900,
+        tracks: [1, 2],
+        perPerson: {
+          "1": { auto: "front", why: "D+", confidence: 0.8, overlapFrames: [20, 40] },
+          "2": { auto: "none", why: "", confidence: 0, overlapFrames: [] },
+        },
+      },
       { bad: true },
     ],
   });

@@ -10,7 +10,16 @@ import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
-import { Button, ConfirmDialog, ErrorNotice, Label, Spinner, StatusDot, Switch, TextInput } from "@/presentation/shared/ui";
+import {
+  Button,
+  ConfirmDialog,
+  ErrorNotice,
+  Label,
+  Spinner,
+  StatusDot,
+  Switch,
+  TextInput,
+} from "@/presentation/shared/ui";
 
 const T = ja.connection.local;
 const STATUS_INTERVAL_MS = 2000;
@@ -27,7 +36,12 @@ export function LocalServerPanel() {
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [confirmStop, setConfirmStop] = useState(false);
-  const status = useQuery({ queryKey: ["local-server-status"], queryFn: uc.localServerStatus, refetchInterval: STATUS_INTERVAL_MS, enabled: env.isTauri });
+  const status = useQuery({
+    queryKey: ["local-server-status"],
+    queryFn: uc.localServerStatus,
+    refetchInterval: STATUS_INTERVAL_MS,
+    enabled: env.isTauri,
+  });
 
   if (!env.isTauri) return <ErrorNotice tone="info" title={T.browserOnly} />;
 
@@ -93,7 +107,14 @@ export function LocalServerPanel() {
         </Label>
         <div>
           <div className="flex gap-2">
-            <TextInput id="ls-dir" value={c.serverDir} onChange={(e) => setC({ ...c, serverDir: e.target.value })} placeholder={T.serverDirHint} spellCheck={false} disabled={running} />
+            <TextInput
+              id="ls-dir"
+              value={c.serverDir}
+              onChange={(e) => setC({ ...c, serverDir: e.target.value })}
+              placeholder={T.serverDirHint}
+              spellCheck={false}
+              disabled={running}
+            />
             <Button icon={<FolderOpen size={14} />} onClick={() => void pickDir()} disabled={running}>
               {T.browse}
             </Button>
@@ -105,7 +126,14 @@ export function LocalServerPanel() {
         </Label>
         <div>
           <div className="flex gap-2">
-            <TextInput id="ls-python" value={c.pythonPath} onChange={(e) => setC({ ...c, pythonPath: e.target.value })} placeholder={T.pythonHint} spellCheck={false} disabled={running} />
+            <TextInput
+              id="ls-python"
+              value={c.pythonPath}
+              onChange={(e) => setC({ ...c, pythonPath: e.target.value })}
+              placeholder={T.pythonHint}
+              spellCheck={false}
+              disabled={running}
+            />
             <Button icon={<FolderOpen size={14} />} onClick={() => void pickPython()} disabled={running}>
               {T.browse}
             </Button>
@@ -115,7 +143,14 @@ export function LocalServerPanel() {
         <Label htmlFor="ls-port" className="pt-1.5">
           {T.port}
         </Label>
-        <TextInput id="ls-port" className="w-28" inputMode="numeric" value={portText} onChange={(e) => setPortText(e.target.value)} disabled={running} />
+        <TextInput
+          id="ls-port"
+          className="w-28"
+          inputMode="numeric"
+          value={portText}
+          onChange={(e) => setPortText(e.target.value)}
+          disabled={running}
+        />
         <div />
         <Switch checked={c.autoStart} onChange={(autoStart) => setC({ ...c, autoStart })} label={T.autoStart} />
       </div>
@@ -129,7 +164,12 @@ export function LocalServerPanel() {
             {T.stop}
           </Button>
         ) : (
-          <Button variant="primary" icon={starting ? <Spinner /> : <Play size={14} />} onClick={() => void onStart()} disabled={starting}>
+          <Button
+            variant="primary"
+            icon={starting ? <Spinner /> : <Play size={14} />}
+            onClick={() => void onStart()}
+            disabled={starting}
+          >
             {starting ? T.starting : T.start}
           </Button>
         )}
@@ -166,7 +206,9 @@ export function LocalServerPanel() {
 
       <details open={!running && exitCode !== null} className="rounded border border-border">
         <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{T.log}</summary>
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all border-t border-border px-3 py-2 font-mono text-xs text-muted">{log.length ? log.join("\n") : T.logEmpty}</pre>
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all border-t border-border px-3 py-2 font-mono text-xs text-muted">
+          {log.length ? log.join("\n") : T.logEmpty}
+        </pre>
       </details>
 
       <ConfirmDialog

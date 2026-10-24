@@ -13,7 +13,16 @@ import { queryKeys, useRecentProjects } from "@/presentation/shared/queries";
 import { useServices } from "@/presentation/shared/services";
 import { activeProfile, currentBackend, useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
-import { Button, Checkbox, ConfirmDialog, ContextMenu, cx, ErrorNotice, Spinner, StatusDot } from "@/presentation/shared/ui";
+import {
+  Button,
+  Checkbox,
+  ConfirmDialog,
+  ContextMenu,
+  cx,
+  ErrorNotice,
+  Spinner,
+  StatusDot,
+} from "@/presentation/shared/ui";
 import { useNewProject } from "./useNewProject";
 
 const T = ja.home;
@@ -59,11 +68,17 @@ export function HomeScreen({
             data-drop-reject={rejected ? "true" : drop.props["data-drop-reject"]}
             className={cx(
               "flex min-h-[18rem] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors",
-              rejected ? "border-danger/70 bg-danger/5" : drop.state === "active" ? "border-accent bg-accent/10" : "border-border bg-panel",
+              rejected
+                ? "border-danger/70 bg-danger/5"
+                : drop.state === "active"
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-panel",
             )}
           >
             {busy ? <Spinner size={32} /> : <Upload size={32} className="text-muted" />}
-            <div className="text-lg">{np.state.kind === "probing" ? T.probing : np.state.kind === "creating" ? T.creating : T.dropTitle}</div>
+            <div className="text-lg">
+              {np.state.kind === "probing" ? T.probing : np.state.kind === "creating" ? T.creating : T.dropTitle}
+            </div>
             <div className="flex items-center gap-2 text-muted">
               {T.or}
               <Button variant="primary" onClick={() => void np.pick()} disabled={busy}>
@@ -94,7 +109,11 @@ export function HomeScreen({
           <div className="mb-3 font-semibold">{T.recent}</div>
           {recent.isLoading && <Spinner />}
           {!recent.isLoading && items.length === 0 && (
-            <button type="button" onClick={() => void onSample()} className="flex items-start gap-3 rounded-lg border border-border bg-panel p-4 text-left hover:border-accent">
+            <button
+              type="button"
+              onClick={() => void onSample()}
+              className="flex items-start gap-3 rounded-lg border border-border bg-panel p-4 text-left hover:border-accent"
+            >
               <Sparkles size={20} className="mt-0.5 text-accent" />
               <div>
                 <div className="font-medium">{T.firstTime}</div>
@@ -138,7 +157,11 @@ function RecentRow({ entry, onOpen }: { entry: RecentEntry; onOpen(): void }) {
 
   const doDelete = async () => {
     try {
-      await uc.deleteProject.execute({ path: entry.path, alsoServer, backend: alsoServer ? currentBackend() : undefined });
+      await uc.deleteProject.execute({
+        path: entry.path,
+        alsoServer,
+        backend: alsoServer ? currentBackend() : undefined,
+      });
     } catch (e) {
       const t = errorText(e);
       toast({ kind: "error", title: t.title, body: t.body });
@@ -164,9 +187,18 @@ function RecentRow({ entry, onOpen }: { entry: RecentEntry; onOpen(): void }) {
           { label: T.deleteServerToo, danger: true, disabled: entry.isSample, onSelect: () => askDelete(true) },
         ]}
       >
-        <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 rounded border border-border bg-panel p-2 text-left hover:border-accent">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full items-center gap-3 rounded border border-border bg-panel p-2 text-left hover:border-accent"
+        >
           {entry.thumb ? (
-            <img src={platform.files.toUrl(entry.thumb)} alt="" className="h-14 w-14 shrink-0 rounded bg-raised object-cover" draggable={false} />
+            <img
+              src={platform.files.toUrl(entry.thumb)}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded bg-raised object-cover"
+              draggable={false}
+            />
           ) : (
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-raised text-faint">
               <Clapperboard size={22} />

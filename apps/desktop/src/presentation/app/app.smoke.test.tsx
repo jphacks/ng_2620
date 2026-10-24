@@ -48,13 +48,27 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-const BONES = ["hips", "spine", "head", "leftUpperArm", "leftLowerArm", "leftHand", "rightUpperArm", "rightLowerArm", "rightHand"]
-  .concat(["leftUpperLeg", "leftLowerLeg", "leftFoot", "rightUpperLeg", "rightLowerLeg", "rightFoot"]);
+const BONES = [
+  "hips",
+  "spine",
+  "head",
+  "leftUpperArm",
+  "leftLowerArm",
+  "leftHand",
+  "rightUpperArm",
+  "rightLowerArm",
+  "rightHand",
+].concat(["leftUpperLeg", "leftLowerLeg", "leftFoot", "rightUpperLeg", "rightLowerLeg", "rightFoot"]);
 
 /** 必須ボーンだけを持つ最小の VRM 1.0（GLB） */
 function minimalVrm(name: string): Uint8Array {
   const humanBones = Object.fromEntries(BONES.map((b, i) => [b, { node: i }]));
-  const json = { asset: { version: "2.0" }, extensions: { VRMC_vrm: { meta: { name, authors: ["Tester"], commercialUsage: "corporation" }, humanoid: { humanBones } } } };
+  const json = {
+    asset: { version: "2.0" },
+    extensions: {
+      VRMC_vrm: { meta: { name, authors: ["Tester"], commercialUsage: "corporation" }, humanoid: { humanBones } },
+    },
+  };
   let j = new TextEncoder().encode(JSON.stringify(json));
   j = new Uint8Array([...j, ...new Array((4 - (j.length % 4)) % 4).fill(0x20)]);
   const out = new Uint8Array(20 + j.length);
@@ -105,7 +119,16 @@ describe("アプリ全体（シミュレーター）", () => {
     const src = "/mem/drops/t/clip.mp4";
     await services.platform.files.writeBytes(src, new Uint8Array(1000).fill(7));
     const project = await act(() =>
-      useProjectStore.getState().createFrom(src, { durationSec: 2, width: 540, height: 960, rotation: 0, codec: "h264", fps: 30, hasAudio: false, sizeBytes: 1000 }),
+      useProjectStore.getState().createFrom(src, {
+        durationSec: 2,
+        width: 540,
+        height: 960,
+        rotation: 0,
+        codec: "h264",
+        fps: 30,
+        hasAudio: false,
+        sizeBytes: 1000,
+      }),
     );
     expect(project.name).toBe("clip");
     await go(`#/project/${project.id}/import`);

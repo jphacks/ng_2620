@@ -3,7 +3,14 @@
 import { AppError, isAppError } from "@/domain/errors";
 import type { LocalMediaInfo, MediaMeta } from "@/domain/media";
 import type { Project, ProjectMutation } from "@/domain/project";
-import { chunkCount, chunkRange, DEFAULT_CHUNK_SIZE, missingChunks, receivedBytes, UPLOAD_CONCURRENCY } from "@/domain/upload";
+import {
+  chunkCount,
+  chunkRange,
+  DEFAULT_CHUNK_SIZE,
+  missingChunks,
+  receivedBytes,
+  UPLOAD_CONCURRENCY,
+} from "@/domain/upload";
 import type { MediaLimits, Violation } from "@/domain/validation";
 import { DEFAULT_LIMITS, fileNameOf, isAcceptedVideoPath, validateMedia } from "@/domain/validation";
 import type { ComputeBackendPort } from "../ports/compute";
@@ -13,7 +20,10 @@ import type { ClockPort } from "../ports/system";
 export class ProbeMedia {
   constructor(private readonly d: { probe: MediaProbePort }) {}
 
-  async execute(path: string, limits: MediaLimits = DEFAULT_LIMITS): Promise<{ info: LocalMediaInfo | null; violations: Violation[] }> {
+  async execute(
+    path: string,
+    limits: MediaLimits = DEFAULT_LIMITS,
+  ): Promise<{ info: LocalMediaInfo | null; violations: Violation[] }> {
     if (!isAcceptedVideoPath(path)) return { info: null, violations: validateMedia(path, null, limits) };
     const info = await this.d.probe.probe(path);
     return { info, violations: validateMedia(path, info, limits) };
@@ -74,7 +84,10 @@ export class ImportMedia {
       progress({ phase: "creating", ratio: 0 });
       serverProjectId = (await backend.createProject(p.name)).projectId;
       const id = serverProjectId;
-      commit((x) => ({ ...x, compute: { ...x.compute, profileId: backend.profileId ?? x.compute.profileId, serverProjectId: id } }));
+      commit((x) => ({
+        ...x,
+        compute: { ...x.compute, profileId: backend.profileId ?? x.compute.profileId, serverProjectId: id },
+      }));
     }
     signal?.throwIfAborted();
 
@@ -101,7 +114,13 @@ export class ImportMedia {
       }
     }
     if (!upload) {
-      const r = await backend.createUpload({ projectId: serverProjectId, kind: "source", filename: fileNameOf(path), size, sha256 });
+      const r = await backend.createUpload({
+        projectId: serverProjectId,
+        kind: "source",
+        filename: fileNameOf(path),
+        size,
+        sha256,
+      });
       upload = { uploadId: r.uploadId, chunkSize: r.chunkSize || DEFAULT_CHUNK_SIZE };
       const u = upload;
       commit((x) => ({ ...x, compute: { ...x.compute, upload: u } }));

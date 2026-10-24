@@ -45,13 +45,18 @@ export function normalizeCombo(combo: string, isMac: boolean): string {
     .map((p) => KEY_ALIASES[p] ?? p);
   // "mod++"（⌘+）のように + そのものがキーのとき
   if (combo.endsWith("++")) parts.push("+");
-  const mods = new Set(parts.filter((p) => (MODS as readonly string[]).includes(p)).map((p) => (!isMac && p === "ctrl" ? "mod" : p)));
+  const mods = new Set(
+    parts.filter((p) => (MODS as readonly string[]).includes(p)).map((p) => (!isMac && p === "ctrl" ? "mod" : p)),
+  );
   const key = parts.filter((p) => !(MODS as readonly string[]).includes(p)).at(-1) ?? "";
   return [...MODS.filter((m) => mods.has(m)), key].join("+");
 }
 
 /** キー入力を正規化した表記に */
-export function comboFromEvent(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "code">, isMac: boolean): string {
+export function comboFromEvent(
+  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "code">,
+  isMac: boolean,
+): string {
   const mods: string[] = [];
   if (isMac ? e.metaKey : e.ctrlKey) mods.push("mod");
   if (isMac && e.ctrlKey) mods.push("ctrl");

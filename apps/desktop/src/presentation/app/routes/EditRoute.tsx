@@ -29,7 +29,11 @@ export function EditRoute() {
     <div className="relative h-full">
       {layers?.status === "downloading" && (
         <div className="absolute inset-x-0 top-0 z-10">
-          <ProgressBar value={layers.total ? layers.received / layers.total : 0} indeterminate={!layers.total} className="!h-0.5 !rounded-none" />
+          <ProgressBar
+            value={layers.total ? layers.received / layers.total : 0}
+            indeterminate={!layers.total}
+            className="!h-0.5 !rounded-none"
+          />
           <div className="px-2 py-1 text-xs text-muted">{ja.editor.downloadingLayers}</div>
         </div>
       )}

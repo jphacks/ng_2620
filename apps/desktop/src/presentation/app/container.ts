@@ -21,7 +21,12 @@ import { TauriFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/has
 import { TauriMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
 import { isTauri } from "@/infrastructure/platform";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
-import { FileSecretStore, FileSettings, LocalStorageSecretStore, LocalStorageSettings } from "@/infrastructure/settings/settingsStores";
+import {
+  FileSecretStore,
+  FileSettings,
+  LocalStorageSecretStore,
+  LocalStorageSettings,
+} from "@/infrastructure/settings/settingsStores";
 import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
 import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
 import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
@@ -51,8 +56,12 @@ export function createServices(): Services {
         config: async () => `${MEM_ROOT}/Config`,
       };
 
-  const settings = inTauri ? new FileSettings(fs, async () => joinPath(await dirs.config(), "settings.json")) : new LocalStorageSettings();
-  const secrets = inTauri ? new FileSecretStore(fs, async () => joinPath(await dirs.config(), "secrets.json")) : new LocalStorageSecretStore();
+  const settings = inTauri
+    ? new FileSettings(fs, async () => joinPath(await dirs.config(), "settings.json"))
+    : new LocalStorageSettings();
+  const secrets = inTauri
+    ? new FileSecretStore(fs, async () => joinPath(await dirs.config(), "secrets.json"))
+    : new LocalStorageSecretStore();
   const projects = new FsProjectRepository(fs, {
     projectsDir: async () => (await settings.load()).projectsDir ?? (await dirs.projects()),
     appDataDir: dirs.appData,
@@ -114,7 +123,14 @@ export function createServices(): Services {
       testConnection: new UC.TestConnection({ compute }),
       watchConnection: new UC.WatchConnection({ clock }),
       saveLocalServerConfig: new UC.SaveLocalServerConfig({ settings }),
-      startLocalServer: new UC.StartLocalServer({ settings, secrets, server: localServer, compute, clock, newToken: randomToken }),
+      startLocalServer: new UC.StartLocalServer({
+        settings,
+        secrets,
+        server: localServer,
+        compute,
+        clock,
+        newToken: randomToken,
+      }),
       stopLocalServer: new UC.StopLocalServer({ server: localServer }),
       localServerStatus: () => localServer.status(),
       submitJob: submit,

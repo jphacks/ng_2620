@@ -27,7 +27,9 @@ export class InMemoryProjectRepository implements ProjectRepositoryPort {
 
   async allocate(name: string, dir?: string) {
     const base = dir ?? this.root;
-    const taken = [...this.raw.keys()].filter((p) => p.startsWith(`${base}/`)).map((p) => p.slice(base.length + 1, -PROJECT_EXT.length));
+    const taken = [...this.raw.keys()]
+      .filter((p) => p.startsWith(`${base}/`))
+      .map((p) => p.slice(base.length + 1, -PROJECT_EXT.length));
     const unique = uniqueName(name, taken);
     return { name: unique, path: `${base}/${unique}${PROJECT_EXT}` };
   }

@@ -55,7 +55,12 @@ export function CastPanel({ onEditCast }: { onEditCast(): void }) {
       {stale && (
         <div className="flex items-center gap-2 pl-3 pt-1">
           <Badge tone="warning">{ja.cast.needsRender}</Badge>
-          <Button size="sm" icon={<RefreshCw size={12} />} disabled={busy || !connected || project.sample !== null} onClick={() => void rerender()}>
+          <Button
+            size="sm"
+            icon={<RefreshCw size={12} />}
+            disabled={busy || !connected || project.sample !== null}
+            onClick={() => void rerender()}
+          >
             {ja.cast.rerender}
           </Button>
         </div>

@@ -25,7 +25,12 @@ export class DefaultComputeBackendFactory implements ComputeBackendFactory {
       return this.d.simulator();
     }
     const make = (getToken: () => Promise<string | null>) =>
-      new HttpComputeBackend({ baseUrl: profile.baseUrl, profileId: profile.id, getToken, transport: this.d.transport });
+      new HttpComputeBackend({
+        baseUrl: profile.baseUrl,
+        profileId: profile.id,
+        getToken,
+        transport: this.d.transport,
+      });
     if (opts && opts.token !== undefined) return make(async () => opts.token ?? null);
     const key = `${profile.id}|${profile.baseUrl}|${profile.tokenRef}`;
     let b = this.cache.get(key);

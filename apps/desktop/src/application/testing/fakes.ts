@@ -9,7 +9,15 @@ import type { OverridesDoc } from "@/domain/overrides";
 import { emptyOverrides } from "@/domain/overrides";
 import type { Project } from "@/domain/project";
 import type { AvatarLibraryPort } from "../ports/avatar";
-import type { Capabilities, ChunkBody, ComputeBackendPort, CreateUploadReq, Health, QueueItem, ServerProject } from "../ports/compute";
+import type {
+  Capabilities,
+  ChunkBody,
+  ComputeBackendPort,
+  CreateUploadReq,
+  Health,
+  QueueItem,
+  ServerProject,
+} from "../ports/compute";
 import type { FileHasherPort, FileStat, LocalFilePort } from "../ports/media";
 import type { ProjectRepositoryPort, RecentEntry } from "../ports/project";
 import type { ClockPort, IdPort } from "../ports/system";
@@ -123,7 +131,13 @@ export class FakeBackend implements ComputeBackendPort {
   }
   async submitJob(projectId: string, type: JobType, params: JobParams) {
     this.calls.push(`submit:${type}`);
-    const job = newJob({ jobId: `job_${type}_${++this.seq}`, projectId, type, params, createdAt: "2026-10-24T00:00:00Z" });
+    const job = newJob({
+      jobId: `job_${type}_${++this.seq}`,
+      projectId,
+      type,
+      params,
+      createdAt: "2026-10-24T00:00:00Z",
+    });
     this.jobs.set(job.jobId, job);
     return job;
   }
@@ -279,5 +293,11 @@ export class FakeAvatars implements AvatarLibraryPort {
 }
 
 export function avatar(id: string, name = id): Avatar {
-  return { avatarId: id, sha256: id.padEnd(64, "0"), file: `/lib/${id}.vrm`, meta: { name, authors: [], version: "1.0", license: {} }, importedAt: "2026-10-24T00:00:00Z" };
+  return {
+    avatarId: id,
+    sha256: id.padEnd(64, "0"),
+    file: `/lib/${id}.vrm`,
+    meta: { name, authors: [], version: "1.0", license: {} },
+    importedAt: "2026-10-24T00:00:00Z",
+  };
 }

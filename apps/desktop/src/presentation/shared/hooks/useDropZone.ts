@@ -54,7 +54,12 @@ function ensureSubscribed() {
  * 返す props を要素に付けると、その要素がドロップ先になる。
  * accept はパスの一覧を受け付けるか（拡張子など）。onDrop には受け付けたパスだけが渡る
  */
-export function useDropZone(opts: { accept: (path: string) => boolean; onDrop: (paths: string[]) => void; multiple?: boolean; disabled?: boolean }) {
+export function useDropZone(opts: {
+  accept: (path: string) => boolean;
+  onDrop: (paths: string[]) => void;
+  multiple?: boolean;
+  disabled?: boolean;
+}) {
   const id = useId();
   const [state, setState] = useState<DropState>("idle");
   const ref = useRef(opts);

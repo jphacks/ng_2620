@@ -33,7 +33,13 @@ export function GeneralSettings() {
   };
 
   const yesNo = (v: boolean | null | undefined) =>
-    v === null || v === undefined ? <Badge>{T.notChecked}</Badge> : v ? <Badge tone="success">{T.yes}</Badge> : <Badge tone="danger">{T.no}</Badge>;
+    v === null || v === undefined ? (
+      <Badge>{T.notChecked}</Badge>
+    ) : v ? (
+      <Badge tone="success">{T.yes}</Badge>
+    ) : (
+      <Badge tone="danger">{T.no}</Badge>
+    );
 
   return (
     <div className="max-w-2xl space-y-8 p-6">
@@ -74,7 +80,15 @@ export function GeneralSettings() {
         )}
       </section>
 
-      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={T.clearCache} body={T.clearCacheBody} confirmLabel={T.clearCache} danger onConfirm={() => void clear()} />
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title={T.clearCache}
+        body={T.clearCacheBody}
+        confirmLabel={T.clearCache}
+        danger
+        onConfirm={() => void clear()}
+      />
     </div>
   );
 }

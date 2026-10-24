@@ -40,7 +40,11 @@ export function LogDialog({ open, onOpenChange, job }: { open: boolean; onOpenCh
     >
       {q.isLoading && <Spinner />}
       {q.isError && !fallback && <ErrorNotice {...errorText(q.error)} />}
-      {text && <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded bg-bg p-3 font-mono text-xs text-muted">{text}</pre>}
+      {text && (
+        <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded bg-bg p-3 font-mono text-xs text-muted">
+          {text}
+        </pre>
+      )}
     </Dialog>
   );
 }

@@ -80,7 +80,12 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
   const defaultRel = `exports/${exportFileName(project)}`;
   const destAbs = dest ?? paths.resolve(project.id, defaultRel);
   const running = !!lastJob && !isTerminal(lastJob.status);
-  const settings: ExportSettings = { format: "mp4_h264", crf: QUALITY_PRESETS[quality], audio: hasAudio && audio, resolution };
+  const settings: ExportSettings = {
+    format: "mp4_h264",
+    crf: QUALITY_PRESETS[quality],
+    audio: hasAudio && audio,
+    resolution,
+  };
 
   const submit = async (rerenderFirst: boolean) => {
     setSubmitting(true);
@@ -90,22 +95,41 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
         accept(await uc.startRender.execute({ project: p, backend: currentBackend() }));
         p = useProjectStore.getState().current?.project ?? p;
       }
-      accept(await uc.startExport.execute({ project: p, backend: currentBackend(), settings, file: dest && isAbsolute(dest) ? dest : defaultRel }));
+      accept(
+        await uc.startExport.execute({
+          project: p,
+          backend: currentBackend(),
+          settings,
+          file: dest && isAbsolute(dest) ? dest : defaultRel,
+        }),
+      );
     } catch (e) {
       const t = errorText(e);
-      toast({ kind: "error", title: isAppError(e, "DEPENDENCY_NOT_READY") && e.detail?.reason === "needs_render" ? T.needsRender : t.title, body: t.body });
+      toast({
+        kind: "error",
+        title: isAppError(e, "DEPENDENCY_NOT_READY") && e.detail?.reason === "needs_render" ? T.needsRender : t.title,
+        body: t.body,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
   const changeDest = async () => {
-    const picked = await platform.dialog.saveFile({ defaultPath: destAbs, filters: [{ name: "MP4", extensions: ["mp4"] }] });
+    const picked = await platform.dialog.saveFile({
+      defaultPath: destAbs,
+      filters: [{ name: "MP4", extensions: ["mp4"] }],
+    });
     if (picked) setDest(picked.toLowerCase().endsWith(".mp4") ? picked : `${picked}.mp4`);
   };
 
   const stage = lastJob ? currentStage(lastJob) : null;
-  const doneFile = lastRef?.status === "succeeded" && lastRef.file ? (isAbsolute(lastRef.file) ? lastRef.file : paths.resolve(project.id, lastRef.file)) : null;
+  const doneFile =
+    lastRef?.status === "succeeded" && lastRef.file
+      ? isAbsolute(lastRef.file)
+        ? lastRef.file
+        : paths.resolve(project.id, lastRef.file)
+      : null;
   const finishedPath = download?.status === "ready" ? (download.path ?? doneFile) : doneFile;
 
   return (
@@ -114,7 +138,12 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
         {rstate === "stale" && (
           <div className="mb-4">
             <ErrorNotice tone="warning" title={T.needsRender} body={T.needsRenderBody}>
-              <Button size="sm" icon={<RefreshCw size={12} />} disabled={!connected || submitting} onClick={() => void submit(true)}>
+              <Button
+                size="sm"
+                icon={<RefreshCw size={12} />}
+                disabled={!connected || submitting}
+                onClick={() => void submit(true)}
+              >
                 {T.renderAndExport}
               </Button>
             </ErrorNotice>
@@ -128,7 +157,12 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
         <div className="grid grid-cols-[7rem_1fr] items-center gap-x-4 gap-y-4 rounded-lg border border-border bg-panel p-5">
           <Label>{T.format}</Label>
           <div className="flex items-center gap-3">
-            <Select value="mp4_h264" onChange={() => {}} options={[{ value: "mp4_h264", label: T.formatMp4 }]} aria-label={T.format} />
+            <Select
+              value="mp4_h264"
+              onChange={() => {}}
+              options={[{ value: "mp4_h264", label: T.formatMp4 }]}
+              aria-label={T.format}
+            />
             <span className="text-xs text-faint">{T.formatsLater}</span>
           </div>
           <Label>{T.resolution}</Label>
@@ -146,10 +180,17 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
             aria-label={T.quality}
             value={quality}
             onChange={setQuality}
-            options={(Object.keys(QUALITY_PRESETS) as QualityPreset[]).map((q) => ({ value: q, label: T.qualities[q] }))}
+            options={(Object.keys(QUALITY_PRESETS) as QualityPreset[]).map((q) => ({
+              value: q,
+              label: T.qualities[q],
+            }))}
           />
           <Label>{T.audio}</Label>
-          {hasAudio ? <Switch checked={audio} onChange={setAudio} label={T.includeAudio} /> : <span className="text-sm text-faint">{T.noAudio}</span>}
+          {hasAudio ? (
+            <Switch checked={audio} onChange={setAudio} label={T.includeAudio} />
+          ) : (
+            <span className="text-sm text-faint">{T.noAudio}</span>
+          )}
           <Label>{T.dest}</Label>
           <div className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 flex-1 truncate font-mono text-sm" title={destAbs}>
@@ -170,7 +211,12 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
         )}
 
         <div className="mt-4 flex justify-end">
-          <Button variant="primary" disabled={!connected || running || submitting || rstate === "stale"} onClick={() => void submit(false)} icon={submitting ? <Spinner /> : undefined}>
+          <Button
+            variant="primary"
+            disabled={!connected || running || submitting || rstate === "stale"}
+            onClick={() => void submit(false)}
+            icon={submitting ? <Spinner /> : undefined}
+          >
             {T.start} ▶
           </Button>
         </div>
@@ -181,7 +227,9 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
               <>
                 <div className="mb-2 flex justify-between text-sm">
                   <span>{T.progress(overallProgress(lastJob), ja.stage[stage.name])}</span>
-                  <span className="text-muted">{stage.etaSec !== undefined ? ja.time.eta(stage.etaSec) : ja.common.calculating}</span>
+                  <span className="text-muted">
+                    {stage.etaSec !== undefined ? ja.time.eta(stage.etaSec) : ja.common.calculating}
+                  </span>
                 </div>
                 <ProgressBar value={overallProgress(lastJob)} />
               </>
@@ -198,7 +246,11 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
                 <Button size="sm" icon={<Play size={12} />} onClick={() => void platform.shell.open(finishedPath)}>
                   {T.play}
                 </Button>
-                <Button size="sm" icon={<FolderOpen size={12} />} onClick={() => void platform.shell.reveal(finishedPath)}>
+                <Button
+                  size="sm"
+                  icon={<FolderOpen size={12} />}
+                  onClick={() => void platform.shell.reveal(finishedPath)}
+                >
                   {T.reveal}
                 </Button>
               </div>

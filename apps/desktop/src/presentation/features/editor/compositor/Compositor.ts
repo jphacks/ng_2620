@@ -159,7 +159,11 @@ export class Compositor {
   private hasMask = 0;
 
   constructor(canvas: HTMLCanvasElement | OffscreenCanvas) {
-    const gl = canvas.getContext("webgl2", { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false }) as WebGL2RenderingContext | null;
+    const gl = canvas.getContext("webgl2", {
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: true,
+      antialias: false,
+    }) as WebGL2RenderingContext | null;
     if (!gl) throw new Error("WebGL2 が使えません");
     this.gl = gl;
     const p = gl.createProgram()!;
@@ -174,14 +178,31 @@ export class Compositor {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    const samplers = ["uFrame", "uClean", "uMask", "uAvatar0", "uAvatar1", "uAvatar2", "uAvatar3", "uHide0", "uHide1", "uHide2", "uHide3", "uUnits", "uModes"];
+    const samplers = [
+      "uFrame",
+      "uClean",
+      "uMask",
+      "uAvatar0",
+      "uAvatar1",
+      "uAvatar2",
+      "uAvatar3",
+      "uHide0",
+      "uHide1",
+      "uHide2",
+      "uHide3",
+      "uUnits",
+      "uModes",
+    ];
     samplers.forEach((name, unit) => {
       gl.uniform1i(this.u(name), unit);
       this.texture(name, name === "uUnits" || name === "uModes");
     });
     this.uploadModes(new Uint8Array([0]), 1, 1);
     this.uploadUnits(null);
-    gl.uniform3fv(this.u("uPersonColor"), PERSON_COLORS.flatMap((c) => c.map((v) => v / 255)));
+    gl.uniform3fv(
+      this.u("uPersonColor"),
+      PERSON_COLORS.flatMap((c) => c.map((v) => v / 255)),
+    );
   }
 
   private u(name: string): WebGLUniformLocation | null {
@@ -221,7 +242,18 @@ export class Compositor {
   private uploadUnits(units: FrameTextures["units"]) {
     const gl = this.gl;
     this.bind("uUnits", 11);
-    if (units) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, units.width, units.height, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, units.data);
+    if (units)
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.R16UI,
+        units.width,
+        units.height,
+        0,
+        gl.RED_INTEGER,
+        gl.UNSIGNED_SHORT,
+        units.data,
+      );
     else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_SHORT, new Uint16Array(1));
     this.hasUnits = units ? 1 : 0;
   }
@@ -261,7 +293,21 @@ export class Compositor {
     }
     gl.viewport(0, 0, w, h);
     gl.useProgram(this.prog);
-    const names = ["uFrame", "uClean", "uMask", "uAvatar0", "uAvatar1", "uAvatar2", "uAvatar3", "uHide0", "uHide1", "uHide2", "uHide3", "uUnits", "uModes"];
+    const names = [
+      "uFrame",
+      "uClean",
+      "uMask",
+      "uAvatar0",
+      "uAvatar1",
+      "uAvatar2",
+      "uAvatar3",
+      "uHide0",
+      "uHide1",
+      "uHide2",
+      "uHide3",
+      "uUnits",
+      "uModes",
+    ];
     names.forEach((n, unit) => this.bind(n, unit));
     gl.uniform1i(this.u("uCount"), this.count);
     gl.uniform4i(this.u("uRow"), ...this.rows);
@@ -300,7 +346,11 @@ export class Compositor {
 }
 
 /** フレーム f の overrideTable（rows = 人物の並び、resolveModes の結果を詰める） */
-export function buildModeTable(rows: readonly number[], maxUnit: number, modeOf: (personId: number, unitId: number) => "front" | "behind" | null): { table: Uint8Array; width: number; height: number } {
+export function buildModeTable(
+  rows: readonly number[],
+  maxUnit: number,
+  modeOf: (personId: number, unitId: number) => "front" | "behind" | null,
+): { table: Uint8Array; width: number; height: number } {
   const width = Math.max(1, maxUnit + 1);
   const height = Math.max(1, rows.length);
   const table = new Uint8Array(width * height);

@@ -36,7 +36,10 @@ export function parseUnits(raw: unknown): OccluderUnit[] {
         frames: [Number(x.frames[0]), Number(x.frames[1])],
         label: x.label === "person" ? "person" : "object",
         areaPx: typeof x.areaPx === "number" ? x.areaPx : 0,
-        perPerson: (x.perPerson && typeof x.perPerson === "object" ? x.perPerson : {}) as Record<string, PerPersonDecision>,
+        perPerson: (x.perPerson && typeof x.perPerson === "object" ? x.perPerson : {}) as Record<
+          string,
+          PerPersonDecision
+        >,
       },
     ];
   });
@@ -91,7 +94,13 @@ export function upsertOverride(list: readonly UnitOverride[], o: UnitOverride, n
 }
 
 /** 人物・ユニットの区間 cut にある修正を取り除く（区間の一部なら削る） */
-export function removeRange(list: readonly UnitOverride[], personId: number, unitId: number, cut: Range, newId: () => string): UnitOverride[] {
+export function removeRange(
+  list: readonly UnitOverride[],
+  personId: number,
+  unitId: number,
+  cut: Range,
+  newId: () => string,
+): UnitOverride[] {
   const out: UnitOverride[] = [];
   for (const x of list) {
     if (x.personId !== personId || x.unitId !== unitId) {
@@ -114,7 +123,11 @@ function mergeAdjacent(list: UnitOverride[]): UnitOverride[] {
   const out: UnitOverride[] = [];
   for (const x of list) {
     const k = out.findIndex(
-      (y) => y.personId === x.personId && y.unitId === x.unitId && y.mode === x.mode && (y.range[1] + 1 === x.range[0] || x.range[1] + 1 === y.range[0]),
+      (y) =>
+        y.personId === x.personId &&
+        y.unitId === x.unitId &&
+        y.mode === x.mode &&
+        (y.range[1] + 1 === x.range[0] || x.range[1] + 1 === y.range[0]),
     );
     if (k >= 0) {
       const y = out[k]!;

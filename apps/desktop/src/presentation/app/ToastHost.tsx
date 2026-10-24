@@ -9,9 +9,18 @@ export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
   return (
-    <div className="pointer-events-none fixed bottom-[calc(var(--statusbar-height)+12px)] right-3 z-50 flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-2" aria-live="polite">
+    <div
+      className="pointer-events-none fixed bottom-[calc(var(--statusbar-height)+12px)] right-3 z-50 flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-2"
+      aria-live="polite"
+    >
       {toasts.map((t) => (
-        <div key={t.id} className={cx("pointer-events-auto flex gap-2.5 rounded-lg border bg-panel-2 p-3 shadow-xl", t.kind === "error" ? "border-danger/50" : "border-border")}>
+        <div
+          key={t.id}
+          className={cx(
+            "pointer-events-auto flex gap-2.5 rounded-lg border bg-panel-2 p-3 shadow-xl",
+            t.kind === "error" ? "border-danger/50" : "border-border",
+          )}
+        >
           {t.kind === "success" ? (
             <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-success" />
           ) : t.kind === "error" ? (

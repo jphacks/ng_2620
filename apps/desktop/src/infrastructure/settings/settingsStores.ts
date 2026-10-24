@@ -14,7 +14,9 @@ export function normalizeSettings(raw: unknown): AppSettings {
   const r = raw as Partial<AppSettings>;
   return {
     schemaVersion: 1,
-    profiles: Array.isArray(r.profiles) ? r.profiles.filter((p) => p && typeof p.id === "string" && typeof p.baseUrl === "string") : d.profiles,
+    profiles: Array.isArray(r.profiles)
+      ? r.profiles.filter((p) => p && typeof p.id === "string" && typeof p.baseUrl === "string")
+      : d.profiles,
     activeProfileId: typeof r.activeProfileId === "string" ? r.activeProfileId : null,
     panelLayouts: r.panelLayouts && typeof r.panelLayouts === "object" ? r.panelLayouts : {},
     projectsDir: typeof r.projectsDir === "string" ? r.projectsDir : undefined,

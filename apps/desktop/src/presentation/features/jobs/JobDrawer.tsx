@@ -13,7 +13,16 @@ import { useServices } from "@/presentation/shared/services";
 import { useAppStore } from "@/presentation/shared/stores/appStore";
 import { useJobsStore } from "@/presentation/shared/stores/jobsStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
-import { Badge, Button, ConfirmDialog, cx, Drawer, EmptyState, ErrorNotice, ProgressBar } from "@/presentation/shared/ui";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  cx,
+  Drawer,
+  EmptyState,
+  ErrorNotice,
+  ProgressBar,
+} from "@/presentation/shared/ui";
 import { JobStageList } from "./JobStageList";
 import { LogDialog } from "./LogDialog";
 
@@ -35,7 +44,14 @@ function JobCard({ job }: { job: Job }) {
   const elapsed = useElapsed(job);
   const stage = currentStage(job);
   const err = job.status === "failed" ? jobErrorText(job.error) : null;
-  const tone = job.status === "succeeded" ? "success" : job.status === "failed" ? "danger" : job.status === "running" ? "accent" : "muted";
+  const tone =
+    job.status === "succeeded"
+      ? "success"
+      : job.status === "failed"
+        ? "danger"
+        : job.status === "running"
+          ? "accent"
+          : "muted";
 
   return (
     <div className="rounded border border-border bg-panel-2 p-3">
@@ -71,7 +87,15 @@ function JobCard({ job }: { job: Job }) {
           {T.logs}
         </Button>
       </div>
-      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={T.cancelTitle} body={T.cancelBody} confirmLabel={T.cancel} danger onConfirm={() => void cancel(job.jobId)} />
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title={T.cancelTitle}
+        body={T.cancelBody}
+        confirmLabel={T.cancel}
+        danger
+        onConfirm={() => void cancel(job.jobId)}
+      />
       <LogDialog open={logOpen} onOpenChange={setLogOpen} job={job} />
     </div>
   );
@@ -89,7 +113,10 @@ function QueueSection() {
       {items.map((it) => {
         const mine = it.projectId === myServerProject;
         return (
-          <li key={it.jobId} className={cx("flex items-center gap-2 rounded px-2 py-1.5 text-sm", mine ? "bg-accent/15" : "bg-panel-2")}>
+          <li
+            key={it.jobId}
+            className={cx("flex items-center gap-2 rounded px-2 py-1.5 text-sm", mine ? "bg-accent/15" : "bg-panel-2")}
+          >
             <span className="w-6 text-right font-mono text-muted">{it.position + 1}</span>
             <span>{ja.jobType[it.type]}</span>
             <Badge tone={it.status === "running" ? "accent" : "muted"}>{ja.jobStatus[it.status]}</Badge>

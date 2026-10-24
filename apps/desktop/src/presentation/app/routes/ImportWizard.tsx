@@ -46,7 +46,8 @@ export function ImportWizard() {
   // 描画が（この画面を開いている間に）終わったらエディタへ
   const prevRender = useRef(render?.status);
   useEffect(() => {
-    if (project && prevRender.current && prevRender.current !== "succeeded" && render?.status === "succeeded") navigate(`/project/${project.id}/edit`);
+    if (project && prevRender.current && prevRender.current !== "succeeded" && render?.status === "succeeded")
+      navigate(`/project/${project.id}/edit`);
     prevRender.current = render?.status;
   }, [render?.status, project, navigate]);
 
@@ -58,12 +59,18 @@ export function ImportWizard() {
     cast: !!project.jobs.render,
     render: project.jobs.render?.status === "succeeded",
   };
-  const reachable = (s: Step) => s === step || done[s] || (s === "cast" && (isStageDone(analyze, "track") || done.analysis)) || (s === "analysis" && done.video);
+  const reachable = (s: Step) =>
+    s === step ||
+    done[s] ||
+    (s === "cast" && (isStageDone(analyze, "track") || done.analysis)) ||
+    (s === "analysis" && done.video);
 
   const slots: CastSlots = {
     renderAvatarPicker: ({ value, onChange }) => <AvatarPicker value={value} onChange={onChange} />,
     renderLicense: (avatarId) => <LicenseFor avatarId={avatarId} />,
-    renderPreview: (highlight) => <ProgressivePreview highlightPersonId={highlight} prefer="masks" className="min-h-0 flex-1" />,
+    renderPreview: (highlight) => (
+      <ProgressivePreview highlightPersonId={highlight} prefer="masks" className="min-h-0 flex-1" />
+    ),
     importVrm: async (path) => (await importPaths([path]))[0]?.avatarId ?? null,
   };
 
@@ -77,9 +84,17 @@ export function ImportWizard() {
               type="button"
               disabled={!reachable(s)}
               onClick={() => setStep(s)}
-              className={cx("flex items-center gap-1.5 rounded px-2.5 py-1 disabled:cursor-default", s === step ? "bg-raised text-fg" : "text-muted hover:text-fg disabled:text-faint")}
+              className={cx(
+                "flex items-center gap-1.5 rounded px-2.5 py-1 disabled:cursor-default",
+                s === step ? "bg-raised text-fg" : "text-muted hover:text-fg disabled:text-faint",
+              )}
             >
-              <span className={cx("flex h-5 w-5 items-center justify-center rounded-full text-xs", done[s] ? "bg-success text-white" : s === step ? "bg-accent text-accent-fg" : "bg-raised")}>
+              <span
+                className={cx(
+                  "flex h-5 w-5 items-center justify-center rounded-full text-xs",
+                  done[s] ? "bg-success text-white" : s === step ? "bg-accent text-accent-fg" : "bg-raised",
+                )}
+              >
                 {done[s] ? <Check size={12} strokeWidth={3} /> : i + 1}
               </span>
               {ja.wizard.steps[s]}
@@ -88,17 +103,46 @@ export function ImportWizard() {
         ))}
       </ol>
       <div className="min-h-0 flex-1">
-        {step === "video" && <VideoStep onCancel={() => navigate("/")} onStarted={() => setStep("analysis")} onOpenConnection={() => navigate("/settings/connection")} />}
-        {step === "analysis" && <AnalysisStep onNext={() => setStep("cast")} onBackground={() => navigate("/")} onPickOtherVideo={() => navigate("/")} />}
-        {step === "cast" && <CastStep slots={slots} onBack={() => setStep("analysis")} onRenderStarted={() => setStep("render")} onPickOtherVideo={() => navigate("/")} />}
-        {step === "render" && <RenderStep onOpenEditor={() => navigate(`/project/${project.id}/edit`)} onBack={() => setStep("cast")} />}
+        {step === "video" && (
+          <VideoStep
+            onCancel={() => navigate("/")}
+            onStarted={() => setStep("analysis")}
+            onOpenConnection={() => navigate("/settings/connection")}
+          />
+        )}
+        {step === "analysis" && (
+          <AnalysisStep
+            onNext={() => setStep("cast")}
+            onBackground={() => navigate("/")}
+            onPickOtherVideo={() => navigate("/")}
+          />
+        )}
+        {step === "cast" && (
+          <CastStep
+            slots={slots}
+            onBack={() => setStep("analysis")}
+            onRenderStarted={() => setStep("render")}
+            onPickOtherVideo={() => navigate("/")}
+          />
+        )}
+        {step === "render" && (
+          <RenderStep onOpenEditor={() => navigate(`/project/${project.id}/edit`)} onBack={() => setStep("cast")} />
+        )}
       </div>
     </div>
   );
 }
 
 /** S2-2 解析：アップロード → ① 準備 ② 人物の追跡 ③ 3D 姿勢 ④ 前後関係、届いた結果のプレビュー */
-function AnalysisStep({ onNext, onBackground, onPickOtherVideo }: { onNext(): void; onBackground(): void; onPickOtherVideo(): void }) {
+function AnalysisStep({
+  onNext,
+  onBackground,
+  onPickOtherVideo,
+}: {
+  onNext(): void;
+  onBackground(): void;
+  onPickOtherVideo(): void;
+}) {
   const navigate = useNavigate();
   const analyze = useProjectJob("analyze");
   const retry = useJobsStore((s) => s.retry);

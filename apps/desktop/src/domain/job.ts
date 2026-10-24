@@ -193,15 +193,31 @@ export function applyEvent(job: Job, ev: JobEvent, now?: string): Job {
       return updateStage(job, ev.data.stage, (s) =>
         s.status === "failed"
           ? s
-          : { ...s, status: "done", progress: 1, etaSec: undefined, durationSec: ev.data.durationSec, finishedAt: s.finishedAt ?? now },
+          : {
+              ...s,
+              status: "done",
+              progress: 1,
+              etaSec: undefined,
+              durationSec: ev.data.durationSec,
+              finishedAt: s.finishedAt ?? now,
+            },
       );
 
     case "job_finished": {
-      const finished: Job = { ...job, status: ev.data.status, finishedAt: job.finishedAt ?? now, queuePosition: undefined };
+      const finished: Job = {
+        ...job,
+        status: ev.data.status,
+        finishedAt: job.finishedAt ?? now,
+        queuePosition: undefined,
+      };
       if (ev.data.status !== "succeeded") return finished;
       return {
         ...finished,
-        stages: finished.stages.map((s) => (s.status === "pending" || s.status === "running" ? { ...s, status: "done", progress: 1, etaSec: undefined } : s)),
+        stages: finished.stages.map((s) =>
+          s.status === "pending" || s.status === "running"
+            ? { ...s, status: "done", progress: 1, etaSec: undefined }
+            : s,
+        ),
       };
     }
 
@@ -211,7 +227,11 @@ export function applyEvent(job: Job, ev: JobEvent, now?: string): Job {
         status: "failed",
         finishedAt: job.finishedAt ?? now,
         queuePosition: undefined,
-        error: { code: ev.data.error.code, message: ev.data.error.message, detail: { stage: ev.data.stage, logTail: ev.data.logTail } },
+        error: {
+          code: ev.data.error.code,
+          message: ev.data.error.message,
+          detail: { stage: ev.data.stage, logTail: ev.data.logTail },
+        },
       };
       return updateStage(failed, ev.data.stage, (s) => ({ ...s, status: "failed", etaSec: undefined }));
     }
@@ -263,7 +283,14 @@ export function orderedStages(job: Job): StageState[] {
 }
 
 /** サーバーへ投入する前のジョブの初期形（InMemory 実装や楽観表示に使う） */
-export function newJob(input: { jobId: string; projectId: string; type: JobType; params: JobParams; createdAt: string; dependsOn?: string }): Job {
+export function newJob(input: {
+  jobId: string;
+  projectId: string;
+  type: JobType;
+  params: JobParams;
+  createdAt: string;
+  dependsOn?: string;
+}): Job {
   return {
     jobId: input.jobId,
     projectId: input.projectId,

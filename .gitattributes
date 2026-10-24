@@ -1,0 +1,7 @@
+# 改行は LF にそろえる。Windows（core.autocrlf=true）でも作業ツリーが LF になり、
+# prettier（endOfLine: lf）の format:check と pre-push の自動修正が CRLF を差分として扱わないようにする
+* text=auto eol=lf
+
+# pipeline/ は上流（SAM-Body4D）をバイト列のまま取り込んでいる（CRLF のファイルがある。b2ea912 を参照）ので、
+# この設定の対象外にして、これまでどおり（core.autocrlf 任せ）にする
+/pipeline/** !text !eol

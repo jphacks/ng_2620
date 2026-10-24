@@ -33,7 +33,10 @@ pub struct UploadResult {
 }
 
 fn part_path(dest: &Path) -> PathBuf {
-    let name = dest.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let name = dest
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
     dest.with_file_name(format!("{name}.part"))
 }
 
@@ -49,7 +52,12 @@ async fn get(url: &str, headers: &HashMap<String, String>, offset: u64) -> CmdRe
 }
 
 #[tauri::command]
-pub async fn net_download(url: String, headers: HashMap<String, String>, dest: String, on_progress: Channel<Progress>) -> CmdResult<()> {
+pub async fn net_download(
+    url: String,
+    headers: HashMap<String, String>,
+    dest: String,
+    on_progress: Channel<Progress>,
+) -> CmdResult<()> {
     let dest = PathBuf::from(dest);
     if let Some(dir) = dest.parent() {
         tokio::fs::create_dir_all(dir).await.map_err(err)?;
@@ -96,12 +104,21 @@ pub async fn net_download(url: String, headers: HashMap<String, String>, dest: S
     file.flush().await.map_err(err)?;
     drop(file);
     tokio::fs::rename(&part, &dest).await.map_err(err)?;
-    let _ = on_progress.send(Progress { received, total: Some(received) });
+    let _ = on_progress.send(Progress {
+        received,
+        total: Some(received),
+    });
     Ok(())
 }
 
 #[tauri::command]
-pub async fn net_upload_chunk(url: String, headers: HashMap<String, String>, path: String, offset: u64, length: u64) -> CmdResult<UploadResult> {
+pub async fn net_upload_chunk(
+    url: String,
+    headers: HashMap<String, String>,
+    path: String,
+    offset: u64,
+    length: u64,
+) -> CmdResult<UploadResult> {
     let bytes = tauri::async_runtime::spawn_blocking(move || read_range(&path, offset, length))
         .await
         .map_err(err)?
