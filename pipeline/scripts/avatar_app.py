@@ -281,10 +281,13 @@ def main(a):
     if not a.no_removal:
         import threading
         extra = {}
-        if getattr(a, "removal", "v2") == "v2":   # removal_gpu work_short / static_bg / LaMa (its docstring)
+        mode = getattr(a, "removal", "v2")
+        if mode != "classic":   # removal_gpu work_short / static_bg / mosaic_sec / shadow + LaMa (its docstring)
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
             from avatar.inpaint_lama import inpaint as lama
-            extra = dict(work_short=480, static_bg=True, inpaint=lama)
+            extra = dict(work_short=480, inpaint=lama)
+            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5),
+                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True)}[mode])
             a.gpu_removal = True
         elif getattr(a, "gpu_removal", False):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
@@ -557,10 +560,11 @@ if __name__ == "__main__":
     ap.add_argument("--removal_workers", type=int, default=None,
                     help="CPU workers for independent clean-plate frames (1 for sequential processing; default 4); "
                          "with --gpu_removal, the threads that compute its homographies (default: all logical CPUs)")
-    ap.add_argument("--removal", choices=["classic", "v2"], default="v2",
+    ap.add_argument("--removal", choices=["classic", "v2", "mosaic", "mosaic_shadow"], default="v2",
                     help="v2 (default; judged better by eye, reports/compare/2026-10-24/removal_rework*): the GPU removal with homographies on a 480 px grid, a window background for a static "
                          "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
-                         "inpaint_lama.py; implies --gpu_removal)")
+                         "inpaint_lama.py; implies --gpu_removal). mosaic: one background per 0.5 s window warped into "
+                         "each frame; mosaic_shadow: also the targets' cast shadows (removal_gpu docstring)")
     ap.add_argument("--gpu_removal", action="store_true",
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
