@@ -127,7 +127,7 @@ describe("アプリ全体（シミュレーター）", () => {
 
     // S2-4 → 描画が終わると自動でエディタへ
     await waitFor(() => expect(window.location.hash).toBe(`#/project/${project.id}/edit`), { timeout: 10_000 });
-    await screen.findByText(ja.editor.viewer);
+    await screen.findByText(ja.editor.view.composite); // エディタ（レーン B）の表示モード切替
     const rendered = useProjectStore.getState().current!.project;
     expect(rendered.cast).toEqual([{ personId: 1, action: "replace", avatarId: imported.imported[0]!.avatarId }]);
     expect(rendered.jobs.render?.status).toBe("succeeded");

@@ -33,3 +33,10 @@ describe("LoadEditorData（フィクスチャ v0）", () => {
     await expect(new LoadEditorData({ projects, files }).execute(p)).rejects.toMatchObject({ code: "LAYERS_MISSING" });
   });
 });
+
+describe("フィクスチャ v0 の project.json", () => {
+  it("castHash がアプリの計算と一致する（キャスト欄に「再描画が必要」が出ない）", async () => {
+    const { castHash } = await import("@/domain/cast");
+    expect(project.jobs.render?.castHash).toBe(castHash(project.cast, project.finish));
+  });
+});

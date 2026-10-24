@@ -23,6 +23,9 @@ FPS = 30
 ANALYZE, RENDER = "job_synth_analyze", "job_synth_render"
 UNITS = {1: (60, 520, 260, 720), 2: (300, 300, 500, 380)}          # unitId -> x0, y0, x1, y1
 PERSON_RGB = {1: (79, 140, 255), 2: (240, 136, 62)}
+# = castHash(cast, finish) of apps/desktop/src/domain/cast.ts for the cast below (checked by
+# apps/desktop/src/application/usecases/editor.test.ts): the editor would otherwise ask to render again
+CAST_HASH = "02fb7031513986"
 
 
 def background(f):
@@ -141,7 +144,7 @@ def main(a):
                    "hasAudio": False},
         "compute": {"profileId": None},
         "jobs": {"analyze": {"jobId": ANALYZE, "status": "succeeded", "finishedAt": now},
-                 "render": {"jobId": RENDER, "status": "succeeded", "finishedAt": now, "castHash": "synth"},
+                 "render": {"jobId": RENDER, "status": "succeeded", "finishedAt": now, "castHash": CAST_HASH},
                  "exports": []},
         "meta": meta, "persons": persons,
         "cast": [{"personId": p, "action": "replace", "avatarId": f"av_synth00000000{p}"} for p in (1, 2)],
