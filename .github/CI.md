@@ -16,6 +16,14 @@
 
 `pnpm install` で lefthook の pre-push が入る。push 時に prettier / eslint --fix / cargo fmt / clippy --fix を掛け、
 直した分は `style: autofix` として commit して push を止める（もう一度 push する）。`git push --no-verify` で飛ばせる。
+（lefthook 自身の postinstall は pnpm のキャッシュがあると走らないので、ルートの `prepare` で `lefthook install` を呼んでいる）
+
+改行は `.gitattributes` で LF にそろえている（`pipeline/` は対象外）。`.gitattributes` が入る前からある Windows の
+クローンは作業ツリーが CRLF のままで、`pnpm format:check` が落ちる。未コミットの変更を commit / stash してから、一度だけ次を実行する。
+
+```sh
+git rm -r -q --cached . && git reset -q --hard
+```
 
 ## 手動で設定するもの（リポジトリの admin）
 

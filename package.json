@@ -6,6 +6,7 @@
     "node": ">=26"
   },
   "scripts": {
+    "prepare": "lefthook install",
     "dev": "pnpm --filter @vvlog/desktop dev",
     "tauri": "pnpm --filter @vvlog/desktop tauri",
     "build": "pnpm --filter @vvlog/desktop build",
