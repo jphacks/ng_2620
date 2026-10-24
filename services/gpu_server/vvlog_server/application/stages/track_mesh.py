@@ -24,7 +24,9 @@ class TrackMeshStage:
     def command(self, ctx: JobContext) -> list[str]:
         s = ctx.settings
         return pipeline_cmd(s, "scripts/offline_app_lite.py", "--input_video", ctx.work / "proxy",
-                            "--output_dir", ctx.work / "pout")
+                            "--output_dir", ctx.work / "pout",
+                            "--max_targets", ctx.job.params.get("maxTargets", s.max_targets),
+                            "--hmr_stride", s.hmr_stride, "--tracker_size", s.tracker_size)
 
     async def run(self, ctx: JobContext) -> None:
         r = ctx.report

@@ -52,7 +52,8 @@ def test_track_mesh(tmp_path, sample_video):
                 and json.loads(e["data"])["stage"] == "track"]
         assert prog == sorted(prog) and prog[-1] == 1.0
         cmd, env = [c for c in FakePipelineRunner.calls if c[0][2].endswith("offline_app_lite.py")][-1]
-        assert cmd[2].endswith("scripts/offline_app_lite.py") and env["BODY4D_MAX_TARGETS"] == "3"
+        assert cmd[2].endswith("scripts/offline_app_lite.py") and cmd[cmd.index("--max_targets") + 1] == "3"
+        assert cmd[cmd.index("--hmr_stride") + 1] == "3" and cmd[cmd.index("--tracker_size") + 1] == "672"
         assert env["USE_TF"] == "0"
 
 

@@ -17,7 +17,6 @@ def pipeline_env(ctx: JobContext) -> dict:
     env = {
         "USE_TF": "0", "USE_JAX": "0", "USE_FLAX": "0",          # TF / JAX imports break pyrender's EGL context
         "CUDA_VISIBLE_DEVICES": str(ctx.extra.get("gpu_id", "0")),
-        "BODY4D_MAX_TARGETS": str(ctx.job.params.get("maxTargets", s.max_targets)),   # offline_app_lite
         "FUSION_DEPTH": s.fusion_depth,
         "PYTHONIOENCODING": "utf-8",
     }
