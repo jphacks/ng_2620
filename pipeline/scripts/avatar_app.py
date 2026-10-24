@@ -5,7 +5,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
 
   1. occlusion   R3_fusion v2 on the meshes (scripts/occlusion/run_fusion_v2.py; cached in <out>/occlusion)
   2. retarget    every target's MHR skeleton -> the VRM (scripts/avatar/retarget_mhr.py): rotation transfer with a
-                 rest-pose correction, leg-length scale, hips placement, 2-bone IK for wrists and soles,
+                 rest-pose correction, leg-length scale, hips placement (a person close to the camera: the head's
+                 scale and the neck's placement), 2-bone IK for wrists and soles,
                  VRM spring bones (hair, skirt)
   3. removal     the targets' real bodies erased by a temporal clean plate (scripts/avatar/removal.py)
   4. render      unlit VRM, supersampled RGBA + depth per target (scripts/avatar/raster.py)
@@ -44,6 +45,7 @@ ROOT = os.path.dirname(HERE)
 sys.path[:0] = [HERE, os.path.join(HERE, "occlusion"), os.path.join(HERE, "occlusion", "fusion_v2"), ROOT]
 
 from avatar.actor import AvatarActor  # noqa: E402
+from avatar.retarget_mhr import near_weights  # noqa: E402
 from avatar.raster import Rasterizer, camera_mvp  # noqa: E402
 from avatar.vrm import load_vrm  # noqa: E402
 from utils.compile_cache import use_persistent_compile_cache  # noqa: E402
@@ -352,7 +354,7 @@ def main(a):
     rz = Rasterizer(OW, OH, ssaa=a.ssaa)
     K = np.array([[focal * sc, 0, OW / 2], [0, focal * sc, OH / 2], [0, 0, 1]])
     mvp = camera_mvp(K, OW, OH)
-    actors = {}
+    actors, near = {}, {}
     for pid in pids:
         coords = [sk[(pid, i)]["joint_coords"] for i in range(n) if (pid, i) in sk]
         act = AvatarActor(models[vrm_of[pid]], rz, scale=1.0, fps=a.fps, spring=not a.no_spring)
@@ -361,6 +363,27 @@ def main(a):
         stats[f"scale_{pid}"] = round(act.scale, 4)
         print(f"[avatar] target {pid}: avatar scale {act.scale:.3f} (avatar height "
               f"{act.scale * act.rt.height_m:.2f} m), {len(coords)} frames", flush=True)
+        # a person close to the camera: placement at the neck and the head's scale (retarget_mhr near_weights)
+        fi = [i for i in range(n) if (pid, i) in sk]
+        w = near_weights([sk[(pid, i)]["joint_coords"][113, 2] + sk[(pid, i)]["cam_t"][2] for i in fi], a.fps)
+        hs = None
+        if w.max() > 0:
+            top = [fi[k] for k in np.argsort(-w, kind="stable")[:8]]
+            meas = []
+            for i in top:   # the unsmoothed skeleton: the mesh's frame
+                z = np.load(f"{run.pout}/skeleton_4d_individual/{pid}/{stems[i]}.npz")
+                m = run.mesh(pid, i)
+                if m is not None:
+                    meas.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
+            hs = act.rt.head_scale(meas)
+        if hs is None:
+            w = np.zeros(len(fi))
+        near[pid] = (act.scale, hs, {i: float(x) for i, x in zip(fi, w) if x > 0})
+        if hs is not None:
+            stats[f"scale_head_{pid}"] = round(hs, 4)
+            stats[f"near_frames_{pid}"] = int((w > 0).sum())
+            print(f"[avatar] target {pid}: close to the camera in {int((w > 0).sum())} frames (head scale {hs:.3f})",
+                  flush=True)
     t_setup = time.perf_counter() - t0
 
     # 3. erase the real targets (started before fusion)
@@ -429,8 +452,11 @@ def main(a):
                 act.reset()             # not tracked here: restart the spring simulation when the person returns
                 continue
             e = expr.get((pid, i))
+            s_leg, s_head, nw = near[pid]
+            wn = nw.get(i, 0.0)
+            act.scale = (1 - wn) * s_leg + wn * s_head if wn > 0 else s_leg
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
-                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None)
+                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn)
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
             hb = act.bone_cam("head")
