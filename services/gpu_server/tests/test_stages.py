@@ -75,3 +75,33 @@ def test_pipeline_crash(tmp_path, sample_video):
         failed = [e for e in sse(c, jid) if e["event"] == "job_failed"][0]
         assert "CUDA out of memory" in json.loads(failed["data"])["logTail"]
         assert "CUDA out of memory" in c.get(f"/v1/jobs/{jid}/logs", headers=AUTH).text
+
+
+def test_render(tmp_path, sample_video):
+    from test_adapters import make_vrm
+    FakePipelineRunner.calls.clear()
+    with make_client(tmp_path, runner_factory=FakePipelineRunner) as c:
+        pid, aid = analyze(c, sample_video)
+        av = c.post("/v1/avatars", headers=AUTH, files={"file": ("a.vrm", make_vrm(), "x")}).json()["avatarId"]
+        bad = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "render", "params": {
+            "analyzeJobId": aid, "cast": [{"personId": 7, "action": "replace", "avatarId": av}]}}).json()
+        r = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "render", "params": {
+            "analyzeJobId": aid, "cast": [{"personId": 2, "action": "replace", "avatarId": av}],
+            "finish": {"footLock": False}}}).json()
+        assert wait_job(c, aid)["status"] == "succeeded"
+        jb = wait_job(c, bad["jobId"])
+        assert jb["status"] == "failed" and jb["error"]["code"] == "VALIDATION_FAILED"
+        j = wait_job(c, r["jobId"])
+        assert j["status"] == "succeeded", j
+        assert j["artifacts"] == ["layers_index", "layers", "preview_video", "stats"]
+        z = zipfile.ZipFile(io.BytesIO(c.get(f"/v1/jobs/{r['jobId']}/artifacts/layers", headers=AUTH).content))
+        assert "clean/00000.webp" in z.namelist() and "avatar/2/00059.webp" in z.namelist()
+        assert "hide/2/00000.png" in z.namelist() and "layers.json" not in z.namelist()
+        lj = c.get(f"/v1/jobs/{r['jobId']}/artifacts/layers_index", headers=AUTH).json()
+        assert lj["avatarIds"] == {"2": av}
+        cmd = [x for x, _ in FakePipelineRunner.calls if x[2].endswith("avatar_app.py")][-1]
+        assert cmd[cmd.index("--targets") + 1] == "2" and "--no_foot_lock" in cmd and "--no_spring" not in cmd
+        assert cmd[cmd.index("--fusion_state") + 1].endswith(f"{aid}/occ/fusion_state.pkl")
+        assert cmd[cmd.index("--vrm_map") + 1].startswith("2=") and cmd[cmd.index("--fps") + 1] == "30.0"
+        stages = [s["status"] for s in j["stages"]]
+        assert stages == ["done", "done", "done"]

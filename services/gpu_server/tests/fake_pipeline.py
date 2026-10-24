@@ -54,7 +54,32 @@ def fake_occlusion(cmd):
     return lines, 0
 
 
-SCRIPTS = {"offline_app_lite.py": fake_offline_app_lite, "run_occlusion_stage.py": fake_occlusion}
+def fake_avatar_app(cmd):
+    import json
+    pout, av, name = _arg(cmd, "--pipeline_out"), _arg(cmd, "--out"), cmd[cmd.index("--name") + 1]
+    targets = [int(x) for x in cmd[cmd.index("--targets") + 1].split(",")]
+    n = len(list((pout / "masks").glob("*.png")))
+    lay = av / "layers"
+    lines = ["[avatar] fusion v2 decisions from x", f"[avatar] target {targets[0]}: avatar scale 1.0"]
+    for sub in ["clean"] + [f"avatar/{p}" for p in targets] + [f"hide/{p}" for p in targets]:
+        (lay / sub).mkdir(parents=True, exist_ok=True)
+    for f in range(n):
+        (lay / "clean" / f"{f:05d}.webp").write_bytes(b"w")
+        for p in targets:
+            (lay / "avatar" / str(p) / f"{f:05d}.webp").write_bytes(b"w")
+            (lay / "hide" / str(p) / f"{f:05d}.png").write_bytes(b"p")
+        lines.append(f"[avatar] frame {f + 1}/{n}")
+    ids = dict(s.split("=") for s in cmd[cmd.index("--avatar_ids") + 1].split(","))
+    (lay / "layers.json").write_text(json.dumps({"persons": targets, "order": {str(f): targets for f in range(n)},
+                                                 "avatarIds": ids}))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=30:duration=1",
+                    "-c:v", "mpeg4", str(av / f"avatar_{name}.mp4")], check=True)
+    (av / "stats.json").write_text(json.dumps({"frames": n}))
+    return lines, 0
+
+
+SCRIPTS = {"offline_app_lite.py": fake_offline_app_lite, "run_occlusion_stage.py": fake_occlusion,
+           "avatar_app.py": fake_avatar_app}
 
 
 class FakePipelineRunner:

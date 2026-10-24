@@ -39,6 +39,7 @@ class TrackMeshStage:
             if not persons:
                 await ctx.runner.terminate()
                 return
+            (ctx.work / "_published_persons.json").write_bytes((pub / "persons.json").read_bytes())
             for name, f in (("persons", "persons.json"), ("person_thumbs", "person_thumbs.zip"),
                             ("track_masks", "track_masks.zip")):
                 r.artifact(name, pub / f)

@@ -104,3 +104,12 @@ class FsPipelineOutputs:
     def to_h264(self, src: Path, dest: Path) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         return to_h264(src, dest)
+
+    def zip_layers(self, layers: Path, dest: Path) -> Path:
+        """clean/, avatar/<pid>/, hide/<pid>/ as stored (contracts §4.2); layers.json is its own artifact."""
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(dest, "w", zipfile.ZIP_STORED) as z:
+            for f in sorted(layers.rglob("*")):
+                if f.is_file() and f.name != "layers.json":
+                    z.write(f, f.relative_to(layers).as_posix())
+        return dest
