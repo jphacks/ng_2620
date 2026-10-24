@@ -1,8 +1,11 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import os
+import threading
+import sys
 
-if "PYOPENGL_PLATFORM" not in os.environ:
+# EGL is Linux-only; on Windows/macOS pyrender needs PYOPENGL_PLATFORM unset (pyglet backend)
+if "PYOPENGL_PLATFORM" not in os.environ and sys.platform.startswith("linux"):
     os.environ["PYOPENGL_PLATFORM"] = "egl"
 from typing import List, Optional
 
@@ -132,6 +135,36 @@ def create_raymond_lights() -> List[pyrender.Node]:
     return nodes
 
 
+_OFFSCREEN = {}
+_GL_THREAD = None
+_GL_LOCK = threading.Lock()
+
+
+def _offscreen(h, w):
+    """One pyrender OffscreenRenderer per viewport size, reused across calls. Creating and deleting a GL context
+    per call cost 0.47 s per frame on 2 people (delete alone 0.37 s) against 0.02 s of actual drawing; the reused
+    context renders the same images up to the pipeline's own run-to-run noise (1/255 on a handful of pixels).
+    Only called from the GL thread (_gl_render)."""
+    if (h, w) not in _OFFSCREEN:
+        _OFFSCREEN[(h, w)] = pyrender.OffscreenRenderer(viewport_height=h, viewport_width=w)
+    return _OFFSCREEN[(h, w)]
+
+
+def _gl_render(h, w, scene, flags):
+    """Run the GL part of a render on one dedicated thread.
+
+    pyglet (pyrender's backend on Windows) is not thread-safe: contexts made in several threads share one object
+    space and fail with GL_INVALID_VALUE. Building the trimesh / pyrender scene is the expensive, GL-free part and
+    can run in any number of saving threads; only renderer.render goes through this single thread, which owns
+    every GL context, so the drawing calls are the same as before."""
+    global _GL_THREAD
+    with _GL_LOCK:
+        if _GL_THREAD is None:
+            from concurrent.futures import ThreadPoolExecutor
+            _GL_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pyrender-gl")
+    return _GL_THREAD.submit(lambda: _offscreen(h, w).render(scene, flags=flags)).result()
+
+
 class Renderer:
 
     def __init__(self, focal_length, faces=None):
@@ -175,12 +208,6 @@ class Renderer:
             image = cv2.imread(imgname).astype(np.float32)
         image = image / 255.0
         h, w = image.shape[:2]
-
-        # Create offscreen renderer
-        renderer = pyrender.OffscreenRenderer(
-            viewport_height=h,
-            viewport_width=w,
-        )
 
         # Process camera translation
         camera_translation = cam_t.copy()
@@ -284,11 +311,8 @@ class Renderer:
             scene.add_node(node)
 
         # Render RGBA
-        color, _rend_depth = renderer.render(
-            scene, flags=pyrender.RenderFlags.RGBA
-        )
+        color, _rend_depth = _gl_render(h, w, scene, pyrender.RenderFlags.RGBA)  # reused renderer, see _gl_render
         color = color.astype(np.float32) / 255.0
-        renderer.delete()
 
         # Return RGBA directly if requested
         if return_rgba:

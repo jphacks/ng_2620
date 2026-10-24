@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vvlog.local/contracts/project.schema.json",
+  "title": "project.json of a *.vvlog folder (designdocs/architecture/contracts.md §6.1)",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "createdAt", "updatedAt", "source", "compute", "jobs", "persons", "cast",
+               "finish", "avatars", "ui", "sample", "owner", "createdBy"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^loc_" },
+    "name": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["path", "copied", "sha256", "durationSec", "width", "height", "fps", "hasAudio"],
+      "properties": {
+        "path": { "type": "string" }, "copied": { "type": "boolean" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "durationSec": { "type": "number" }, "width": { "type": "integer" }, "height": { "type": "integer" },
+        "fps": { "type": "number" }, "hasAudio": { "type": "boolean" }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "properties": {
+        "profileId": { "type": ["string", "null"] },
+        "serverProjectId": { "type": ["string", "null"] },
+        "mediaId": { "type": ["string", "null"] }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "properties": {
+        "analyze": { "$ref": "#/$defs/jobRef" },
+        "render": { "allOf": [{ "$ref": "#/$defs/jobRef" }], "properties": { "castHash": { "type": "string" } } },
+        "exports": {
+          "type": "array",
+          "items": { "allOf": [{ "$ref": "#/$defs/jobRef" }],
+                     "properties": { "file": { "type": "string" }, "overridesHash": { "type": "string" } } }
+        }
+      }
+    },
+    "meta": { "type": ["object", "null"], "description": "MediaMeta copied from the analyze job's meta artifact" },
+    "persons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["personId", "label"],
+        "properties": {
+          "personId": { "type": "integer", "minimum": 1 }, "label": { "type": "string" },
+          "firstFrame": { "type": "integer" }, "lastFrame": { "type": "integer" },
+          "visibleRatio": { "type": "number" }, "thumb": { "type": "string" }
+        }
+      }
+    },
+    "cast": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["personId", "action", "avatarId"],
+        "properties": {
+          "personId": { "type": "integer", "minimum": 1 },
+          "action": { "const": "replace" },
+          "avatarId": { "type": "string", "pattern": "^av_[0-9a-f]{16}$" }
+        }
+      }
+    },
+    "finish": {
+      "type": "object",
+      "properties": { "smooth": { "type": "number" }, "footLock": { "type": "boolean" }, "spring": { "type": "boolean" } }
+    },
+    "avatars": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "file", "sha256"],
+        "properties": { "name": { "type": "string" }, "file": { "type": "string" }, "sha256": { "type": "string" } }
+      }
+    },
+    "ui": { "type": "object" },
+    "sample": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "object", "required": ["id"],
+          "properties": { "id": { "type": "string" }, "license": { "type": "string" }, "exportedVideo": { "type": "string" } } }
+      ]
+    },
+    "owner": { "type": "null", "description": "reserved for enterprise (ADR-0010)" },
+    "createdBy": { "type": "null", "description": "reserved for enterprise (ADR-0010)" }
+  },
+  "$defs": {
+    "jobRef": {
+      "type": "object",
+      "required": ["jobId", "status"],
+      "properties": {
+        "jobId": { "type": "string", "pattern": "^job_" },
+        "status": { "enum": ["queued", "running", "succeeded", "failed", "canceled"] },
+        "finishedAt": { "type": "string" }
+      }
+    }
+  }
+}

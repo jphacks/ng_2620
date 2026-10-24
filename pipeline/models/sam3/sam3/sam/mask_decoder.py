@@ -27,6 +27,7 @@ class MaskDecoder(nn.Module):
         pred_obj_scores: bool = False,
         pred_obj_scores_mlp: bool = False,
         use_multimask_token_for_obj_ptr: bool = False,
+        expand_image_embeddings: bool = False,
     ) -> None:
         """
         Predicts masks given an image and prompt embeddings, using a
@@ -47,6 +48,10 @@ class MaskDecoder(nn.Module):
         super().__init__()
         self.transformer_dim = transformer_dim
         self.transformer = transformer
+        # Opt-in for repeated point prompts on one image. The transformer only
+        # reads these shared embeddings; src + dense_prompt_embeddings below
+        # still creates independent per-prompt storage before any updates.
+        self.expand_image_embeddings = expand_image_embeddings
 
         self.num_multimask_outputs = num_multimask_outputs
 
@@ -195,7 +200,13 @@ class MaskDecoder(nn.Module):
 
         # Expand per-image data in batch direction to be per-mask
         if repeat_image:
-            src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+            if self.expand_image_embeddings and image_embeddings.size(0) == 1:
+                # repeat_interleave produces NCHW storage even if the incoming
+                # single-image features are channels-last. Preserve that layout
+                # before broadcasting to avoid changing downstream kernels.
+                src = image_embeddings.contiguous().expand(tokens.shape[0], -1, -1, -1)
+            else:
+                src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
         else:
             assert image_embeddings.shape[0] == tokens.shape[0]
             src = image_embeddings
@@ -203,7 +214,10 @@ class MaskDecoder(nn.Module):
         assert (
             image_pe.size(0) == 1
         ), "image_pe should have size 1 in batch dim (from `get_dense_pe()`)"
-        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        if self.expand_image_embeddings:
+            pos_src = image_pe.contiguous().expand(tokens.shape[0], -1, -1, -1)
+        else:
+            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
         b, c, h, w = src.shape
 
         # Run the transformer
