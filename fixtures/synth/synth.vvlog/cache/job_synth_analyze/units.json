@@ -1,0 +1,62 @@
+{
+ "units": [
+  {
+   "unitId": 1,
+   "frames": [
+    0,
+    95
+   ],
+   "label": "object",
+   "tracks": [
+    1
+   ],
+   "areaPx": 40000,
+   "perPerson": {
+    "1": {
+     "auto": "front",
+     "why": "D+",
+     "confidence": 0.9,
+     "overlapFrames": [
+      0,
+      67
+     ]
+    },
+    "2": {
+     "auto": "none",
+     "why": "",
+     "confidence": 0.0,
+     "overlapFrames": []
+    }
+   }
+  },
+  {
+   "unitId": 2,
+   "frames": [
+    0,
+    95
+   ],
+   "label": "object",
+   "tracks": [
+    2
+   ],
+   "areaPx": 16000,
+   "perPerson": {
+    "1": {
+     "auto": "none",
+     "why": "",
+     "confidence": 0.0,
+     "overlapFrames": []
+    },
+    "2": {
+     "auto": "behind",
+     "why": "S-",
+     "confidence": 0.4,
+     "overlapFrames": [
+      19,
+      57
+     ]
+    }
+   }
+  }
+ ]
+}

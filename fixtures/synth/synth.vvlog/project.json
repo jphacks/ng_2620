@@ -1,0 +1,109 @@
+{
+ "schemaVersion": 1,
+ "id": "loc_synth_v0",
+ "name": "合成フィクスチャ v0",
+ "createdAt": "2026-10-24T00:00:00.000Z",
+ "updatedAt": "2026-10-24T00:00:00.000Z",
+ "source": {
+  "path": "synth.mp4",
+  "copied": false,
+  "durationSec": 3.2,
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "hasAudio": false
+ },
+ "compute": {
+  "profileId": null
+ },
+ "jobs": {
+  "analyze": {
+   "jobId": "job_synth_analyze",
+   "status": "succeeded",
+   "finishedAt": "2026-10-24T00:00:00.000Z"
+  },
+  "render": {
+   "jobId": "job_synth_render",
+   "status": "succeeded",
+   "finishedAt": "2026-10-24T00:00:00.000Z",
+   "castHash": "synth"
+  },
+  "exports": []
+ },
+ "meta": {
+  "durationSec": 3.2,
+  "frameCount": 96,
+  "fps": 30,
+  "full": {
+   "width": 540,
+   "height": 960
+  },
+  "proxy": {
+   "width": 540,
+   "height": 960
+  },
+  "proxyScale": 1,
+  "hasAudio": false,
+  "sourceCodec": "h264"
+ },
+ "persons": [
+  {
+   "personId": 1,
+   "label": "人物 1",
+   "firstFrame": 0,
+   "lastFrame": 95,
+   "visibleRatio": 1.0,
+   "bestFrame": 48,
+   "thumb": "cache/job_synth_analyze/person_thumbs/1.jpg"
+  },
+  {
+   "personId": 2,
+   "label": "人物 2",
+   "firstFrame": 0,
+   "lastFrame": 95,
+   "visibleRatio": 1.0,
+   "bestFrame": 48,
+   "thumb": "cache/job_synth_analyze/person_thumbs/2.jpg"
+  }
+ ],
+ "cast": [
+  {
+   "personId": 1,
+   "action": "replace",
+   "avatarId": "av_synth000000001"
+  },
+  {
+   "personId": 2,
+   "action": "replace",
+   "avatarId": "av_synth000000002"
+  }
+ ],
+ "finish": {
+  "smooth": 0.05,
+  "footLock": true,
+  "spring": true
+ },
+ "avatars": {
+  "av_synth000000001": {
+   "name": "円 1",
+   "file": "",
+   "sha256": ""
+  },
+  "av_synth000000002": {
+   "name": "円 2",
+   "file": "",
+   "sha256": ""
+  }
+ },
+ "ui": {
+  "playhead": 0,
+  "zoom": 1,
+  "panelLayout": "default"
+ },
+ "sample": {
+  "id": "synth_v0",
+  "license": "合成データ（テスト用）"
+ },
+ "owner": null,
+ "createdBy": null
+}
