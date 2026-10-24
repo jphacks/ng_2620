@@ -52,8 +52,9 @@ class AvatarActor:
         if self.spring is not None:
             self.spring.reset()
 
-    def pose(self, joint_rots, coords_cam, arm_ik=True, leg_ik=True, gpu=None):
-        """Pose the avatar for one frame (frames must be fed in order: spring bones keep state)."""
+    def pose(self, joint_rots, coords_cam, arm_ik=True, leg_ik=True, gpu=None, expr=None):
+        """Pose the avatar for one frame (frames must be fed in order: spring bones keep state).
+        expr: {VRM expression name: weight 0-1} (avatar/face.py), added to the rest mesh before skinning."""
         rt = self.rt
         g, t, self.ik_err = rt.solve(joint_rots, coords_cam, self.scale, arm_ik=arm_ik, leg_ik=leg_ik)
         if self.spring is not None:
@@ -61,10 +62,19 @@ class AvatarActor:
             t_gltf = (rt.A.T @ t) / self.scale
             g = self.spring.step(g, t_gltf.astype(np.float32), self.dt, warmup=self.spring_warmup)
         if gpu is not None:
-            self.apply_gpu(g, t, gpu)
+            self.apply_gpu(g, t, gpu, expr)
         else:
-            self.apply(g, t)
+            self.apply(g, t, expr)
         return g, t
+
+    def _morphs(self, expr):
+        """{expression: weight} -> {prim index: {target index: weight}} through the expressions' binds."""
+        out = {}
+        for name, w in (expr or {}).items():
+            for pi, ti, bw in self.m.blendshapes.get(name, ()):
+                d = out.setdefault(pi, {})
+                d[ti] = d.get(ti, 0.0) + float(w) * bw
+        return out
 
     def _gpu_init(self, dev):
         """Static GPU tensors of every primitive, merged: homogeneous rest positions, uvs, the 4 influences as
@@ -101,14 +111,31 @@ class AvatarActor:
         self._g = dict(ph=T(ph), uv=T(uv), pi=T(pi, torch.int64), w=T(wt),
                        node=torch.tensor([n for n, _ in pal], device=dev),
                        ibm=T(np.stack([b for _, b in pal])), sizes=sizes, dev=dev)
+        # morph targets that some expression binds: merged vertex rows and position deltas, one entry per (prim, target)
+        offs = np.cumsum([0] + sizes)
+        self._g["morph"] = {}
+        for pi_, ti in sorted({(pi_, ti) for b in m.blendshapes.values() for pi_, ti, _ in b}):
+            d = m.prims[pi_].targets[ti]
+            rows = np.nonzero(np.abs(d).max(1) > 0)[0]
+            if len(rows):
+                self._g["morph"][(pi_, ti)] = (T(rows + offs[pi_], torch.int64), T(d[rows]))
 
-    def apply_gpu(self, g, t, dev):
+    def apply_gpu(self, g, t, dev, expr=None):
         """apply() with the skinning on the GPU (one pass over all primitives, then one copy back for the vertex
         buffers), and the screen box of the projected vertices (screen_box) computed there as well."""
         import torch
         if getattr(self, "_g", None) is None:
             self._gpu_init(dev)
         G = self._g
+        ph = G["ph"]
+        mw = self._morphs(expr)
+        if mw:
+            ph = ph.clone()
+            for pi_, tw in mw.items():
+                for ti, w in tw.items():
+                    if w > 1e-4 and (pi_, ti) in G["morph"]:
+                        rows, d = G["morph"][(pi_, ti)]
+                        ph[rows, :3] += d * w
         gt = torch.from_numpy(np.ascontiguousarray(g, np.float32)).to(dev)
         node = G["node"]
         Mg = torch.where((node >= 0)[:, None, None], gt[node.clamp(min=0)], torch.eye(4, device=dev))
@@ -116,7 +143,7 @@ class AvatarActor:
         P = torch.zeros((len(G["ph"]), 3), device=dev)
         for k in range(4):
             Mk = Mp[G["pi"][:, k]]                                         # (V,3,4)
-            P = P + G["w"][:, k:k + 1] * (Mk * G["ph"][:, None, :]).sum(-1)
+            P = P + G["w"][:, k:k + 1] * (Mk * ph[:, None, :]).sum(-1)
         M = torch.from_numpy((self.scale * self.rt.A).astype(np.float32)).to(dev)
         tt = torch.from_numpy(np.asarray(t, np.float32)).to(dev)
         C = (P[:, None, :] * M[None]).sum(-1) + tt                          # P @ M.T + t
@@ -129,12 +156,13 @@ class AvatarActor:
         self.last_globals, self.last_t = g, t
         self.visible = True
 
-    def apply(self, g, t):
+    def apply(self, g, t, expr=None):
         """Skin the mesh with node globals g (glTF space) and camera translation t, and upload it."""
         M = (self.scale * self.rt.A).astype(np.float32)
         self.cam_pts = []
-        for p, vbo in zip(self.m.prims, self.vbo):
-            P, _ = self.m.skin_primitive(p, g, compute_normals=False)
+        mw = self._morphs(expr)
+        for k, (p, vbo) in enumerate(zip(self.m.prims, self.vbo)):
+            P, _ = self.m.skin_primitive(p, g, mw.get(k), compute_normals=False)
             data = np.concatenate([P @ M.T + t, p.uvs], 1).astype("f4")
             vbo.write(np.ascontiguousarray(data))
             self.cam_pts.append(data[:, :3])

@@ -31,6 +31,19 @@ Options that change the plates (all off by default, the byte-identical path abov
                behind people that stay put, so the per-frame fill inpainted 75% of downtown_bar's hole pixels
   inpaint      callable(img, mask) -> img for the pixels no frame shows (default cv2.inpaint Telea); e.g.
                avatar/inpaint_lama.inpaint
+  mosaic_sec   window backgrounds for a moving camera too (_mosaic_plates): per window of mosaic_sec, the middle frame r
+               gets one background over every pixel any window frame needs (their holes, and shadow bands, mapped
+               into r), from the same per-pixel median of the frames within +-span; the pixels none of them shows are
+               inpainted once; each frame's hole is the window background warped into it (one refined homography per
+               frame). The per-frame fill inpainted every frame on its own (texture can change from frame to frame)
+               and refined ~16 homographies per frame; here ~16 per window plus one per frame
+  shadow       with mosaic_sec: also replace the targets' cast shadows, in two passes. Pass 1 builds the window
+               backgrounds as above and finds each frame's shadow: band pixels (within shadow_frac of the frame height
+               of its hole) darker than the background (luminance 0.2-0.8 x) with the same chromaticity, in components
+               touching the hole. Pass 2 treats the shadows as the people are treated: excluded from every frame that
+               lends pixels (dilated like the exclusion masks) and filled in their own frame. A shadow is outside the
+               person mask, so it stayed in the plate, and other frames' shadows were copied into the fill (the people
+               stay around the same place, so a pass-1 background still holds some shadow)
 """
 from __future__ import annotations
 
@@ -63,6 +76,163 @@ def _dilate(m, kernel):
     if bool(((y - y.round()).abs() > 0.25).any()):
         return None
     return y > 0.5
+
+
+def _warp_sample(img, Minv, xs, ys):
+    """Bilinear samples (N, 3) float32 of img (H, W, 3) uint8 tensor at the points Minv @ (xs, ys, 1); out of the
+    image -> ok False."""
+    import torch
+    H, W = img.shape[:2]
+    M = torch.as_tensor(Minv, dtype=torch.float64, device=img.device)
+    X = M[0, 0] * xs + M[0, 1] * ys + M[0, 2]
+    Y = M[1, 0] * xs + M[1, 1] * ys + M[1, 2]
+    Z = M[2, 0] * xs + M[2, 1] * ys + M[2, 2]
+    X, Y = X / Z, Y / Z
+    ok = (X >= 0) & (X <= W - 1) & (Y >= 0) & (Y <= H - 1)
+    x0 = X.floor().clamp(0, W - 2).long()
+    y0 = Y.floor().clamp(0, H - 2).long()
+    ax = (X - x0).clamp(0, 1).float()[:, None]
+    ay = (Y - y0).clamp(0, 1).float()[:, None]
+    f = img.float()
+    v = (f[y0, x0] * (1 - ax) * (1 - ay) + f[y0, x0 + 1] * ax * (1 - ay)
+         + f[y0 + 1, x0] * (1 - ax) * ay + f[y0 + 1, x0 + 1] * ax * ay)
+    return v, ok
+
+
+def _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint, out, dev, log, t0, pool,
+                   shadow, shadow_frac, fill=True, quantile=0.5):
+    """mosaic_sec's plates (module docstring): one background per window of L frames, warped into each frame.
+    shadow: also find each frame's cast shadows (-> the 4th result, uint8 masks); fill=False: only find them.
+    quantile: of the valid samples per pixel (0.5: the median, as the per-frame fill). Shadow detection uses a higher
+    one: where the people stay, most samples of a pixel can be shadowed, and their median is a shadowed background.
+    -> (plates, holes, stats, shadow masks or None)."""
+    import torch
+    rad = max(3, int(round(shadow_frac * H)))
+    by_plate = by_inpaint = n_shadow = 0
+    shadows = [np.zeros((H, W), np.uint8) for _ in range(n)] if shadow else None
+    for a in range(0, n, L):
+        b = min(n, a + L)
+        r = (a + b - 1) // 2
+        win = list(range(a, b))
+        if not any(np.asarray(holes[t]).any() for t in win):
+            for t in win:
+                out[t] = np.array(frames[t])
+            continue
+
+        def h_rt(t):   # frame r -> frame t (refined from the chain), and the regions frame t needs
+            if t == r:
+                Hm = np.eye(3)
+            else:
+                Hc = C[t] @ np.linalg.inv(C[r])
+                Hc /= Hc[2, 2]
+                Hm = homography(r, t, pts[r], init=Hc)
+                Hm = Hc if Hm is None else Hm
+            hole = np.asarray(holes[t]).astype(np.uint8)
+            if shadow:   # within rad of the hole (a distance transform: a disc this large is slow as a dilation)
+                band = (cv2.distanceTransform(1 - hole, cv2.DIST_L2, 3) <= rad).astype(np.uint8)
+            else:
+                band = hole
+            return Hm, hole, band
+        per = dict(zip(win, pool.map(h_rt, win)))
+        need = np.zeros((H, W), np.uint8)
+        for t in win:   # what frame t needs, in r's pixels
+            Hm, _, band = per[t]
+            need |= cv2.warpPerspective(band, np.linalg.inv(Hm), (W, H), flags=cv2.INTER_NEAREST)
+        ys, xs = np.nonzero(need)
+        img = ring.f[ring.slot(r)]
+        Ms = []
+        cands = cands_of(r)
+        for u in cands:   # = inverse_maps(r): H(u -> r) refined, inverted for the sampler
+            Hc = C[r] @ np.linalg.inv(C[u])
+            Hc /= Hc[2, 2]
+            Hm = homography(u, r, pts[u], init=Hc)
+            Hm = Hc if Hm is None else Hm
+            Ms.append(cv2.invert(Hm)[1].ravel().tolist())
+        yt, xt = torch.from_numpy(ys).to(dev), torch.from_numpy(xs).to(dev)
+        mosaic = img.clone()
+        shown = torch.zeros(len(ys), dtype=torch.bool, device=dev)
+        if cands:
+            slots = [ring.slot(u) for u in cands]
+            Mt = torch.tensor(Ms, dtype=torch.float64, device=dev)
+            yf, xf = yt.double(), xt.double()
+            parts = [ring.sample(slots[k:k + 16], Mt[k:k + 16], xf, yf) for k in range(0, len(cands), 16)]
+            v = torch.cat([p_[0] for p_ in parts])
+            oks = torch.cat([p_[1] for p_ in parts])
+            del parts
+            v[~oks] = 255
+            v = v.sort(dim=0).values
+            c = oks.sum(dim=0)
+            if quantile == 0.5:
+                lo = torch.div(c - 1, 2, rounding_mode="floor").clamp(min=0)
+                hi = torch.div(c, 2, rounding_mode="floor")
+            else:   # per channel sorted values: the quantile of the valid ones
+                lo = hi = (quantile * (c - 1).clamp(min=0).float()).floor().long()
+            med = (v.gather(0, lo[None, :, None].expand(1, -1, 3))[0].float()
+                   + v.gather(0, hi[None, :, None].expand(1, -1, 3))[0].float()) / 2
+            shown = c > 0
+            mosaic[yt[shown], xt[shown]] = (med[shown] + 0.5).clamp(0, 255).to(torch.uint8)
+            del v, oks, med
+        # never shown: r's own hole pixels need a fill; the rest of `need` (other frames' bands) keeps r's pixels
+        hole_r = torch.from_numpy(np.asarray(holes[r])).to(dev)
+        never = ~shown & hole_r[yt, xt]   # outside r's own hole, r's pixel is background at r
+        rest = np.zeros((H, W), np.uint8)
+        rest_any = bool(never.any())
+        if rest_any:
+            rest[ys[never.cpu().numpy()], xs[never.cpu().numpy()]] = 255
+        mos = mosaic.cpu().numpy()
+        if rest_any:
+            mos = inpaint(mos, rest)
+        mos_t = torch.from_numpy(mos).to(dev)
+        rest_t = torch.from_numpy(rest).to(dev)
+        for t in win:
+            Hm, hole, band = per[t]
+            frame = np.array(frames[t])
+            sel = band > 0
+            if not sel.any():
+                out[t] = frame
+                continue
+            py, px = np.nonzero(sel)
+            pyt, pxt = torch.from_numpy(py).to(dev), torch.from_numpy(px).to(dev)
+            Minv = np.linalg.inv(Hm)   # t's pixels -> r's
+            bg, ok = _warp_sample(mos_t, Minv, pxt.double(), pyt.double())
+            replace = torch.from_numpy(hole[py, px] > 0).to(dev) & ok
+            if shadow:
+                fr = torch.from_numpy(frame).to(dev)[pyt, pxt].float()
+                yf_ = fr.mean(1)
+                yb = bg.mean(1).clamp(min=1)
+                ratio = yf_ / yb
+                chroma = (fr / fr.sum(1, keepdim=True).clamp(min=1) - bg / bg.sum(1, keepdim=True).clamp(min=1)).abs().max(1).values
+                cand = ok & ~replace & (ratio > 0.2) & (ratio < 0.8) & (chroma < 0.06)
+                sm = np.zeros((H, W), np.uint8)
+                sm[py[cand.cpu().numpy()], px[cand.cpu().numpy()]] = 1
+                sm = cv2.morphologyEx(sm, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+                sm = cv2.morphologyEx(sm, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+                nlab, lab = cv2.connectedComponents(sm)
+                touch = np.unique(lab[(cv2.dilate(hole, np.ones((9, 9), np.uint8)) > 0) & (sm > 0)])
+                keep = np.isin(lab, touch[touch > 0]) & sel
+                n_shadow += int(keep.sum())
+                shadows[t] = keep.astype(np.uint8)
+                replace = replace | torch.from_numpy(keep[py, px]).to(dev)
+            if not fill:
+                continue
+            idx = replace.nonzero().flatten()
+            frame[py[idx.cpu().numpy()], px[idx.cpu().numpy()]] = (bg[idx] + 0.5).clamp(0, 255).to(torch.uint8).cpu().numpy()
+            out[t] = frame
+            hp = hole > 0
+            n_h = int(hp.sum())
+            if n_h:   # how the hole's pixels were filled: from r's inpainted pixels or from the median
+                hy, hx = np.nonzero(hp)
+                q, _ = _warp_sample(rest_t[..., None].expand(H, W, 3).contiguous(), Minv,
+                                    torch.from_numpy(hx).to(dev).double(), torch.from_numpy(hy).to(dev).double())
+                n_inp = int((q[:, 0] > 127).sum())
+                by_inpaint += n_inp
+                by_plate += n_h - n_inp
+    tot = max(by_plate + by_inpaint, 1)
+    stats = {"hole_px": tot, "clean_plate_%": round(100 * by_plate / tot, 1),
+             "inpaint_%": round(100 * by_inpaint / tot, 1), "shadow_px": n_shadow, "mosaic_frames": L}
+    log(f"[removal] window backgrounds of {L} frames: hole pixels from other frames {stats['clean_plate_%']}%, "
+        f"inpainted {stats['inpaint_%']}%, shadow pixels replaced {n_shadow} (total {time.perf_counter() - t0:.0f} s)")
+    return out, holes, stats, shadows
 
 
 def _static_plates(frames, holes, excl, n, H, W, span, stride, inpaint, scratch, dev, log, t0):
@@ -202,7 +372,7 @@ def _telea(img, mask):
 
 def clean_plates_gpu(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15, span_sec=7.5, stride_sec=8 / 30,
                      log=print, workers=4, scratch=None, device="cuda", work_short=None, static_bg=False,
-                     inpaint=None):
+                     inpaint=None, mosaic_sec=None, shadow=False, shadow_frac=0.15):
     """removal.clean_plates (same arguments and results); `workers` CPU threads compute the homographies.
     work_short / static_bg / inpaint: see the module docstring (not byte-identical)."""
     import torch
@@ -302,6 +472,23 @@ def clean_plates_gpu(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15
         else:
             out = [None] * n
         ring = _Ring(frames, excl, min(n, 2 * span + 1), dev)
+        if mosaic_sec:
+            L = max(1, int(round(mosaic_sec * fps)))
+            if not shadow:
+                return _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint, out,
+                                      dev, log, t0, pool, False, shadow_frac)[:3]
+            _, _, _, shadows = _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint,
+                                              [None] * n, dev, lambda *a: None, t0, pool, True, shadow_frac,
+                                              fill=False, quantile=0.8)
+            k_sh = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (exclude_dilate, exclude_dilate))
+            excl2 = [np.maximum(np.asarray(excl[t]), cv2.dilate(shadows[t], k_sh)) for t in range(n)]
+            holes2 = [np.asarray(holes[t]) | (shadows[t] > 0) for t in range(n)]
+            del ring
+            ring2 = _Ring(frames, excl2, min(n, 2 * span + 1), dev)
+            res = _mosaic_plates(frames, holes2, n, H, W, L, cands_of, homography, pts, C, ring2, inpaint, out,
+                                 dev, log, t0, pool, False, shadow_frac)
+            res[2]["shadow_px"] = int(sum(int((sh > 0).sum()) for sh in shadows))
+            return res[0], holes2, res[2]
 
         def store(t, res, rest):   # in a worker thread: the Telea inpaint of what no frame shows, then the plate
             if rest is not None:

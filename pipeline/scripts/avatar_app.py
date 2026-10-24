@@ -10,6 +10,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
   3. removal     the targets' real bodies erased by a temporal clean plate (scripts/avatar/removal.py)
   4. render      unlit VRM, supersampled RGBA + depth per target (scripts/avatar/raster.py)
   5. hide        fusion v2's decisions re-rendered over each avatar's own silhouette (scripts/avatar/occlusion.py)
+  face          facial expressions (scripts/avatar/face.py: MediaPipe's landmark and blendshape models on crops placed
+                 by the skeleton's head, CPU) in a thread beside 1 and 3, applied as VRM expressions in 4
   6. composite   clean plate, then the avatars back to front (z-buffer between avatars, at the supersampled
                  resolution so that intersecting avatars do not alias), each hidden where a real object is in front
                  of it; hidden pixels show the real frame (the occluder)
@@ -19,7 +21,7 @@ composited once frame t+1 is rendered (two frames of render buffers in memory, e
 usage (repo root):
   .venv/Scripts/python.exe scripts/avatar_app.py --pipeline_out <run>/pipeline_out --out <run>/avatar
       [--vrm assets/vrm_models/yuzuhako_Shuera.vrm] [--fps 30] [--no_occlusion] [--no_removal] [--no_spring]
-      [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock] [--fusion_keyframe]
+      [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock] [--fusion_keyframe] [--no_face]
       [--targets 1,3] [--vrm_map 1=a.vrm,3=b.vrm] [--fusion_state <occ>/fusion_state.pkl] [--export_layers <dir>]
       [--overrides <overrides.json>]
 --targets: only these people are erased and replaced; the others stay real, and where one of them is in front of an
@@ -255,6 +257,8 @@ def main(a):
         pid, _, path = item.partition("=")
         vrm_of[int(pid)] = path
     stats["vrm"] = {str(p): os.path.basename(v) for p, v in vrm_of.items()}
+    # the face crops follow the unsmoothed head (the image's face), taken before smooth_skeletons changes cam_t
+    heads = {k: z["keypoints_3d"][:5] + z["cam_t"] for k, z in sk.items() if "keypoints_3d" in z}
     if a.smooth > 0 or a.foot_lock:
         from avatar.smooth import smooth_skeletons
         sk, ss = smooth_skeletons(sk, pids, sigma_s=a.smooth, fps=a.fps, foot_lock=a.foot_lock)
@@ -281,10 +285,13 @@ def main(a):
     if not a.no_removal:
         import threading
         extra = {}
-        if getattr(a, "removal", "classic") == "v2":   # removal_gpu work_short / static_bg / LaMa (its docstring)
+        mode = getattr(a, "removal", "mosaic")
+        if mode != "classic":   # removal_gpu work_short / static_bg / mosaic_sec / shadow + LaMa (its docstring)
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
             from avatar.inpaint_lama import inpaint as lama
-            extra = dict(work_short=480, static_bg=True, inpaint=lama)
+            extra = dict(work_short=480, inpaint=lama)
+            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5),
+                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True)}[mode])
             a.gpu_removal = True
         elif getattr(a, "gpu_removal", False):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
@@ -307,6 +314,12 @@ def main(a):
             removal["s"] = time.perf_counter() - t0
         removal["thread"] = threading.Thread(target=_removal, daemon=True)
         removal["thread"].start()
+
+    # facial expressions: CPU, ~4 ms per face, beside the removal and fusion v2 (face.py)
+    face = None
+    if getattr(a, "face", True) and heads:
+        from avatar.face import FaceThread
+        face = FaceThread(frames, heads, focal * sc, OW / 2, OH / 2, pids, n, sigma=a.face_sigma).start()
 
     # 1. occlusion decisions (fusion v2 on the meshes)
     fus = None
@@ -363,6 +376,27 @@ def main(a):
         stats["removal_s"] = round(removal["s"], 1)                    # its own run time (overlapped with fusion)
         stats["removal_wait_s"] = round(time.perf_counter() - t0, 1)   # what it still added after fusion
 
+    expr, fmap = {}, {}          # fmap: per target (each may have its own VRM and expression names)
+    if face is not None:
+        from avatar.face import vrm_mapping
+        t0 = time.perf_counter()
+        try:
+            fr = face.result()
+        except (ImportError, OSError, ValueError) as e:   # no ai-edge-litert / checkpoint: neutral faces
+            print(f"[avatar] WARNING: no facial expressions ({type(e).__name__}: {e}); "
+                  f"pip install ai-edge-litert, scripts/setup.py downloads mediapipe/face_landmarker.task", flush=True)
+            stats["face_error"] = f"{type(e).__name__}: {e}"
+            fr = None
+        if fr is not None:
+            expr = fr["expr"]
+            fmap = {pid: vrm_mapping(models[vrm_of[pid]].blendshapes) for pid in pids}
+            stats["face_mapping"] = {str(pid): m[1] for pid, m in fmap.items()}
+            fmap = {pid: m[0] for pid, m in fmap.items()}
+            stats["face_s"] = round(fr["s"], 1)                            # its own run time (overlapped)
+            stats["face_wait_s"] = round(time.perf_counter() - t0, 1)      # what it still added
+            stats["face_read"] = len(fr["raw"])
+            stats["face_confident"] = int(sum(p > 0.5 for _, p in fr["raw"].values()))
+
     hider = None
     if fus is not None:
         from avatar.occlusion import AvatarHider
@@ -372,6 +406,7 @@ def main(a):
             overrides = Overrides.load(a.overrides)
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
     ik_err = {}
+    head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
     ss = rz.ssaa
     dev = None
@@ -393,10 +428,15 @@ def main(a):
             if z is None:
                 act.reset()             # not tracked here: restart the spring simulation when the person returns
                 continue
+            e = expr.get((pid, i))
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
-                     gpu=dev)
+                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None)
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
+            hb = act.bone_cam("head")
+            if hb is not None and hb[2] > 0:
+                head_px.setdefault(str(pid), {})[stems[i]] = [round(float(K[0, 0] * hb[0] / hb[2] + K[0, 2]), 1),
+                                                            round(float(K[1, 1] * hb[1] / hb[2] + K[1, 2]), 1)]
             box = act.screen_box(K)
             if box is None:
                 continue
@@ -525,7 +565,7 @@ def main(a):
                       if k.startswith("ik_")), flush=True)
     outs.close()
     comps.close()
-    del frames, plates, removal, base, hider, fus   # every view of the scratch arrays, so the files can go
+    del frames, plates, removal, base, hider, fus, face   # every view of the scratch arrays, so the files can go
     for f in ("frames", "person_masks", "removal_holes", "removal_excl", "removal_grays", "removal_plates"):
         release(f"{sdir}/{f}.npy")
     try:
@@ -534,6 +574,7 @@ def main(a):
         pass
     stats["total_s"] = round(time.perf_counter() - t_all, 1)
     json.dump(stats, open(os.path.join(a.out, "stats.json"), "w"), indent=1)
+    json.dump(head_px, open(os.path.join(a.out, "avatar_heads.json"), "w"))
     print(f"[avatar] done in {stats['total_s']} s -> {a.out}", flush=True)
     return stats
 
@@ -557,10 +598,11 @@ if __name__ == "__main__":
     ap.add_argument("--removal_workers", type=int, default=None,
                     help="CPU workers for independent clean-plate frames (1 for sequential processing; default 4); "
                          "with --gpu_removal, the threads that compute its homographies (default: all logical CPUs)")
-    ap.add_argument("--removal", choices=["classic", "v2"], default="classic",
-                    help="v2: the GPU removal with homographies on a 480 px grid, a window background for a static "
+    ap.add_argument("--removal", choices=["classic", "v2", "mosaic", "mosaic_shadow"], default="mosaic",
+                    help="mosaic (default) / v2 (judged better than classic by eye, reports/compare/2026-10-24/removal_rework*): the GPU removal with homographies on a 480 px grid, a window background for a static "
                          "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
-                         "inpaint_lama.py; implies --gpu_removal)")
+                         "inpaint_lama.py; implies --gpu_removal). mosaic: one background per 0.5 s window warped into "
+                         "each frame; mosaic_shadow: also the targets' cast shadows (removal_gpu docstring)")
     ap.add_argument("--gpu_removal", action="store_true",
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
@@ -573,6 +615,10 @@ if __name__ == "__main__":
     ap.add_argument("--export_layers", default=None, help="write the editor's preview layers to this directory")
     ap.add_argument("--overrides", default=None,
                     help="manual occlusion corrections expanded to fusion tracks (avatar/occlusion.py: Overrides)")
+    ap.add_argument("--no_face", dest="face", action="store_false",
+                    help="neutral avatar faces (no facial expressions from scripts/avatar/face.py)")
+    ap.add_argument("--face_sigma", type=float, default=1.0,
+                    help="Gaussian sigma [frames] of the expression smoothing (face.py)")
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")

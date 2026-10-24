@@ -11,7 +11,7 @@
 pnpm install                         # リポジトリのルートで
 
 # Tauri なし（ブラウザで http://localhost:1420）。ファイルはメモリ上にだけ置かれ、再読み込みで消える
-pnpm --filter @vvlog/desktop dev          # 既定の接続 = モックサーバー（F14、http://127.0.0.1:8766、トークン mock）
+pnpm --filter @vvlog/desktop dev          # 既定の接続 = 登録した接続（開発用モック・シミュレーターも一覧に出る。モックは `pnpm mock` で起動）
 pnpm --filter @vvlog/desktop dev:memory   # 既定の接続 = シミュレーター（サーバー不要。ウィザードを端から端まで流せる）
 
 # デスクトップアプリ

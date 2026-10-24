@@ -253,6 +253,11 @@ def build_specs() -> tuple[list[URLFile], list[HFRepoDir], list[HFFile]]:
             url="https://huggingface.co/depth-anything/Depth-Anything-V2-Large/resolve/main/depth_anything_v2_vitl.pth?download=true",
             rel_out="depth_anything_v2_vitl.pth",
         ),
+        URLFile(   # avatar facial expressions (scripts/avatar/face.py; Apache-2.0)
+            name="MediaPipe Face Landmarker",
+            url="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+            rel_out="mediapipe/face_landmarker.task",
+        ),
     ]
 
     repo_dirs = [

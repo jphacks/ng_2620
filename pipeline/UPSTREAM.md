@@ -3,7 +3,7 @@
 | 層 | 出どころ |
 |---|---|
 | 土台 | 公式 SAM-Body4D（Mingqi Gao）`21af1020979e`（2026-01-27）。MIT。上流モデルのコード `models/`（sam3・sam_3d_body：SAM License、diffusion_vas：MIT） |
-| 改善 | 実験用 sandbox `vlog_JPHack2026` の `image_analytics`。**`2568f80` まで取り込み済み**（作者・メッセージはそのまま） |
+| 改善 | 実験用 sandbox `vlog_JPHack2026` の `image_analytics`。**`fad6c82` まで取り込み済み**（人物除去 mosaic・表情まで）（作者・メッセージはそのまま） |
 | サービス化 | このリポジトリで追加（下表） |
 
 ## 取り込みの方針

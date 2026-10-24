@@ -4,9 +4,13 @@ GPU なしで本物と同じ API・同じイベントの流れ・同じ名前の
 中身は本サーバー（`services/gpu_server`）そのもので、ステージだけを再生用（`mock_server/replay.py`）に差し替えている。
 
 ```sh
-cd services/gpu_server && uv venv .venv -p 3.11 && uv pip install -p .venv/bin/python -e '.[dev]'   # 初回だけ
-cd ../mock_server && ../gpu_server/.venv/bin/python -m mock_server            # http://127.0.0.1:8766  token: mock
+sh services/mock_server/run.sh                     # リポジトリのルートで。macOS / Linux（pnpm mock も同じ）
+powershell -ExecutionPolicy Bypass -File services\mock_server\run.ps1    # Windows
+# → http://127.0.0.1:8766、トークン mock
 ```
+
+初回だけ `services/gpu_server/.venv` を作って依存を入れる（uv があれば uv、無ければ `python3 -m venv` + pip。1 分ほど）。2 回目からはすぐ起動する。
+前提は Python 3.10 以上と ffmpeg（`ffprobe` が PATH にあること。アップロードの検証に使う）。引数は `--port`、`--fixture <dir>`。
 
 | 環境変数 | 既定 | 意味 |
 |---|---|---|

@@ -30,6 +30,7 @@ dependencies = [
     "transformers~=4.57.3",
     "accelerate~=1.12.0",
     "imageio[ffmpeg]",
+    "ai-edge-litert",   # TFLite runtime of the avatar facial expressions (scripts/avatar/face.py)
 
     # MoGe
     "MoGe @ git+https://github.com/microsoft/MoGe.git",
