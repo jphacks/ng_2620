@@ -1,6 +1,7 @@
 export type * from "./avatar";
 export type * from "./cache";
 export type * from "./compute";
+export type * from "./localServer";
 export type * from "./media";
 export type * from "./project";
 export type * from "./settings";

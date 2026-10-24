@@ -22,7 +22,8 @@ import { isTauri } from "@/infrastructure/platform";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
 import { FileSecretStore, FileSettings, LocalStorageSecretStore, LocalStorageSettings } from "@/infrastructure/settings/settingsStores";
 import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
-import { randomIds, systemClock } from "@/infrastructure/system/common";
+import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
+import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
 import { tauriDialog, tauriFileDrop, tauriNotifier, tauriShell } from "@/infrastructure/system/tauriSystem";
 import type { BackendMode, Services } from "@/presentation/shared/services";
 
@@ -79,6 +80,7 @@ export function createServices(): Services {
 
   const clock = systemClock;
   const submit = new UC.SubmitJob();
+  const localServer = inTauri ? tauriLocalServer : browserLocalServer;
 
   return {
     env: { isTauri: inTauri, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
@@ -109,6 +111,10 @@ export function createServices(): Services {
       selectActiveProfile: new UC.SelectActiveProfile({ settings }),
       testConnection: new UC.TestConnection({ compute }),
       watchConnection: new UC.WatchConnection({ clock }),
+      saveLocalServerConfig: new UC.SaveLocalServerConfig({ settings }),
+      startLocalServer: new UC.StartLocalServer({ settings, secrets, server: localServer, compute, clock, newToken: randomToken }),
+      stopLocalServer: new UC.StopLocalServer({ server: localServer }),
+      localServerStatus: () => localServer.status(),
       submitJob: submit,
       subscribeJob: new UC.SubscribeJob({ clock }),
       fetchArtifact: new UC.FetchArtifact({ projects, cache }),

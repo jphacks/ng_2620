@@ -29,6 +29,7 @@ export type LocalErrorCode =
   | "SAVE_FAILED"
   | "PROJECT_TOO_NEW"
   | "PROJECT_INVALID"
+  | "LOCAL_SERVER_FAILED" // この PC の GPU サーバーを起動できない
   | "UNKNOWN";
 
 export type AppErrorCode = ApiErrorCode | LocalErrorCode;

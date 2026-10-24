@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { ComputeBackendFactory } from "@/application/ports/compute";
+import type { LocalServerStatus } from "@/application/ports/localServer";
 import type { LocalFilePort } from "@/application/ports/media";
 import type { ProjectRepositoryPort } from "@/application/ports/project";
 import type { SettingsPort } from "@/application/ports/settings";
@@ -48,6 +49,10 @@ export interface Services {
     selectActiveProfile: UC.SelectActiveProfile;
     testConnection: UC.TestConnection;
     watchConnection: UC.WatchConnection;
+    saveLocalServerConfig: UC.SaveLocalServerConfig;
+    startLocalServer: UC.StartLocalServer;
+    stopLocalServer: UC.StopLocalServer;
+    localServerStatus: () => Promise<LocalServerStatus>;
     submitJob: UC.SubmitJob;
     subscribeJob: UC.SubscribeJob;
     fetchArtifact: UC.FetchArtifact;

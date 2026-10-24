@@ -1,6 +1,6 @@
-// 設定 > 接続（S6、F03）：プロファイルの追加・編集・削除・既定の選択、接続テスト
+// 設定 > 接続（S6、F03）：プロファイルの追加・編集・削除・既定の選択、接続テスト、この PC の GPU サーバー（Tauri のみ）
 
-import { CheckCircle2, Plus, Server, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Cpu, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
 import type { TestResult } from "@/application/usecases";
 import type { ComputeProfile, ProfileKind } from "@/domain/connection";
@@ -11,6 +11,7 @@ import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { Badge, Button, ConfirmDialog, cx, EmptyState, ErrorNotice, Label, Select, Spinner, StatusDot, TextInput } from "@/presentation/shared/ui";
+import { LocalServerPanel } from "./LocalServerPanel";
 
 const T = ja.connection;
 
@@ -19,20 +20,42 @@ function newProfile(id: string): ComputeProfile {
 }
 
 export function ConnectionSettings() {
-  const { platform } = useServices();
+  const { platform, env } = useServices();
   const profiles = useConnectionStore((s) => s.profiles);
   const activeProfileId = useConnectionStore((s) => s.activeProfileId);
   const status = useConnectionStore((s) => s.state.status);
   const [editing, setEditing] = useState<{ profile: ComputeProfile; isNew: boolean } | null>(null);
+  const [showLocal, setShowLocal] = useState(false);
+
+  const edit = (next: { profile: ComputeProfile; isNew: boolean } | null) => {
+    setShowLocal(false);
+    setEditing(next);
+  };
+  const openLocal = () => {
+    setEditing(null);
+    setShowLocal(true);
+  };
 
   const startNew = () => {
     const id = `prof_${platform.clock.now().getTime().toString(36)}`;
-    setEditing({ profile: newProfile(id), isNew: true });
+    edit({ profile: newProfile(id), isNew: true });
   };
 
   return (
     <div className="flex h-full min-h-0">
       <div className="flex w-72 shrink-0 flex-col border-r border-border">
+        {env.isTauri && (
+          <div className="border-b border-border p-2">
+            <button
+              type="button"
+              onClick={openLocal}
+              className={cx("flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-raised", showLocal && "bg-raised")}
+            >
+              <Cpu size={14} className="shrink-0 text-muted" />
+              <span className="truncate font-medium">{T.local.title}</span>
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between px-4 py-3">
           <div className="font-semibold">{T.profiles}</div>
           <Button size="sm" icon={<Plus size={14} />} onClick={startNew}>
@@ -44,7 +67,7 @@ export function ConnectionSettings() {
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => setEditing({ profile: p, isNew: false })}
+                onClick={() => edit({ profile: p, isNew: false })}
                 className={cx(
                   "flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-raised",
                   editing?.profile.id === p.id && "bg-raised",
@@ -66,13 +89,20 @@ export function ConnectionSettings() {
         </ul>
       </div>
       <div className="min-w-0 flex-1 overflow-auto p-6">
-        {editing ? (
+        {showLocal ? (
+          <LocalServerPanel />
+        ) : editing ? (
           <ProfileEditor key={editing.profile.id} initial={editing.profile} isNew={editing.isNew} onDone={() => setEditing(null)} />
         ) : profiles.length === 0 ? (
           <EmptyState icon={<Server size={32} />} title={T.profiles} body={T.empty}>
             <Button variant="primary" icon={<Plus size={14} />} onClick={startNew}>
               {T.add}
             </Button>
+            {env.isTauri && (
+              <Button icon={<Cpu size={14} />} onClick={openLocal}>
+                {T.local.useThisPc}
+              </Button>
+            )}
           </EmptyState>
         ) : (
           <div className="text-muted">{T.selectHint}</div>

@@ -9,9 +9,9 @@ import type { ClockPort } from "../ports/system";
 
 export class ListProfiles {
   constructor(private readonly d: { settings: SettingsPort }) {}
-  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId">> {
+  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId" | "localServer">> {
     const s = await this.d.settings.load();
-    return { profiles: s.profiles, activeProfileId: s.activeProfileId };
+    return { profiles: s.profiles, activeProfileId: s.activeProfileId, localServer: s.localServer };
   }
 }
 

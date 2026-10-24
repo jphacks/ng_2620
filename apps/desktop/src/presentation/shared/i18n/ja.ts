@@ -2,10 +2,13 @@
 
 import type { LicenseBadge } from "@/domain/avatar";
 import type { ProfileProblem } from "@/domain/connection";
+import type { LocalServerProblem } from "@/domain/localServer";
 import type { JobStatus, JobType, StageName, StageStatus } from "@/domain/job";
 import type { ProjectPhase } from "@/domain/project";
+import { IS_MAC } from "../commands/useCommands";
 
 const pct = (r: number) => `${Math.round(r * 100)}%`;
+const REVEAL = IS_MAC ? "Finder で表示" : "エクスプローラーで表示";
 
 export function formatSeconds(sec: number): string {
   if (!Number.isFinite(sec)) return "—";
@@ -88,7 +91,7 @@ export const ja = {
     deleteTitle: (name: string) => `「${name}」を削除しますか？`,
     deleteBody: "プロジェクトのフォルダをゴミ箱に移動します。",
     deleteServerBody: "GPU サーバー上の動画と解析結果も削除します。元に戻せません。",
-    revealProject: "Finder で表示",
+    revealProject: REVEAL,
     overrides: (n: number) => `修正 ${n} 件`,
     sample: "サンプル",
     phase: {
@@ -237,7 +240,7 @@ export const ja = {
     downloading: "完成した動画を受け取っています…",
     done: "完了",
     play: "再生",
-    reveal: "Finder で表示",
+    reveal: REVEAL,
     needsRender: "再描画が必要です",
     needsRenderBody: "描画した後にキャストが変わっています。",
     renderAndExport: "再描画して書き出す",
@@ -304,6 +307,42 @@ export const ja = {
     devSim: "開発用シミュレーター",
     empty: "接続プロファイルがありません。GPU サーバーの URL とトークンを登録してください。",
     selectHint: "左の一覧から接続を選んで編集するか、追加してください。",
+    local: {
+      title: "この PC の GPU サーバー",
+      profileName: "この PC",
+      intro: "services/gpu_server をこのアプリから起動・停止します。トークンは自動で作られ、接続「この PC」が登録されて既定になります。",
+      useThisPc: "この PC の GPU を使う",
+      serverDir: "サーバーのフォルダ",
+      serverDirHint: "C:\\…\\ng_2620\\services\\gpu_server",
+      serverDirNote: "フォルダの中に .venv（run_local.ps1 を一度実行すると作られます）が必要です。",
+      python: "推論用の Python",
+      pythonHint: "C:\\…\\pipeline\\.venv\\Scripts\\python.exe",
+      pythonNote: "torch と pipeline の依存が入った Python（VVLOG_PYTHON）。",
+      port: "ポート",
+      autoStart: "アプリの起動時に自動で起動する",
+      browse: "参照…",
+      start: "起動",
+      starting: "起動しています…",
+      stop: "停止",
+      saved: "この PC の GPU サーバーの設定を保存しました",
+      started: "この PC の GPU サーバーを起動しました",
+      stopped: "この PC の GPU サーバーを停止しました",
+      stopTitle: "GPU サーバーを停止しますか？",
+      stopBody: "実行中のジョブは中断され、次に起動したときに失敗として扱われます。",
+      status: {
+        running: (pid: number | null) => `動いています${pid ? `（PID ${pid}）` : ""}`,
+        stopped: "停止しています",
+        exited: (code: number | null) => `終了しました（終了コード ${code ?? "—"}）`,
+      },
+      log: "サーバーのログ",
+      logEmpty: "まだ出力はありません",
+      browserOnly: "ブラウザ版ではサーバーを起動できません。デスクトップアプリで開いてください。",
+      problems: {
+        server_dir_required: "サーバーのフォルダを選んでください",
+        python_required: "推論用の Python を選んでください",
+        port_invalid: "ポートは 1〜65535 の数で指定してください",
+      } satisfies Record<LocalServerProblem, string>,
+    },
   },
   general: {
     cache: "キャッシュ",
@@ -385,6 +424,7 @@ export const ja = {
     API_VERSION_MISMATCH: { title: "API 版が合いません", body: () => "サーバーとアプリの版を揃えてください。" },
     PROJECT_TOO_NEW: { title: "新しい版のアプリで作られています", body: () => "アプリを更新してから開いてください。" },
     PROJECT_INVALID: { title: "プロジェクトを開けません", body: () => "project.json が壊れているか、形式が違います。" },
+    LOCAL_SERVER_FAILED: { title: "この PC の GPU サーバーを起動できません", body: (d: { message?: string }) => d.message ?? "" },
     CANCELED: { title: "取り消しました", body: () => "" },
     UNKNOWN: { title: "エラーが起きました", body: (d: { message?: string }) => d.message ?? "" },
   },

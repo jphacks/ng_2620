@@ -19,9 +19,15 @@ export const systemClock: ClockPort = {
     }),
 };
 
+const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
 export const randomIds: IdPort = {
   newId(prefix: string) {
-    const bytes = crypto.getRandomValues(new Uint8Array(8));
-    return `${prefix}_${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+    return `${prefix}_${hex(crypto.getRandomValues(new Uint8Array(8)))}`;
   },
 };
+
+/** この PC の GPU サーバーの API トークン（48 桁の 16 進） */
+export function randomToken(): string {
+  return hex(crypto.getRandomValues(new Uint8Array(24)));
+}

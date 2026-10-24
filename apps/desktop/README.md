@@ -23,6 +23,12 @@ pnpm typecheck
 ```
 
 開発ビルドでは、接続プロファイルに「開発用モック」と「開発用シミュレーター（`memory://sim`）」が自動で入る（設定 > 接続で切り替えられる）。
+
+### この PC の GPU サーバーを使う（Windows）
+
+設定 > 接続 >「この PC の GPU サーバー」で、`services/gpu_server` のフォルダと推論用の Python（`VVLOG_PYTHON`）を選んで［起動］。
+アプリがサーバーを子プロセスとして起動し（`src-tauri/src/commands/server.rs`）、トークンを作って接続「この PC」（`http://127.0.0.1:<ポート>`）を既定にする。
+アプリを閉じるとサーバーも止まる。`services/gpu_server/.venv` は事前に要る（`run_local.ps1` を一度実行すると作られる）。
 シミュレーターの速さと失敗の再現は `.env.memory` の `VITE_SIM_SPEED` / `VITE_SIM_FAIL=track:NO_PERSON_FOUND`。
 
 ## 構成
@@ -43,7 +49,7 @@ src/
     app/           container.ts（DI）、ルーティング、タイトルバー・ステータスバー、ウィザード、エディタ枠
     shared/        UI 部品、tokens.css、i18n/ja.ts、ストア（project / jobs / connection）、CommandRegistry
     features/      home / import / connection / jobs / cast / avatar-library / export / settings
-src-tauri/         Rust（fs / media(ffprobe) / hash / net）。capabilities/default.json
+src-tauri/         Rust（fs / media(ffprobe) / hash / net / server（この PC の GPU サーバー））。capabilities/default.json
 ```
 
 依存規則は ESLint（`import/no-restricted-paths`）で強制している：domain は外部ライブラリを使わない、presentation から infrastructure を直接 import しない（`container.ts` だけ例外）、feature 同士で import しない。
@@ -68,7 +74,9 @@ feature をまたぐ画面（取り込みウィザード、設定）は `present
 
 ## 未対応・確認していないこと
 
-- **Rust 側は、この環境に Rust が無いためコンパイルしていない**。初回の `pnpm tauri dev` でエラーが出たら直す必要がある。
+- Rust 側は Windows（stable、MSVC）で `cargo check` / `cargo clippy` / `cargo build` / `cargo test` が通ることを確かめた。macOS ではまだビルドしていない。
+- `pnpm tauri dev` が `cargo metadata ... program not found` で止まるときは、`cargo` が PATH に無い。Rust を入れた後はターミナル（VS Code なら VS Code ごと）を起動し直す。
 - ffprobe のサイドカーは同梱していない。実行ファイルの隣か PATH の `ffprobe` を使い、無ければ `<video>` で長さと寸法だけを読む（コーデック・音声はサーバーの ingest に任せる）。
 - macOS の `.icns` は未作成。`pnpm tauri icon src-tauri/icons/icon.png` で作れる。
-- キーチェーン保存（P1）、ローカルサーバーの自動起動（P1）、HTTP 許可範囲の絞り込み（P1）。
+- キーチェーン保存（P1）、HTTP 許可範囲の絞り込み（P1）。
+- この PC の GPU サーバーは macOS では試していない（停止は子プロセスだけで、推論のサブプロセスまでは止めない）。

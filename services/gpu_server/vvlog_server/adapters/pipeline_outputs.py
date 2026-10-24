@@ -96,13 +96,29 @@ def to_h264(src: Path, dest: Path, crf: int = 23, size: tuple[int, int] | None =
     return dest
 
 
-def frames_to_h264(frames_dir: Path, fps: float, dest: Path, crf: int = 20) -> Path:
+def _concat_entry(p: Path) -> str:
+    return "file '" + p.resolve().as_posix().replace("'", "'\\''") + "'\n"
+
+
+def frames_to_h264(frames_dir: Path, fps: float, dest: Path, crf: int = 20) -> Path | None:
     """avatar_app's frames/<stem>.jpg at their exact size (its own mp4 goes through imageio, which stretches the
-    height to a multiple of 16: 854 -> 864)."""
-    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-framerate", str(fps), "-pattern_type", "glob",
-                    "-i", str(frames_dir / "*.jpg"), "-c:v", "libx264", "-crf", str(crf), "-pix_fmt", "yuv420p",
-                    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", str(dest)],
-                   check=True, capture_output=True)
+    height to a multiple of 16: 854 -> 864). None without ffmpeg or frames.
+    Read through the concat demuxer: `-pattern_type glob` is not in Windows builds, and the stems need not be
+    0-based and gapless for %08d (image2 stops silently at a gap). The last file is listed twice so that its
+    duration counts on older ffmpeg; newer ones emit it as an extra frame, hence -frames:v."""
+    files = sorted(frames_dir.glob("*.jpg"))
+    if not files or not shutil.which("ffmpeg"):
+        return None
+    lst = dest.with_name(dest.stem + ".frames.txt")
+    lst.write_text("".join(_concat_entry(p) + f"duration {1 / fps}\n" for p in files) + _concat_entry(files[-1]),
+                   encoding="utf-8")
+    try:
+        subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+                        "-r", str(fps), "-frames:v", str(len(files)), "-c:v", "libx264", "-crf", str(crf), "-pix_fmt", "yuv420p",
+                        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", str(dest)],
+                       check=True, capture_output=True)
+    finally:
+        lst.unlink(missing_ok=True)
     return dest
 
 
@@ -126,6 +142,6 @@ class FsPipelineOutputs:
                     z.write(f, f.relative_to(layers).as_posix())
         return dest
 
-    def frames_to_h264(self, frames_dir: Path, fps: float, dest: Path) -> Path:
+    def frames_to_h264(self, frames_dir: Path, fps: float, dest: Path) -> Path | None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         return frames_to_h264(frames_dir, fps, dest)

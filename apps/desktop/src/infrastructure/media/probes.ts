@@ -19,7 +19,11 @@ export function probeWithVideoElement(url: string, timeoutMs = 5000): Promise<Pi
     const timer = setTimeout(() => done(() => reject(new Error("動画のメタ情報を読めませんでした（時間切れ）"))), timeoutMs);
     v.preload = "metadata";
     v.muted = true;
-    v.onloadedmetadata = () => done(() => resolve({ durationSec: v.duration, width: v.videoWidth, height: v.videoHeight }));
+    v.onloadedmetadata = () => {
+      // done() が src を外して読み直すと duration / videoWidth が NaN / 0 に戻るので、先に読む
+      const m = { durationSec: v.duration, width: v.videoWidth, height: v.videoHeight };
+      done(() => resolve(m));
+    };
     v.onerror = () => done(() => reject(new Error("この動画はプレビューで読めません")));
     v.src = url;
   });

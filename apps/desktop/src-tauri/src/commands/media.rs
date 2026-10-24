@@ -1,7 +1,7 @@
 //! 動画のメタ情報（F02 の事前検証）。同梱の ffprobe サイドカー（実行ファイルの隣）→ PATH の ffprobe の順に探す。
 //! 使えなければエラーを返し、JS 側が <video> の loadedmetadata で代用する
 
-use super::{err, CmdResult};
+use super::{err, hide_console, CmdResult};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -32,16 +32,6 @@ fn ffprobe_path() -> PathBuf {
     }
     PathBuf::from(name)
 }
-
-#[cfg(windows)]
-fn hide_console(cmd: &mut Command) {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    cmd.creation_flags(CREATE_NO_WINDOW);
-}
-
-#[cfg(not(windows))]
-fn hide_console(_cmd: &mut Command) {}
 
 /// "30000/1001" → 29.97
 fn parse_rate(v: &Value) -> Option<f64> {
