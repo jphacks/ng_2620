@@ -26,6 +26,12 @@ Placement: one uniform scale per person and a per-frame translation.
           the whole skeleton length instead puts the soles 13-25 cm into the floor when the hips are matched, or the
           hands 17-30 cm off when the soles are matched, as virtual-vlog S06 does).
   translation = the hips joint (3D).
+  near  = a person close to the camera shows the head and the upper body only; with the hips placement the shorter
+          trunk puts the avatar's head on the person's chest (a selfie at 0.7 m: the head 159 px low at 480 px, the
+          hips out of frame). near_weights() turns the head's distance into a weight (1 within NEAR_M[0], 0 beyond
+          NEAR_M[1], smoothed over time) that blends the placement from the hips to the neck and the scale from the
+          leg ratio to the head ratio (head_scale: neck -> crown of the person's mesh / of the avatar's head). The
+          selfie: IoU with the person's mask 0.37 -> 0.65. People beyond NEAR_M[1] are placed as before.
   arms  = 2-bone IK (virtual-vlog retarget.apply_arm_ik) puts the avatar's wrists on the person's wrists, which the
           shorter trunk otherwise leaves low; the hand keeps the person's hand orientation.
   legs  = 2-bone IK (virtual-vlog retarget.apply_leg_ik) puts the soles on the person's soles; the thigh / shin
@@ -45,6 +51,7 @@ from .vrm import VrmModel
 
 S_CAM = np.diag([1.0, -1.0, -1.0]).astype(np.float32)
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mhr_rest_skeleton.npz")
+NEAR_M = (1.2, 2.0)     # head distance [m]: neck placement + head scale within the first, hips + leg scale beyond the second
 
 # VRM bone -> MHR joint whose global rotation drives it. Read off the MHR rest skeleton (parents + rest positions):
 # 1 pelvis; 34-37 spine (37 carries the clavicles); 110 neck; 113 head; legs 2-8 (left) / 18-24 (right): hip, knee,
@@ -164,6 +171,8 @@ class MhrToVrm:
                              for p in self.m.prims])
         self.height_m = float(ys.max() - ys.min())       # rest mesh height at scale 1
         self.vrm_leg = float(np.mean(vleg) + self.vrm_ankle_h)
+        self.neck = hb["neck"]
+        self.vrm_head_h = self._head_height()
 
     # --- scale -----------------------------------------------------------
     def mhr_leg(self, coords):
@@ -178,6 +187,18 @@ class MhrToVrm:
     def leg_scale(self, coords_frames):
         """avatar scale = person's leg (hip..sole) / avatar's leg (hip..sole), median over frames."""
         return float(np.median([self.mhr_leg(c) for c in coords_frames])) / self.vrm_leg
+
+    def head_scale(self, frames):
+        """avatar scale = person's neck -> crown / avatar's, median over frames = [(joint_rots, joint coords, mesh
+        vertices)], all in camera coords. The person's crown: the mesh vertex near the head farthest along the head's
+        up axis from the neck joint (the bones end at the head joint, far below the crown)."""
+        h = []
+        for G, c, V in frames:
+            up = S_CAM @ (G[113] @ self.G0[113].T @ np.array([0, 1, 0], np.float32))
+            near = np.linalg.norm(V - c[113], axis=1) < 0.35
+            if near.any():
+                h.append(float(((V[near] - c[110]) @ up).max()))
+        return float(np.median(h)) / self.vrm_head_h if h else None
 
     # --- pose ------------------------------------------------------------
     def targets(self, G: np.ndarray) -> dict[int, np.ndarray]:
@@ -196,20 +217,24 @@ class MhrToVrm:
         """-> node global matrices (N,4,4) in glTF space (unscaled, untranslated), rotation transfer only."""
         return self.m.global_matrices(self.locals_(self.targets(np.asarray(G, np.float32))))
 
-    def placement(self, g: np.ndarray, scale: float, coords_cam: np.ndarray) -> np.ndarray:
-        """Camera-space translation t (v_cam = scale * A v_gltf + t): the avatar's hips on the person's hips."""
-        return (coords_cam[1] - scale * (self.A @ g[self.hips][:3, 3])).astype(np.float32)
+    def placement(self, g: np.ndarray, scale: float, coords_cam: np.ndarray, near: float = 0.0) -> np.ndarray:
+        """Camera-space translation t (v_cam = scale * A v_gltf + t): the avatar's hips on the person's hips, or
+        with near > 0 blended towards its neck on the person's neck."""
+        t = coords_cam[1] - scale * (self.A @ g[self.hips][:3, 3])
+        if near > 0:
+            t = (1 - near) * t + near * (coords_cam[110] - scale * (self.A @ g[self.neck][:3, 3]))
+        return t.astype(np.float32)
 
     def sole_y(self, g: np.ndarray, scale: float, t: np.ndarray) -> float:
         """Camera y of the avatar's lower sole (y points down)."""
         return max(float((scale * (self.A @ (g[n] @ q)[:3]) + t)[1]) for n, q in self.sole_local.items())
 
-    def solve(self, G, coords_cam, scale, arm_ik=True, leg_ik=True, reach=0.995):
+    def solve(self, G, coords_cam, scale, arm_ik=True, leg_ik=True, reach=0.995, near=0.0):
         """One frame: -> (node globals (N,4,4) glTF, translation t, {limb: end-effector error before IK [m]})."""
         T = self.targets(np.asarray(G, np.float32))
         loc = self.locals_(T)
         g = self.m.global_matrices(loc)
-        t = self.placement(g, scale, coords_cam)
+        t = self.placement(g, scale, coords_cam, near)
         err = {}
         limbs = ([("arm", s, "upper_arm", "lower_arm", "hand", "hand") for s in ("left", "right")] * bool(arm_ik)
                  + [("leg", s, "upper_leg", "lower_leg", "foot", "ankle") for s in ("left", "right")] * bool(leg_ik))
@@ -324,6 +349,32 @@ class MhrToVrm:
                     best = (float(y[k]), P[v][k])
             if best is not None:
                 self.sole_local[n] = np.linalg.inv(self.rest[n]) @ np.append(best[1], 1.0).astype(np.float32)
+
+    def _head_height(self) -> float:
+        """Rest neck -> crown of the avatar (glTF units): the highest rest vertex weighted > 0.5 to the head bone
+        (hair strands and an ahoge hang on their own bones)."""
+        head, top = self.m.humanoid["head"], None
+        for p in self.m.prims:
+            if p.skin is None or p.joints is None:
+                continue
+            col = np.nonzero(np.asarray(self.m.skins[p.skin]["joints"]) == head)[0]
+            if not len(col):
+                continue
+            v = ((p.joints == col[0]) * p.weights).max(1) > 0.5
+            if v.any():
+                P, _ = self.m.skin_primitive(p, self.rest, compute_normals=False)
+                top = max(top or -np.inf, float(P[v][:, 1].max()))
+        neck_y = float(self.rest[self.neck][1, 3])
+        return top - neck_y if top is not None else float(np.linalg.norm(self.prest[self.m.humanoid["head"]]
+                                                                         - self.prest[self.neck])) * 2
+
+
+def near_weights(head_z, fps, sigma_s=0.5):
+    """Head distances [m] of consecutive frames -> placement weights in [0, 1]: 1 within NEAR_M[0], 0 beyond
+    NEAR_M[1], linear between, smoothed over sigma_s seconds so that the avatar does not jump."""
+    from .smooth import _gauss
+    w = np.clip((NEAR_M[1] - np.asarray(head_z, np.float64)) / (NEAR_M[1] - NEAR_M[0]), 0.0, 1.0)
+    return np.clip(_gauss(w, sigma_s * fps), 0.0, 1.0) if w.any() else w
 
 
 def _axis_angle(axis, angle):
