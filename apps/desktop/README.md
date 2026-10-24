@@ -5,7 +5,7 @@
 
 ## 起動
 
-前提：Node 26、pnpm 9（`npm i -g pnpm@9` か `npx pnpm@9`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
+前提：Node 26、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
 
 ```sh
 pnpm install                         # リポジトリのルートで
@@ -20,6 +20,7 @@ pnpm tauri dev                       # macOS / Windows
 pnpm test        # Vitest（domain / application / SSE / VRM / 画面の通しテスト）
 pnpm lint        # ESLint（層の依存規則を含む）
 pnpm typecheck
+pnpm build       # 型チェック + vite build（dist/）
 ```
 
 開発ビルドでは、接続プロファイルに「開発用モック」と「開発用シミュレーター（`memory://sim`）」が自動で入る（設定 > 接続で切り替えられる）。

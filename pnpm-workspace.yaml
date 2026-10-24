@@ -1,3 +1,10 @@
 packages:
   - apps/*
+  # packages/ には今は JS のパッケージが無い（packages/contracts は package.json の無い契約ファイル置き場なので、
+  # ワークスペースのプロジェクトにはならない）。共有の TS パッケージを置くときのために残している
   - packages/*
+
+# pnpm 10 以降は依存の install スクリプトを既定で走らせない。走らせてよいものだけをここに書く
+allowBuilds:
+  esbuild: true # vite が使う。ネイティブバイナリの確認
+  unrs-resolver: true # eslint-import-resolver-typescript が使う。ネイティブバインディングの確認
