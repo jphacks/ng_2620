@@ -21,6 +21,7 @@ usage (repo root):
       [--vrm assets/vrm_models/yuzuhako_Shuera.vrm] [--fps 30] [--no_occlusion] [--no_removal] [--no_spring]
       [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock]
       [--targets 1,3] [--vrm_map 1=a.vrm,3=b.vrm] [--fusion_state <occ>/fusion_state.pkl] [--export_layers <dir>]
+      [--overrides <overrides.json>]
 --targets: only these people are erased and replaced; the others stay real, and where one of them is in front of an
 avatar the avatar is hidden. --fusion_state: the decisions of scripts/occlusion/run_occlusion_stage.py instead of
 running fusion v2 again. --export_layers: the editor's preview layers (scripts/avatar/layers_export.py).
@@ -358,7 +359,11 @@ def main(a):
     hider = None
     if fus is not None:
         from avatar.occlusion import AvatarHider
-        hider = AvatarHider(fus, real=real_people)
+        overrides = None
+        if a.overrides:
+            from avatar.occlusion import Overrides
+            overrides = Overrides.load(a.overrides)
+        hider = AvatarHider(fus, real=real_people, overrides=overrides)
     ik_err = {}
 
     ss = rz.ssaa
@@ -555,6 +560,8 @@ if __name__ == "__main__":
     ap.add_argument("--fusion_state", default=None,
                     help="fusion_state.pkl of scripts/occlusion/run_occlusion_stage.py: reuse its decisions")
     ap.add_argument("--export_layers", default=None, help="write the editor's preview layers to this directory")
+    ap.add_argument("--overrides", default=None,
+                    help="manual occlusion corrections expanded to fusion tracks (avatar/occlusion.py: Overrides)")
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")

@@ -33,10 +33,11 @@ def _nearest_parts(parts, M):
     return parts[iy, ix]
 
 
-def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False, real=()):
+def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False, real=(), override=None):
     """Hide mask over the avatar region A of target p (index k) in frame i. c: prep cache, DA: avatar depth (inf =
     empty). Mirrors fusion.render's per-(i, p) body. real: people who are not replaced (their bodies stay in the
-    frame), for whom the person-person rule applies even with people=False."""
+    frame), for whom the person-person rule applies even with people=False. override(track, pid, i) -> "front" |
+    "behind" | None: the editor's manual correction of the object decision (front hides the whole segment)."""
     from fusion import grasp_veto, unpack
     H, W = A.shape
     hide = np.zeros((H, W), np.float32)
@@ -60,6 +61,9 @@ def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False,
                     hide[C & R & (parts == u["part"]) & ~V] = 1
             continue
         d = dec.get((u["tr"], u["pid"], u["part"], "o"))
+        m = override(u["tr"], u["pid"], i) if override is not None else None
+        if m is not None:
+            d = (m == "front", "OVR") + (tuple(d[2:]) if d is not None else (np.nan, 0.0, 0))
         if d is not None and d[0]:
             reg = masks[u["ci"]] & R & (parts == u["part"]) & ~V
             if gnd is not None:
@@ -99,12 +103,13 @@ class AvatarHider:
     """Per-frame hide masks over the avatars (streaming form of avatar_hides: raw masks of frame i need only frame i;
     the TSMOOTH=2 majority needs the raw masks of i-1, i, i+1)."""
 
-    def __init__(self, fus, people=False, real=()):
+    def __init__(self, fus, people=False, real=(), overrides=None):
         from fusion import P
         from gpu_stage import load_cands
         from prep import load
         from shared_cache import moge_z
         self.P, self.people, self.real = P, people, set(real)
+        self.overrides = overrides     # Overrides or None
         self.ev, self.dec, cache = fus["ev"], fus["dec"], fus["cache"]
         self.c = load(cache)
         self.pids = list(self.c["pids"])
@@ -131,7 +136,7 @@ class AvatarHider:
                 continue
             A = a > 0.02
             h = hide_frame(i, p, k, c, self.ev, self.byf, self.dec, self.masks, Zm, gnd, A, depth[p], P, self.people,
-                           self.real)
+                           self.real, self.overrides.mode if self.overrides is not None else None)
             if not self.people:   # erased targets only: a real person's body in front keeps hiding the avatar
                 others = np.isin(c["L"][i], [q for q in self.pids if q != p and q not in self.real])
                 h[cv2.dilate(others.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0] = 0
@@ -152,6 +157,32 @@ class AvatarHider:
         sm = np.where(votes * 2 > n, 1.0, np.where(votes * 2 < n, 0.0, c0.astype(np.float32))).astype(np.float32)
         sm[~R] = h[~R]
         return sm
+
+
+class Overrides:
+    """The editor's unit corrections, expanded by the server to fusion tracks (designdocs/architecture/
+    pipeline-integration §3.6): {"items": [{"personId", "tracks": [...], "range": [f0, f1], "mode": "front" |
+    "behind"}, ...]} in the order they were made; the last one covering a frame wins."""
+
+    def __init__(self, items):
+        self.by = {}
+        for it in items:
+            for tr in it["tracks"]:
+                self.by.setdefault((int(tr), int(it["personId"])), []).append(
+                    (int(it["range"][0]), int(it["range"][1]), it["mode"]))
+
+    @classmethod
+    def load(cls, path):
+        import json
+        with open(path, encoding="utf-8") as f:
+            return cls(json.load(f)["items"])
+
+    def mode(self, tr, pid, i):
+        m = None
+        for f0, f1, mode in self.by.get((int(tr), int(pid)), ()):
+            if f0 <= i <= f1:
+                m = mode
+        return m
 
 
 def avatar_hides(fus, avatar_alpha, avatar_depth, people=False):
