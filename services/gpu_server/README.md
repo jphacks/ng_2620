@@ -63,7 +63,7 @@ $P opencv-python~=4.12.0.88 einops~=0.8.1 pycocotools~=2.0.10 roma~=1.5.4 omegac
   yacs~=0.1.8 fvcore pyrender~=0.1.45 termcolor~=3.2.0 diffusers==0.29.1 transformers~=4.57.3 accelerate~=1.12.0 \
   'imageio[ffmpeg]' timm ftfy regex iopath trimesh braceexpand~=0.1.7 cloudpickle~=3.1.2 psutil torchmetrics \
   webdataset scipy moderngl ai-edge-litert 'huggingface-hub<1.0' eva-decord
-$P 'git+https://github.com/microsoft/MoGe.git'
+$P 'git+https://github.com/microsoft/MoGe.git' 'huggingface-hub<1.0'        # 固定を渡さないと 2.x に上がり transformers が読めなくなる
 uv pip uninstall -p .venv/bin/python utils3d_moge || true                     # MoGe 同梱版は utils3d.pt が無い
 $P --no-deps 'git+https://github.com/EasternJournalist/utils3d.git'
 ```
@@ -79,6 +79,7 @@ $P --no-deps 'git+https://github.com/EasternJournalist/utils3d.git'
 
 ```sh
 <環境 B の python> -c "import torch; print(torch.cuda.is_available())"     # True
+cd pipeline && <環境 B の python> -c "import sam3, detectron2, moge, utils3d, pyrender, moderngl, decord, ai_edge_litert, transformers, diffusers, pytorch_lightning; print('ok')"
 ```
 
 ## 3. 重み（GPU 機だけ）
@@ -136,6 +137,9 @@ curl -H "Authorization: Bearer $VVLOG_API_TOKEN" http://127.0.0.1:8765/v1/capabi
 | ログに `... does not exist`（`sam3.pt`・`big-lama.pt`・`face_landmarker.task` など） | 重みが無いか `ckpt_root` が違う。§3 を `--write_config` 付きで |
 | `401 Unauthorized`（重みの取得） | Hugging Face のアクセス許諾がまだ、または `HF_TOKEN` 未設定 |
 | 描画で segfault（Linux） | TF / JAX が読み込まれて EGL が壊れる。サーバーは `USE_TF=0` 等を自動で渡す。手でスクリプトを動かすときも付ける |
+| `ValueError: Key backend: 'module://matplotlib_inline...'`（Colab・Jupyter から手で実行したとき） | ノートブックの `MPLBACKEND` を引き継いでいる。`export MPLBACKEND=Agg`（サーバー経由のジョブは自動で Agg） |
+| `huggingface-hub>=0.34.0,<1.0 is required ... found huggingface-hub==2.x` | 後から入れたもの（MoGe など）が hub を上げた。`uv pip install -p .venv/bin/python 'huggingface-hub<1.0'` |
+| `The detected CUDA version (13.0) mismatches ... PyTorch (12.4)`（detectron2 のビルド） | torch を `nvcc --version` と同じ CUDA 版で入れ直す（§2） |
 | `GPU_OOM` | 同じ GPU で他の処理が動いている。ジョブは 1 本ずつ流す設計（`VVLOG_GPU_IDS` は 1 枚） |
 | サーバーを再起動したら実行中のジョブが `INTERRUPTED` | 仕様。アプリから再実行する |
 | ジョブの詳細を見たい | `GET /v1/jobs/{id}/logs`、または `data/projects/<prj>/work/<job>/*.log` |
