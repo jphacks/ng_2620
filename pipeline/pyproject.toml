@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sam-body4d"
+version = "0.1.0"
+description = "SAM-Body4D: Training-Free 4D Human Body Mesh Recovery from Videos"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "gradio~=6.0.0",
+    "opencv-python~=4.12.0.88",
+    "einops~=0.8.1",
+    "decord~=0.6.0",
+    "pycocotools~=2.0.10",
+    "psutil~=7.1.3",
+    "braceexpand~=0.1.7",
+    "roma~=1.5.4",
+    "omegaconf~=2.3.0",
+    "pytorch_lightning",
+    "yacs~=0.1.8",
+    "matplotlib~=3.10.7",
+    "cloudpickle~=3.1.2",
+    "fvcore~=0.1.5.post20221221",
+    "pyrender~=0.1.45",
+    "termcolor~=3.2.0",
+    "diffusers==0.29.1",
+    "transformers~=4.57.3",
+    "accelerate~=1.12.0",
+    "imageio[ffmpeg]",
+
+    # MoGe
+    "MoGe @ git+https://github.com/microsoft/MoGe.git",
+]
+
+[tool.setuptools]
+packages = { find = { where = ["."] , include = ["models", "models.*"] } }
