@@ -19,6 +19,7 @@ def pipeline_env(ctx: JobContext) -> dict:
         "CUDA_VISIBLE_DEVICES": str(ctx.extra.get("gpu_id", "0")),
         "FUSION_DEPTH": s.fusion_depth,
         "PYTHONIOENCODING": "utf-8",
+        "MPLBACKEND": "Agg",          # headless: never inherit a notebook / GUI backend (Colab sets matplotlib_inline)
     }
     if sys.platform.startswith("linux"):
         env.update({"PYOPENGL_PLATFORM": "egl", "MODERNGL_BACKEND": "egl"})
