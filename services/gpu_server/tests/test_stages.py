@@ -100,6 +100,12 @@ def test_render(tmp_path, sample_video):
         assert "hide/2/00000.png" in z.namelist() and "layers.json" not in z.namelist()
         lj = c.get(f"/v1/jobs/{r['jobId']}/artifacts/layers_index", headers=AUTH).json()
         assert lj["avatarIds"] == {"2": av}
+        pv = tmp_path / "preview.mp4"
+        pv.write_bytes(c.get(f"/v1/jobs/{r['jobId']}/artifacts/preview_video", headers=AUTH).content)
+        import subprocess
+        wh = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "stream=width,height,nb_frames",
+                             "-of", "csv=p=0", str(pv)], capture_output=True, text=True).stdout.strip()
+        assert wh == "360,640,60"                       # the proxy size, every frame
         cmd = [x for x, _ in FakePipelineRunner.calls if x[2].endswith("avatar_app.py")][-1]
         assert cmd[cmd.index("--targets") + 1] == "2" and "--no_foot_lock" in cmd and "--no_spring" not in cmd
         assert cmd[cmd.index("--fusion_state") + 1].endswith(f"{aid}/occ/fusion_state.pkl")

@@ -3,6 +3,7 @@ tracking ends ([STAGE][sam3_propagate]), without waiting for the meshes (designd
 from __future__ import annotations
 
 import asyncio
+import json
 
 from ...domain.errors import VvlogError
 from ..ports import PipelineOutputsPort
@@ -81,5 +82,8 @@ class TrackMeshStage:
                 raise VvlogError("NO_PERSON_FOUND", "人物が見つかりませんでした")
         video = self.outputs.latest_mesh_video(pout)
         if video:
-            r.artifact("mesh_preview", await asyncio.to_thread(self.outputs.to_h264, video, pub / "mesh_preview.mp4"))
+            meta = json.loads((ctx.work / "meta.json").read_text(encoding="utf-8"))
+            size = (meta["proxy"]["width"], meta["proxy"]["height"])
+            r.artifact("mesh_preview", await asyncio.to_thread(self.outputs.to_h264, video, pub / "mesh_preview.mp4",
+                                                               size))
         r.stage_finished("mesh")

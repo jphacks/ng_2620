@@ -69,7 +69,9 @@ def fake_avatar_app(cmd):
     lines = ["[avatar] fusion v2 decisions from x", f"[avatar] target {targets[0]}: avatar scale 1.0"]
     for sub in ["clean"] + [f"avatar/{p}" for p in targets] + [f"hide/{p}" for p in targets]:
         (lay / sub).mkdir(parents=True, exist_ok=True)
+    (av / "frames").mkdir(parents=True, exist_ok=True)
     for f in range(n):
+        Image.new("RGB", (360, 640)).save(av / "frames" / f"{f:08d}.jpg")
         (lay / "clean" / f"{f:05d}.webp").write_bytes(b"w")
         for p in targets:
             (lay / "avatar" / str(p) / f"{f:05d}.webp").write_bytes(b"w")

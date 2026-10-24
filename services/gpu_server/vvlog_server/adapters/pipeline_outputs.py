@@ -83,14 +83,26 @@ def latest(pattern_dir: Path, pattern: str) -> Path | None:
     return c[-1] if c else None
 
 
-def to_h264(src: Path, dest: Path, crf: int = 23) -> Path:
-    """The pipeline's mp4s are OpenCV mp4v, which WebViews do not play: re-encode to H.264."""
+def to_h264(src: Path, dest: Path, crf: int = 23, size: tuple[int, int] | None = None) -> Path:
+    """The pipeline's mp4s are OpenCV mp4v or imageio's (height stretched to a multiple of 16), which WebViews may
+    not play or which do not match the proxy: re-encode to H.264, back at `size` (w, h) when given."""
     if not shutil.which("ffmpeg"):
         shutil.copyfile(src, dest)
         return dest
     subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", str(src), "-c:v", "libx264", "-crf", str(crf),
-                    "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-movflags", "+faststart",
+                    "-pix_fmt", "yuv420p", "-vf", f"scale={size[0]}:{size[1]}" if size else "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                    "-movflags", "+faststart",
                     str(dest)], check=True, capture_output=True)
+    return dest
+
+
+def frames_to_h264(frames_dir: Path, fps: float, dest: Path, crf: int = 20) -> Path:
+    """avatar_app's frames/<stem>.jpg at their exact size (its own mp4 goes through imageio, which stretches the
+    height to a multiple of 16: 854 -> 864)."""
+    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-framerate", str(fps), "-pattern_type", "glob",
+                    "-i", str(frames_dir / "*.jpg"), "-c:v", "libx264", "-crf", str(crf), "-pix_fmt", "yuv420p",
+                    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", str(dest)],
+                   check=True, capture_output=True)
     return dest
 
 
@@ -101,9 +113,9 @@ class FsPipelineOutputs:
     def latest_mesh_video(self, pout: Path) -> Path | None:
         return latest(pout, "4d_*.mp4")
 
-    def to_h264(self, src: Path, dest: Path) -> Path:
+    def to_h264(self, src: Path, dest: Path, size: tuple[int, int] | None = None) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        return to_h264(src, dest)
+        return to_h264(src, dest, size=size)
 
     def zip_layers(self, layers: Path, dest: Path) -> Path:
         """clean/, avatar/<pid>/, hide/<pid>/ as stored (contracts §4.2); layers.json is its own artifact."""
@@ -113,3 +125,7 @@ class FsPipelineOutputs:
                 if f.is_file() and f.name != "layers.json":
                     z.write(f, f.relative_to(layers).as_posix())
         return dest
+
+    def frames_to_h264(self, frames_dir: Path, fps: float, dest: Path) -> Path:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        return frames_to_h264(frames_dir, fps, dest)
