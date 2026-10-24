@@ -280,7 +280,13 @@ def main(a):
     removal = {}
     if not a.no_removal:
         import threading
-        if getattr(a, "gpu_removal", False):
+        extra = {}
+        if getattr(a, "removal", "classic") == "v2":   # removal_gpu work_short / static_bg / LaMa (its docstring)
+            from avatar.removal_gpu import clean_plates_gpu as clean_plates
+            from avatar.inpaint_lama import inpaint as lama
+            extra = dict(work_short=480, static_bg=True, inpaint=lama)
+            a.gpu_removal = True
+        elif getattr(a, "gpu_removal", False):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
         else:
             from avatar.removal import clean_plates
@@ -295,7 +301,7 @@ def main(a):
                 workers = getattr(a, "removal_workers", None) or (os.cpu_count() if getattr(a, "gpu_removal", False) else 4)
                 removal["out"] = clean_plates(frames, pm, fps=a.fps, workers=workers,
                                               scratch=sdir, dilate=max(1, round(9 * sc)),
-                                              exclude_dilate=max(1, round(15 * sc)))
+                                              exclude_dilate=max(1, round(15 * sc)), **extra)
             except BaseException as e:   # re-raised below on the main thread
                 removal["err"] = e
             removal["s"] = time.perf_counter() - t0
@@ -551,6 +557,10 @@ if __name__ == "__main__":
     ap.add_argument("--removal_workers", type=int, default=None,
                     help="CPU workers for independent clean-plate frames (1 for sequential processing; default 4); "
                          "with --gpu_removal, the threads that compute its homographies (default: all logical CPUs)")
+    ap.add_argument("--removal", choices=["classic", "v2"], default="classic",
+                    help="v2: the GPU removal with homographies on a 480 px grid, a window background for a static "
+                         "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
+                         "inpaint_lama.py; implies --gpu_removal)")
     ap.add_argument("--gpu_removal", action="store_true",
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
