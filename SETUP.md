@@ -15,7 +15,7 @@
 
 | ツール | 版 | 何に要る | 入れ方（macOS） |
 |---|---|---|---|
-| Node.js | 26 | アプリ | `brew install node@26` |
+| Node.js | 26 | アプリ | `brew install node@26`（nvm・fnm はリポジトリ直下の `.nvmrc`・`.node-version` を読むので `nvm install && nvm use` / `fnm use` でよい。mise は `mise settings add idiomatic_version_file_enable_tools node` で読むようになる） |
 | pnpm | 10 | アプリ | `npm i -g pnpm@10`（Node 25 以降は corepack が同梱されない。pnpm 10 以降なら `package.json` の `packageManager` の版に自動で切り替わる） |
 | Rust（stable） | 1.80 以上 | アプリ（Tauri のネイティブ部分） | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` → 新しいターミナルを開く |
 | Xcode Command Line Tools | — | アプリ（macOS） | `xcode-select --install` |
@@ -94,6 +94,7 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 | `pnpm tauri dev` で `cargo: command not found` | Rust を入れたあと新しいターミナルを開く（または `source ~/.cargo/env`） |
 | アプリで動画を入れると「動画として読めません」 | サーバー（モック）側の ffprobe が PATH に無い。`brew install ffmpeg` してモックを再起動 |
 | モックが `ModuleNotFoundError: fastapi` | `python -m mock_server` を素の Python で起動している。`sh services/mock_server/run.sh` を使う |
+| `pnpm` が `WARN Unsupported engine: wanted: {"node":">=26"}` と出す | Node が 26 より古い（止まりはしない）。`nvm use`（`.nvmrc` を読む）などで 26 に切り替える |
 | `pnpm install` が「modules directories will be removed and reinstalled」と聞く | 古い pnpm（9 以下）で入れた `node_modules` が残っている。そのまま進めてよい。`pnpm -v` が 10 以上かも確認 |
 | 接続先のランプが赤 | モック / サーバーが起動していない、URL・トークン違い。`curl http://127.0.0.1:8766/v1/health` で確認 |
 | GPU サーバーのジョブが失敗する | `services/gpu_server/README.md` の「つまずきやすい点」 |

@@ -5,7 +5,7 @@
 
 ## 起動
 
-前提：Node 26、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
+前提：Node 26（`nvm use` / `fnm use` はリポジトリ直下の `.nvmrc`・`.node-version` を読む。mise は idiomatic version file を有効にすると読む）、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
 
 ```sh
 pnpm install                         # リポジトリのルートで
