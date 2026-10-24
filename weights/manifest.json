@@ -54,6 +54,13 @@
       "sha256": null
     },
     {
+      "dest": "big-lama/big-lama.pt",
+      "source": "url",
+      "url": "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt",
+      "license": "Apache-2.0 (LaMa, TorchScript export of simple-lama-inpainting)",
+      "sha256": null
+    },
+    {
       "dest": "mediapipe/face_landmarker.task",
       "source": "url",
       "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
