@@ -1,6 +1,7 @@
 export * from "./avatar";
 export * from "./cast";
 export * from "./connection";
+export * from "./editor";
 export * from "./export";
 export * from "./jobs";
 export * from "./localServer";

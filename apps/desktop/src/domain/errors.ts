@@ -30,6 +30,7 @@ export type LocalErrorCode =
   | "PROJECT_TOO_NEW"
   | "PROJECT_INVALID"
   | "LOCAL_SERVER_FAILED" // この PC の GPU サーバーを起動できない
+  | "LAYERS_MISSING" // エディタ：描画済みのレイヤーをまだ取得していない
   | "UNKNOWN";
 
 export type AppErrorCode = ApiErrorCode | LocalErrorCode;

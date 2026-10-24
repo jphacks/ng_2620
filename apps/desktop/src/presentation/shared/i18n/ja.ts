@@ -425,6 +425,7 @@ export const ja = {
     PROJECT_TOO_NEW: { title: "新しい版のアプリで作られています", body: () => "アプリを更新してから開いてください。" },
     PROJECT_INVALID: { title: "プロジェクトを開けません", body: () => "project.json が壊れているか、形式が違います。" },
     LOCAL_SERVER_FAILED: { title: "この PC の GPU サーバーを起動できません", body: (d: { message?: string }) => d.message ?? "" },
+    LAYERS_MISSING: { title: "レイヤーがまだありません", body: () => "描画が終わってレイヤーを取得すると編集できます。" },
     CANCELED: { title: "取り消しました", body: () => "" },
     UNKNOWN: { title: "エラーが起きました", body: (d: { message?: string }) => d.message ?? "" },
   },
