@@ -101,6 +101,7 @@ HF_TOKEN=hf_... <環境 B の python> weights/fetch.py --dest <重みの置き�
 | `VVLOG_DATA_ROOT` | | `services/gpu_server/data` | ジョブ・成果物の保存先（既定 `./data`） |
 | `VVLOG_PORT` | | `8765` | 待受ポート（127.0.0.1 のみで待ち受ける） |
 | `VVLOG_GPU_IDS` | | `0` | 使う GPU |
+| `VVLOG_MAX_DURATION_SEC` | | `180` | 受け付ける動画の長さの上限（秒）。アプリは capabilities でこの値を読む |
 | `VVLOG_MAX_TARGETS` / `VVLOG_HMR_STRIDE` / `VVLOG_TRACKER_SIZE` / `VVLOG_FUSION_DEPTH` | | `4` / `3` / `672` / `da2_indoor_s` | パイプラインの既定値 |
 
 ```sh
@@ -140,6 +141,7 @@ curl -H "Authorization: Bearer $VVLOG_API_TOKEN" http://127.0.0.1:8765/v1/capabi
 | `ValueError: Key backend: 'module://matplotlib_inline...'`（Colab・Jupyter から手で実行したとき） | ノートブックの `MPLBACKEND` を引き継いでいる。`export MPLBACKEND=Agg`（サーバー経由のジョブは自動で Agg） |
 | `huggingface-hub>=0.34.0,<1.0 is required ... found huggingface-hub==2.x` | 後から入れたもの（MoGe など）が hub を上げた。`uv pip install -p .venv/bin/python 'huggingface-hub<1.0'` |
 | `The detected CUDA version (13.0) mismatches ... PyTorch (12.4)`（detectron2 のビルド） | torch を `nvcc --version` と同じ CUDA 版で入れ直す（§2） |
+| ログに `OSError: [Errno 28] No space left on device`（遮蔽判定の段が多い）、ジョブが `running` のまま進まない | `VVLOG_DATA_ROOT` のディスクが足りない。作業データは動画の長さにほぼ比例し、132 秒で約 21GB（遮蔽判定のキャッシュだけで 13GB 超）。空きのあるドライブに `VVLOG_DATA_ROOT` を移して再起動し、解析からやり直す |
 | `GPU_OOM` | 同じ GPU で他の処理が動いている。ジョブは 1 本ずつ流す設計（`VVLOG_GPU_IDS` は 1 枚） |
 | サーバーを再起動したら実行中のジョブが `INTERRUPTED` | 仕様。アプリから再実行する |
 | ジョブの詳細を見たい | `GET /v1/jobs/{id}/logs`、または `data/projects/<prj>/work/<job>/*.log` |

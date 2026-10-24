@@ -20,7 +20,7 @@
 | 署名・公証・自動更新・インストーラ | Apple Developer ID、Windows コード署名、更新配信 | なし（デモは開発ビルド） |
 | 書き出し形式の拡充 | ProRes 4444 / PNG 連番 / レイヤー別 / VRMA・BVH / Premiere・AE 連携 | `export` ジョブの `format` を列挙型にし、`mp4_h264` のみ実装 |
 | 人物の消去・ぼかし（匿名化） | キャストの操作種別、除去のみのレンダリング | `CastEntry.action` を列挙型にし、`replace` のみ実装 |
-| 途中から入る人物、30 秒超、4 人超 | 検出の再実行、チャンク処理 | `analyze` のパラメータに `maxTargets` / `segment` を予約 |
+| 途中から入る人物、180 秒超、4 人超 | 検出の再実行、チャンク処理 | `analyze` のパラメータに `maxTargets` / `segment` を予約 |
 | Mac でのローカル推論 | MPS / Core ML への移植（SAM3 等） | `ComputeBackendPort` の別アダプタとして追加可能 |
 | VRoid Hub 連携 | OAuth、利用条件の確認フロー | `AvatarSource` に `vroid_hub` を予約 |
 

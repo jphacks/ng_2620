@@ -1,4 +1,4 @@
-// 入力制約（ADR-0011）：30 秒以下・長辺 1920px 以下・mp4 / mov（H.264 / HEVC）
+// 入力制約（ADR-0011）：180 秒以下・長辺 1920px 以下・mp4 / mov（H.264 / HEVC）
 
 import type { LocalMediaInfo } from "./media";
 import { normalizeCodec } from "./media";
@@ -9,7 +9,7 @@ export interface MediaLimits {
 }
 
 /** 既定値。サーバーの capabilities.limits があれば上書きする */
-export const DEFAULT_LIMITS: MediaLimits = { maxDurationSec: 30, maxLongEdge: 1920 };
+export const DEFAULT_LIMITS: MediaLimits = { maxDurationSec: 180, maxLongEdge: 1920 };
 
 export const ACCEPTED_EXTENSIONS = ["mp4", "mov"] as const;
 export const ACCEPTED_CODECS = ["h264", "hevc"] as const;

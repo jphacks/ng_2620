@@ -62,7 +62,7 @@ apps/desktop/
       occlusion.ts               OccluderUnit, OcclusionOverride, 区間演算, applyOverrides()（unit×frame→mode）
       composite.ts               合成規則（CPU 版の参照実装＝テスト用、シェーダーと同じ式）
       job.ts                     Job, Stage, JobEvent, 状態遷移
-      validation.ts              入力制約（30 秒、1920px、形式）
+      validation.ts              入力制約（180 秒、1920px、形式）
     application/
       ports/                     ComputeBackendPort, ProjectRepositoryPort, LayerCachePort, AvatarLibraryPort,
                                  MediaProbePort, SettingsPort, ClockPort, NotifierPort

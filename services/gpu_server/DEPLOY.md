@@ -26,6 +26,7 @@ HF_TOKEN=hf_... <pipeline の python> weights/fetch.py --dest <ckpt> --write_con
 | `VVLOG_PYTHON` | `C:\...\pipeline\.venv\Scripts\python.exe` | パイプラインを動かす Python |
 | `VVLOG_DATA_ROOT` | `services/gpu_server/data` | ジョブ・成果物の保存先 |
 | `VVLOG_GPU_IDS` | `0` | 使う GPU |
+| `VVLOG_MAX_DURATION_SEC` | `180` | 受け付ける動画の長さの上限（秒） |
 | `VVLOG_MAX_TARGETS` / `VVLOG_HMR_STRIDE` / `VVLOG_TRACKER_SIZE` / `VVLOG_FUSION_DEPTH` | `4` / `3` / `672` / `da2_indoor_s` | パイプラインの既定値 |
 
 - Windows：`services\gpu_server\run_local.ps1`

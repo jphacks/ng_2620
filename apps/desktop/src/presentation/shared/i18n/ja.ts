@@ -74,7 +74,7 @@ export const ja = {
     dropTitle: "動画をここにドロップ",
     or: "または",
     pickFile: "ファイルを選ぶ",
-    limits: "mp4 / mov・30 秒・1920px まで",
+    limits: "mp4 / mov・3 分・1920px まで",
     probing: "動画を確認しています…",
     creating: "プロジェクトを作っています…",
     openSample: "サンプルを開く",
@@ -424,7 +424,7 @@ export const ja = {
     MEDIA_TOO_LONG: {
       title: "動画が長すぎます",
       body: (d: { durationSec?: number; limitSec?: number }) =>
-        `${d.durationSec !== undefined ? Number(d.durationSec.toFixed(1)) : "—"} 秒あります。${d.limitSec ?? 30} 秒以下に切り出してから取り込んでください。`,
+        `${d.durationSec !== undefined ? Number(d.durationSec.toFixed(1)) : "—"} 秒あります。${d.limitSec ?? 180} 秒以下に切り出してから取り込んでください。`,
     },
     MEDIA_TOO_LARGE: {
       title: "解像度が大きすぎます",

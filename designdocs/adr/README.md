@@ -15,7 +15,7 @@
 | [0008](0008-implementation-repo-and-model-placement.md) | 実装はハッカソン指定リポジトリの monorepo。パイプライン・モデルのコードはそこへ置き、重みは無料の外部（Hugging Face 等）から取得する | 採択 |
 | [0009](0009-demo-resilience.md) | デモは処理済みサンプルプロジェクトを同梱し、サーバー無しでも編集体験を見せる | 採択 |
 | [0010](0010-out-of-scope-enterprise-and-later.md) | エンタープライズ機能・多形式書き出し等は今回の 2 日間ではスコープ外（拡張点のみ） | 採択 |
-| [0011](0011-input-limits-and-resolutions.md) | 入力は 30 秒・長辺 1920px まで。推論はプロキシ解像度、書き出しはフル解像度 | 採択 |
+| [0011](0011-input-limits-and-resolutions.md) | 入力は 180 秒・長辺 1920px まで。推論はプロキシ解像度、書き出しはフル解像度 | 採択（2026-10-25 改訂：30 秒 → 180 秒） |
 | [0012](0012-transport-and-auth.md) | 通信は HTTP(S)＋SSE、認証は Bearer トークン。リモートはトンネル経由の HTTPS | 採択 |
 | [0013](0013-frontend-stack.md) | フロントエンドのライブラリ構成（状態管理・パネル・描画・型生成） | 採択 |
 | [0014](0014-server-stack.md) | サーバーは FastAPI＋GPU 1 枚につき 1 ワーカー、ステージはサブプロセスで実行 | 採択 |

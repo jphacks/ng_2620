@@ -16,13 +16,13 @@ const info = (o: Partial<LocalMediaInfo> = {}): LocalMediaInfo => ({
 });
 
 describe("validateMedia", () => {
-  it("30.0 秒・長辺 1920px ちょうどは通す", () => {
-    expect(validateMedia("a.mp4", info({ durationSec: 30.0 }))).toEqual([]);
-    expect(validateMedia("a.mp4", info({ durationSec: 30.004 }))).toEqual([]); // コンテナの端数
+  it("180.0 秒・長辺 1920px ちょうどは通す", () => {
+    expect(validateMedia("a.mp4", info({ durationSec: 180.0 }))).toEqual([]);
+    expect(validateMedia("a.mp4", info({ durationSec: 180.004 }))).toEqual([]); // コンテナの端数
   });
 
-  it("30 秒超は MEDIA_TOO_LONG", () => {
-    expect(validateMedia("a.mp4", info({ durationSec: 30.1 }))).toEqual([{ code: "MEDIA_TOO_LONG", durationSec: 30.1, limitSec: 30 }]);
+  it("180 秒超は MEDIA_TOO_LONG", () => {
+    expect(validateMedia("a.mp4", info({ durationSec: 180.1 }))).toEqual([{ code: "MEDIA_TOO_LONG", durationSec: 180.1, limitSec: 180 }]);
   });
 
   it("長辺 1920px 超は MEDIA_TOO_LARGE（縦動画も長辺で判定）", () => {

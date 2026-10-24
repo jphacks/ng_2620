@@ -96,7 +96,7 @@ interface MediaMeta {                    // ingest が決める。後段はこ�
 ### 2.3 エラー
 
 ```json
-{ "error": { "code": "MEDIA_TOO_LONG", "message": "動画が 30 秒を超えています", "detail": { "durationSec": 42.1, "limitSec": 30 } } }
+{ "error": { "code": "MEDIA_TOO_LONG", "message": "動画が 180 秒を超えています", "detail": { "durationSec": 201.3, "limitSec": 180 } } }
 ```
 
 | code | HTTP | 発生 | アプリの対処 |

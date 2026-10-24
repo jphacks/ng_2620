@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from .errors import VvlogError
 
-MAX_DURATION_SEC = 30.0
+MAX_DURATION_SEC = 180.0
 MAX_LONG_SIDE = 1920
 MAX_FPS = 30.0
 PROXY_SHORT_SIDE = 480

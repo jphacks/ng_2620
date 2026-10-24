@@ -63,7 +63,7 @@ def test_plan_meta_applies_rotation_and_cfr():
 
 
 @pytest.mark.parametrize("kw,code", [
-    ({"duration_sec": 42.1}, "MEDIA_TOO_LONG"),
+    ({"duration_sec": 181.0}, "MEDIA_TOO_LONG"),
     ({"width": 3840, "height": 2160}, "MEDIA_TOO_LARGE"),
     ({"codec": "vp9"}, "MEDIA_UNSUPPORTED"),
     ({"format_name": "matroska,webm"}, "MEDIA_UNSUPPORTED"),

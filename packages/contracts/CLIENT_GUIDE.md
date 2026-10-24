@@ -44,7 +44,7 @@
 | `UNAUTHORIZED` | 401 | トークン違い | 接続設定を開く |
 | `NOT_FOUND` | 404 | ID 不明（サーバーのデータが消えた等） | 再アップロード・再実行。アバターなら再登録 |
 | `VALIDATION_FAILED` | 422 | パラメータ不正 | バグとして報告（`detail.errors`） |
-| `MEDIA_TOO_LONG` / `MEDIA_TOO_LARGE` / `MEDIA_UNSUPPORTED` | 422 | 入力制約（30 秒・長辺 1920px・mp4/mov の H.264/HEVC） | `detail` の上限値を出してトリミング等を案内 |
+| `MEDIA_TOO_LONG` / `MEDIA_TOO_LARGE` / `MEDIA_UNSUPPORTED` | 422 | 入力制約（180 秒・長辺 1920px・mp4/mov の H.264/HEVC。上限は `capabilities.limits`） | `detail` の上限値を出してトリミング等を案内 |
 | `UPLOAD_INCOMPLETE` / `CHECKSUM_MISMATCH` | 409 | 断片不足・破損 | `detail.missingChunks` を再送 / 最初から |
 | `AVATAR_INVALID` | 422 | VRM として読めない・ボーン不足 | 別の VRM |
 | `NOT_IMPLEMENTED` | 501 | 予約機能（ProRes 等の形式、`units:prompt`、`/me`） | 「今後対応」 |

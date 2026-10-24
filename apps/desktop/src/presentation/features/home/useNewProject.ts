@@ -1,4 +1,4 @@
-// 動画から新規プロジェクトを作る（ドロップ・ファイル選択・⌘N 共通）。事前検証（30 秒・1920px・形式）で弾く
+// 動画から新規プロジェクトを作る（ドロップ・ファイル選択・⌘N 共通）。事前検証（180 秒・1920px・形式）で弾く
 
 import { useState } from "react";
 import { mergeLimits, DEFAULT_LIMITS, isAcceptedVideoPath, ACCEPTED_EXTENSIONS } from "@/domain/validation";

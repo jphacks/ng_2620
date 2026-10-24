@@ -44,7 +44,7 @@ def test_health_and_auth(client):
     assert r.status_code == 401 and r.json()["error"]["code"] == "UNAUTHORIZED"
     assert client.get("/v1/capabilities", headers={"Authorization": "Bearer nope"}).status_code == 401
     caps = client.get("/v1/capabilities", headers=AUTH).json()
-    assert caps["limits"]["maxDurationSec"] == 30 and caps["queueLength"] == 0
+    assert caps["limits"]["maxDurationSec"] == 180 and caps["queueLength"] == 0
 
 
 def test_upload_and_job_flow(client, sample_video):

@@ -42,7 +42,7 @@ class Settings:
             fusion_depth=e.get("VVLOG_FUSION_DEPTH", "da2_indoor_s"),
             tracker_size=int(e.get("VVLOG_TRACKER_SIZE", "672")),
             hmr_stride=int(e.get("VVLOG_HMR_STRIDE", "3")),
-            max_duration_sec=float(e.get("VVLOG_MAX_DURATION_SEC", "30")),
+            max_duration_sec=float(e.get("VVLOG_MAX_DURATION_SEC", "180")),
             max_long_side=int(e.get("VVLOG_MAX_LONG_SIDE", "1920")),
             backend=e.get("VVLOG_BACKEND", "pipeline"),
             record_fixture=Path(rec).resolve() if rec else None,

@@ -58,4 +58,4 @@
 - 実 GPU での通し：`services/gpu_server/scripts/smoke_analyze.py <video>`。
 
 ## P1 / スコープ外
-- 途中から入る人物の追跡（P2）、30 秒超のチャンク処理（スコープ外）、`mesh` と `occlusion` の GPU 並走（P2）。
+- 途中から入る人物の追跡（P2）、180 秒超のチャンク処理（スコープ外）、`mesh` と `occlusion` の GPU 並走（P2）。

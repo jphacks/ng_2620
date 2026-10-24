@@ -13,7 +13,7 @@
 
 ## 受け入れ条件
 - [ ] ドロップまたはファイル選択で mp4 / mov を受け付ける。他の拡張子はドロップ時に拒否。
-- [ ] **アプリ側の事前検証**（1 秒以内）：長さ・解像度・コーデック・音声の有無を表示。30 秒超・長辺 1920px 超は理由付きで拒否（[interaction §5](../../ux/interaction.md#5-エラー文言)）。
+- [ ] **アプリ側の事前検証**（1 秒以内）：長さ・解像度・コーデック・音声の有無を表示。180 秒（3 分）超・長辺 1920px 超は理由付きで拒否（[interaction §5](../../ux/interaction.md#5-エラー文言)）。
 - [ ] 取り込み確認画面（S2-1）にプレビュー（`<video>` で元ファイルを再生）と送信先の接続名。
 - [ ] 「解析を始める」で：サーバー側プロジェクト作成 → 分割アップロード（8MB、並列 3）→ `complete` → `analyze` ジョブ投入（F04）まで自動で進む。
 - [ ] アップロード進捗（% と速度）。中断（アプリ終了・通信断）後に再開すると、`GET /v1/uploads/{id}` で受信済みの断片を確認し、残りだけ送る。
@@ -21,7 +21,7 @@
 - [ ] sha256 はアップロード前に計算（Rust 側、ストリーム）。同じ動画の再取り込みでは計算結果を再利用。
 
 ## 設計
-- domain/validation.ts：`validateMedia(meta): Violation[]`（30 秒、1920px、形式）。上限値はサーバーの `capabilities.limits` で上書き可能。
+- domain/validation.ts：`validateMedia(meta): Violation[]`（180 秒、1920px、形式）。上限値はサーバーの `capabilities.limits` で上書き可能。
 - application/ports：
   ```ts
   interface MediaProbePort { probe(path: string): Promise<LocalMediaInfo> }   // duration, width, height, rotation, codec, fps, hasAudio
@@ -51,4 +51,4 @@
 - アップロードの途中でモックサーバーを落とし、再起動後に残りの断片だけが送られる。
 
 ## P1 / スコープ外
-- 取り込み時のトリミング（区間指定）（P1）、30 秒超の自動分割（スコープ外）。
+- 取り込み時のトリミング（区間指定）（P1）、180 秒超の自動分割（スコープ外）。
