@@ -46,6 +46,8 @@ commit)
   fi
   if [ -n "$(git status --porcelain)" ]; then
     git add -A apps pnpm-lock.yaml
+    # 改行だけの書き換えなど、add すると差分が消えるときは commit せずに通す
+    git diff --cached --quiet && exit 0
     git commit -q -m "style: autofix（pre-push の linter / formatter）"
     echo "✔ 自動修正を commit しました。内容を確認して、もう一度 push してください。"
     exit 1
