@@ -8,6 +8,7 @@ import contextlib
 import logging
 
 from .adapters.events import JsonlEventBus
+from .adapters.fixture_recorder import FixtureRecorder
 from .adapters.fs import FsArtifactStore, FsAvatarStore, FsJobRepository, FsProjectRepository, FsUploadRepository
 from .adapters.media_ffmpeg import FfmpegMedia
 from .adapters.queue import InProcessJobQueue
@@ -27,9 +28,11 @@ def create_app(settings: Settings | None = None, runner_factory=None, planner=No
     projects, jobs = FsProjectRepository(root), FsJobRepository(root)
     bus, queue = JsonlEventBus(root), InProcessJobQueue()
     store = FsArtifactStore(projects, jobs)
+    recorder = FixtureRecorder(s.record_fixture, bus, store, projects) if s.record_fixture else None
     worker = Worker(jobs=jobs, queue=queue, bus=bus, store=store, projects=projects,
                     planner=planner or planner_for(s), runner_factory=runner_factory or SubprocessPipelineRunner,
-                    settings=s, gpu_id=s.gpu_ids[0] if s.gpu_ids else "0")
+                    settings=s, gpu_id=s.gpu_ids[0] if s.gpu_ids else "0",
+                    on_succeeded=recorder.record if recorder else None)
     deps = Deps(settings=s, projects=projects, uploads=FsUploadRepository(root), avatars=FsAvatarStore(root),
                 jobs=jobs, queue=queue, bus=bus, store=store, media=FfmpegMedia(), gpu=NvidiaSmiGpuInfo(worker.gpu_id),
                 worker=worker)

@@ -152,3 +152,33 @@ def test_export_rejects_unknown_unit(tmp_path, sample_video):
                                                      "range": [0, 1], "mode": "front"}]}}).json()
         j = wait_job(c, e["jobId"])
         assert j["status"] == "failed" and j["error"]["code"] == "VALIDATION_FAILED"
+
+
+def test_record_fixture_replays_on_the_mock(tmp_path, sample_video):
+    import sys
+    from pathlib import Path
+    fx = tmp_path / "fx"
+    with make_client(tmp_path, runner_factory=FakePipelineRunner, record_fixture=fx) as c:
+        _, jid = analyze(c, sample_video)
+        assert wait_job(c, jid)["status"] == "succeeded"
+    m = json.loads((fx / "manifest.json").read_text())
+    assert m["jobs"]["analyze"]["jobId"] == jid and m["source"]["frameCount"] == 60
+    assert (fx / "jobs" / "analyze" / "artifacts" / "persons.json").is_file()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mock_server"))
+    from mock_server.__main__ import build
+    from fastapi.testclient import TestClient
+    with TestClient(build({"VVLOG_DATA_ROOT": str(tmp_path / "mock"), "VVLOG_MOCK_SPEED": "1000",
+                           "VVLOG_MOCK_FIXTURE": str(fx)})) as mc:
+        mauth = {"Authorization": "Bearer mock"}
+        pid = mc.post("/v1/projects", headers=mauth, json={"name": "m"}).json()["projectId"]
+        media = mc.post(f"/v1/uploads/{upload(mc, pid, sample_video, headers=mauth)}/complete", headers=mauth).json()
+        j = mc.post(f"/v1/projects/{pid}/jobs", headers=mauth,
+                    json={"type": "analyze", "params": {"mediaId": media["mediaId"]}}).json()
+        import time
+        for _ in range(200):
+            s = mc.get(f"/v1/jobs/{j['jobId']}", headers=mauth).json()
+            if s["status"] == "succeeded":
+                break
+            time.sleep(0.05)
+        assert s["status"] == "succeeded" and "units" in s["artifacts"]
+        assert mc.get(f"/v1/jobs/{j['jobId']}/artifacts/persons", headers=mauth).json()[0]["personId"] == 1

@@ -24,9 +24,11 @@ class Canceled(Exception):
 class Worker:
     def __init__(self, *, jobs: JobRepositoryPort, queue: JobQueuePort, bus: EventBusPort, store: ArtifactStorePort,
                  projects: ProjectRepositoryPort, planner: StagePlannerPort,
-                 runner_factory: Callable[[], PipelineRunnerPort], settings: object, gpu_id: str = "0"):
+                 runner_factory: Callable[[], PipelineRunnerPort], settings: object, gpu_id: str = "0",
+                 on_succeeded: Callable[[Job], None] | None = None):
         self.jobs, self.queue, self.bus, self.store, self.projects = jobs, queue, bus, store, projects
         self.planner, self.runner_factory, self.settings, self.gpu_id = planner, runner_factory, settings, gpu_id
+        self.on_succeeded = on_succeeded           # e.g. the fixture recorder (VVLOG_RECORD_FIXTURE)
         self._wake = asyncio.Event()
         self._task: asyncio.Task | None = None
         self.current: tuple[Job, PipelineRunnerPort, asyncio.Task] | None = None
@@ -162,6 +164,11 @@ class Worker:
             job.succeed()
             self.jobs.save(job)
             self.bus.publish(job.jobId, "job_finished", {"status": "succeeded"})
+            if self.on_succeeded is not None:
+                try:
+                    self.on_succeeded(job)
+                except Exception:                     # noqa: BLE001 — recording must not fail the job
+                    log.exception("on_succeeded hook failed for %s", job.jobId)
         except asyncio.CancelledError:
             if job.jobId not in self._canceling:
                 raise

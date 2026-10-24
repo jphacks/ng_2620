@@ -36,14 +36,14 @@ def client(tmp_path):
         yield c
 
 
-def upload(client, project_id, path, chunk=None):
+def upload(client, project_id, path, chunk=None, headers=AUTH):
     data = path.read_bytes()
-    r = client.post("/v1/uploads", headers=AUTH, json={"projectId": project_id, "kind": "source", "filename": path.name,
+    r = client.post("/v1/uploads", headers=headers, json={"projectId": project_id, "kind": "source", "filename": path.name,
                                                        "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
     assert r.status_code == 201, r.text
     up = r.json()
     size = chunk or up["chunkSize"]
     for i in range(0, len(data), size):
-        r = client.put(f"/v1/uploads/{up['uploadId']}/chunks/{i // size}", headers=AUTH, content=data[i:i + size])
+        r = client.put(f"/v1/uploads/{up['uploadId']}/chunks/{i // size}", headers=headers, content=data[i:i + size])
         assert r.status_code == 200, r.text
     return up["uploadId"]
