@@ -68,6 +68,18 @@ def load_skeletons(pout, stems):
     return sk
 
 
+def refine_mask(img, m, thr=0.3, r=8, eps=1e-3):
+    """Pipeline-resolution mask m -> output-resolution mask with its edge on the frame's edges: the bilinear upscale
+    through a guided filter (He et al.; guide = the frame's grey, radius r output px), thresholded at thr."""
+    H, W = img.shape[:2]
+    p = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_LINEAR)
+    I = cv2.cvtColor(np.asarray(img), cv2.COLOR_BGR2GRAY).astype(np.float32) / 255
+    box = lambda x: cv2.boxFilter(x, -1, (2 * r + 1, 2 * r + 1))
+    mI, mp = box(I), box(p)
+    A = (box(I * p) - mI * mp) / (box(I * I) - mI * mI + eps)
+    return box(A) * I + box(mp - A * mI) > thr
+
+
 def source_size(src):
     """(H, W) of the original video / first frame of the frames folder."""
     if os.path.isfile(src):
@@ -318,14 +330,29 @@ def main(a):
         def _removal():
             t0 = time.perf_counter()
             pm = disk(f"{sdir}/person_masks.npy", (n, OH, OW), bool)
+            refine = getattr(a, "removal_refine", False) and sc != 1
             for i in range(n):
                 m = np.isin(run.mask(i), pids)
-                pm[i] = m if sc == 1 else cv2.resize(m.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
+                if refine:   # edge-aware upscale: the bilinear mask guided by the frame (refine_mask)
+                    pm[i] = refine_mask(frames[i], m)
+                else:
+                    pm[i] = m if sc == 1 else cv2.resize(m.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
             try:   # the dilations are in pipeline pixels: scaled with the masks
                 workers = getattr(a, "removal_workers", None) or (os.cpu_count() if getattr(a, "gpu_removal", False) else 4)
                 removal["out"] = clean_plates(frames, pm, fps=a.fps, workers=workers,
-                                              scratch=sdir, dilate=max(1, round(9 * sc)),
+                                              scratch=sdir, dilate=max(1, round(getattr(a, "removal_dilate", 9) * sc)),
                                               exclude_dilate=max(1, round(15 * sc)), **extra)
+                if getattr(a, "blend", True):   # the plate's colour level matched around each hole (plate_blend)
+                    from concurrent.futures import ThreadPoolExecutor as _TP
+                    from avatar import plate_blend
+                    pls, hls = removal["out"][0], removal["out"][1]
+
+                    def _blend(i):
+                        h = np.asarray(hls[i])
+                        if h.any():
+                            pls[i] = plate_blend.match(np.asarray(pls[i]), np.asarray(frames[i]), h)
+                    with _TP(4) as pool:
+                        list(pool.map(_blend, range(n)))
             except BaseException as e:   # re-raised below on the main thread
                 removal["err"] = e
             removal["s"] = time.perf_counter() - t0
@@ -452,24 +479,28 @@ def main(a):
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
         hider.prefetch(range(n))
         hide_pool = ThreadPoolExecutor(1)   # raw hide masks of frame i beside the rendering of frame i + 1
-        if not a.no_removal and getattr(a, "cover", True):
-            # what covers a target (AvatarHider.cover: fusion's in-front segments) stays real: the removal hole is the
-            # dilated target mask, which also took held objects, the table in front and people passing in front
-            t0 = time.perf_counter()
-            holes, cover_px = removal["out"][1], 0
-            for i in range(n):
-                cv = hider.cover(i)
-                if not cv.any():
-                    continue
-                U = cv if sc == 1 else cv2.resize(cv.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
-                R = U & np.asarray(holes[i])
-                if R.any():
-                    pl = np.asarray(plates[i]).copy()
-                    pl[R] = frames[i][R]
-                    plates[i] = pl
-                    cover_px += int(R.sum())
-            stats["cover_px"] = cover_px
-            stats["cover_s"] = round(time.perf_counter() - t0, 1)
+    if not a.no_removal and getattr(a, "cover", True) and hider is not None:
+        # what covers a target (AvatarHider.cover: fusion's in-front segments) stays real: the removal hole is the
+        # dilated target mask, which also took held objects, the table in front and people passing in front
+        from concurrent.futures import ThreadPoolExecutor as _TP
+        t0 = time.perf_counter()
+        holes = removal["out"][1]
+
+        def restore_cover(i):
+            cv = hider.cover(i)
+            if not cv.any():
+                return 0
+            U = cv if sc == 1 else cv2.resize(cv.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
+            R = U & np.asarray(holes[i])
+            if not R.any():
+                return 0
+            pl = np.asarray(plates[i]).copy()
+            pl[R] = frames[i][R]
+            plates[i] = pl
+            return int(R.sum())
+        with _TP(4) as pool:
+            stats["cover_px"] = int(sum(pool.map(restore_cover, range(n))))
+        stats["cover_s"] = round(time.perf_counter() - t0, 1)
     ik_err = {}
     head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
@@ -683,6 +714,10 @@ if __name__ == "__main__":
                          "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
                          "inpaint_lama.py; implies --gpu_removal). mosaic: one background per 0.5 s window warped into "
                          "each frame; mosaic_shadow: also the targets' cast shadows (removal_gpu docstring)")
+    ap.add_argument("--removal_dilate", type=int, default=9,
+                    help="dilation [pipeline px, ellipse diameter] of the target masks into the removal holes")
+    ap.add_argument("--removal_refine", action="store_true",
+                    help="upscale the target masks to --hq along the frame's edges (refine_mask) instead of nearest")
     ap.add_argument("--gpu_removal", action="store_true",
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
@@ -709,6 +744,8 @@ if __name__ == "__main__":
                     help="placement point: 0 = the hips on the person's hips .. 1 = the neck on the person's neck")
     ap.add_argument("--no_cover", dest="cover", action="store_false",
                     help="erase what covers a target too (default: fusion's in-front segments stay real in the removal)")
+    ap.add_argument("--no_blend", dest="blend", action="store_false",
+                    help="no colour matching of the plate to the frame around each removal hole (scripts/avatar/plate_blend.py)")
     ap.add_argument("--no_compare", action="store_true",
                     help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
     ap.add_argument("--no_frames", action="store_true",
