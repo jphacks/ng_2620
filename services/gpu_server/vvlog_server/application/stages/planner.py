@@ -12,8 +12,11 @@ class Planner:
         return list(self.table.get(job_type, []))
 
 
-def planner_for(settings, media=None) -> Planner:
+def planner_for(settings, media=None, outputs=None) -> Planner:
+    """The composition root's choice of adapters for the real stages (main.py passes none: the defaults)."""
     from ...adapters.media_ffmpeg import FfmpegMedia
+    from ...adapters.pipeline_outputs import FsPipelineOutputs
     from .ingest import IngestStage
-    media = media or FfmpegMedia()
-    return Planner({"analyze": [IngestStage(media)], "render": [], "export": []})
+    from .track_mesh import TrackMeshStage
+    media, outputs = media or FfmpegMedia(), outputs or FsPipelineOutputs()
+    return Planner({"analyze": [IngestStage(media), TrackMeshStage(outputs)], "render": [], "export": []})

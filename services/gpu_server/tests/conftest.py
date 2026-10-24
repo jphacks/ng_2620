@@ -31,7 +31,8 @@ def make_client(tmp_path, planner=None, runner_factory=None, **settings):
 
 @pytest.fixture
 def client(tmp_path):
-    with make_client(tmp_path) as c:
+    from fake_pipeline import FakePipelineRunner
+    with make_client(tmp_path, runner_factory=FakePipelineRunner) as c:
         yield c
 
 

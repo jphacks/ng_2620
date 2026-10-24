@@ -10,6 +10,8 @@ dependencies = [
   "pydantic>=2.7,<3",
   "python-multipart>=0.0.9",
   "pyyaml>=6",
+  "numpy>=1.24",
+  "pillow>=10",
 ]
 
 [project.optional-dependencies]

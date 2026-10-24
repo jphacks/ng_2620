@@ -70,6 +70,14 @@ class AvatarStorePort(Protocol):
     def get(self, avatar_id: str) -> tuple[Path, dict]: ...
 
 
+class PipelineOutputsPort(Protocol):
+    """Turns the pipeline's output folders into contract artifacts."""
+
+    def persons_from_masks(self, pout: Path, proxy: Path, out: Path) -> list[dict]: ...
+    def latest_mesh_video(self, pout: Path) -> Path | None: ...
+    def to_h264(self, src: Path, dest: Path) -> Path: ...
+
+
 class GpuInfoPort(Protocol):
     def info(self) -> dict: ...                                      # {name, vramMB} or {}
 
