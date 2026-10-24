@@ -404,6 +404,7 @@ def main(a):
             overrides = Overrides.load(a.overrides)
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
     ik_err = {}
+    head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
     ss = rz.ssaa
     dev = None
@@ -430,6 +431,10 @@ def main(a):
                      gpu=dev, expr=fmap(e) if e is not None else None)
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
+            hb = act.bone_cam("head")
+            if hb is not None and hb[2] > 0:
+                head_px.setdefault(str(pid), {})[stems[i]] = [round(float(K[0, 0] * hb[0] / hb[2] + K[0, 2]), 1),
+                                                            round(float(K[1, 1] * hb[1] / hb[2] + K[1, 2]), 1)]
             box = act.screen_box(K)
             if box is None:
                 continue
@@ -567,6 +572,7 @@ def main(a):
         pass
     stats["total_s"] = round(time.perf_counter() - t_all, 1)
     json.dump(stats, open(os.path.join(a.out, "stats.json"), "w"), indent=1)
+    json.dump(head_px, open(os.path.join(a.out, "avatar_heads.json"), "w"))
     print(f"[avatar] done in {stats['total_s']} s -> {a.out}", flush=True)
     return stats
 
