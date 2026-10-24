@@ -281,7 +281,7 @@ def main(a):
     if not a.no_removal:
         import threading
         extra = {}
-        if getattr(a, "removal", "classic") == "v2":   # removal_gpu work_short / static_bg / LaMa (its docstring)
+        if getattr(a, "removal", "v2") == "v2":   # removal_gpu work_short / static_bg / LaMa (its docstring)
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
             from avatar.inpaint_lama import inpaint as lama
             extra = dict(work_short=480, static_bg=True, inpaint=lama)
@@ -557,8 +557,8 @@ if __name__ == "__main__":
     ap.add_argument("--removal_workers", type=int, default=None,
                     help="CPU workers for independent clean-plate frames (1 for sequential processing; default 4); "
                          "with --gpu_removal, the threads that compute its homographies (default: all logical CPUs)")
-    ap.add_argument("--removal", choices=["classic", "v2"], default="classic",
-                    help="v2: the GPU removal with homographies on a 480 px grid, a window background for a static "
+    ap.add_argument("--removal", choices=["classic", "v2"], default="v2",
+                    help="v2 (default; judged better by eye, reports/compare/2026-10-24/removal_rework*): the GPU removal with homographies on a 480 px grid, a window background for a static "
                          "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
                          "inpaint_lama.py; implies --gpu_removal)")
     ap.add_argument("--gpu_removal", action="store_true",
