@@ -1,5 +1,5 @@
 {
-  "comment": "designdocs/adr/0008: weights are never committed. weights/fetch.py downloads them to VVLOG_CKPT_ROOT. sha256 null = not pinned yet (fetch.py prints the value to pin).",
+  "comment": "designdocs/adr/0008: weights are never committed. weights/fetch.py downloads them to VVLOG_CKPT_ROOT and checks the sha256 (pinned 2026-10-24 from a fresh download).",
   "files": [
     {
       "dest": "sam3/sam3.pt",
@@ -8,7 +8,7 @@
       "filename": "sam3.pt",
       "gated": true,
       "license": "SAM License",
-      "sha256": null
+      "sha256": "9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e"
     },
     {
       "dest": "sam-3d-body-dinov3/model.ckpt",
@@ -17,7 +17,7 @@
       "filename": "model.ckpt",
       "gated": true,
       "license": "SAM License",
-      "sha256": null
+      "sha256": "b5a2f9d305dd02626b967aa2e86021fba07065df66ce7a7e00ffb9664f150abf"
     },
     {
       "dest": "sam-3d-body-dinov3/model_config.yaml",
@@ -26,7 +26,7 @@
       "filename": "model_config.yaml",
       "gated": true,
       "license": "SAM License",
-      "sha256": null
+      "sha256": "1012fc3f39cb5e90e3f8fbadf7bded31604bfafdce0321d17a7c1a2d3f08b88d"
     },
     {
       "dest": "sam-3d-body-dinov3/assets/mhr_model.pt",
@@ -35,7 +35,7 @@
       "filename": "assets/mhr_model.pt",
       "gated": true,
       "license": "SAM License",
-      "sha256": null
+      "sha256": "352e271a6c42729c68554ceaea0c955e866970160c31e35506d782dc0f7377bc"
     },
     {
       "dest": "moge-2-vitl-normal/model.pt",
@@ -44,28 +44,28 @@
       "filename": "model.pt",
       "gated": false,
       "license": "MIT (code) / see the model card",
-      "sha256": null
+      "sha256": "280741fd09bc3f403ccff9967784c2a391b52d2c0742ae3efdb21d9f90cc1a01"
     },
     {
       "dest": "vitdet/model_final_f05665.pkl",
       "source": "url",
       "url": "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_vitdet_h/f328730692/model_final_f05665.pkl",
       "license": "Apache-2.0 (detectron2)",
-      "sha256": null
+      "sha256": "8601bc52000c8a87960f3db6a9672596c5e06ce33bc30a3b8f96a96efe42ae60"
     },
     {
       "dest": "big-lama/big-lama.pt",
       "source": "url",
       "url": "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt",
       "license": "Apache-2.0 (LaMa, TorchScript export of simple-lama-inpainting)",
-      "sha256": null
+      "sha256": "7ba7aa7ac37a4d41fdbbeba3a2af7ead18058552997e3a3cd1a3b2210c9e6b4c"
     },
     {
       "dest": "mediapipe/face_landmarker.task",
       "source": "url",
-      "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+      "url": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
       "license": "Apache-2.0 (MediaPipe)",
-      "sha256": null
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
     }
   ],
   "hf_cache": [
