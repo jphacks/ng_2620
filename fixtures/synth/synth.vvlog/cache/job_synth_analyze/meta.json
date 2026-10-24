@@ -1,0 +1,16 @@
+{
+ "durationSec": 3.2,
+ "frameCount": 96,
+ "fps": 30,
+ "full": {
+  "width": 540,
+  "height": 960
+ },
+ "proxy": {
+  "width": 540,
+  "height": 960
+ },
+ "proxyScale": 1,
+ "hasAudio": false,
+ "sourceCodec": "h264"
+}

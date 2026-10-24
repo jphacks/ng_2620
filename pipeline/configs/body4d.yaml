@@ -1,0 +1,73 @@
+# ============================================================================
+# Configuration Template for SAM-Body4D
+#
+# This is a runtime config template used by the setup script.
+# The setup script will replace `C:\VScodeFiles\checkpoints` with the user-specified
+# checkpoint directory and generate `configs/body4d.yaml`.
+#
+# NOTE:
+#   All checkpoint paths below are relative to `paths.ckpt_root`.
+#   To relocate checkpoints, you only need to change `ckpt_root`.
+# ============================================================================
+
+paths:
+  # Global root directory for all checkpoints (filled by setup script)
+  ckpt_root: "C:/VScodeFiles/checkpoints"
+
+# ---------------------------------------------------------------------------
+# SAM3
+# ---------------------------------------------------------------------------
+sam3:
+  # Requires prior access approval on Hugging Face
+  ckpt_path: ${paths.ckpt_root}/sam3/sam3.pt
+
+# ---------------------------------------------------------------------------
+# SAM-3D-Body
+# ---------------------------------------------------------------------------
+sam_3d_body:
+  # Requires prior access approval on Hugging Face
+  ckpt_path: ${paths.ckpt_root}/sam-3d-body-dinov3/model.ckpt
+  mhr_path: ${paths.ckpt_root}/sam-3d-body-dinov3/assets/mhr_model.pt
+
+  # MoGe (surface normal / FoV prior)
+  fov_path: ${paths.ckpt_root}/moge-2-vitl-normal/model.pt
+
+  # Number of frames processed in parallel
+  batch_size: 16
+
+  # Optional external detector / segmentor (leave empty to use defaults)
+  detector_path: ""
+  segmentor_path: ""
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+runtime:
+  # Output directory for renders / meshes / results
+  output_dir: ./outputs
+
+  # People tracked and meshed: the N largest boxes on the first frame with a person.
+  # Everyone else stays part of the scene (background / objects in front of the targets).
+  max_targets: 2
+
+# ---------------------------------------------------------------------------
+# Occlusion-aware Completion (Diffusion-VAS + Depth Anything)
+# ---------------------------------------------------------------------------
+completion:
+  # Enable occlusion-aware completion module (slower but more robust)
+  enable: false
+
+  # Resolution used for detection and completion
+  detection_resolution: [512, 1024]
+  completion_resolution: [512, 1024]
+
+  # Diffusion-VAS checkpoints (directories)
+  model_path_mask: ${paths.ckpt_root}/diffusion-vas-amodal-segmentation
+  model_path_rgb:  ${paths.ckpt_root}/diffusion-vas-content-completion
+
+  # Depth Anything v2
+  model_path_depth: ${paths.ckpt_root}/depth_anything_v2_vitl.pth
+  depth_encoder: vitl
+
+  # Maximum length of continuous occlusion (in frames)
+  max_occ_len: 25

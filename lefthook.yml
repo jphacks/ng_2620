@@ -1,0 +1,20 @@
+# git hook（pnpm install で自動的に入る。手動で入れ直すなら pnpm exec lefthook install）
+#
+# pre-push：push するファイルに linter / formatter を掛けて、直せるものは直す。
+#   - 直した分は "style: autofix" として自動で commit し、push を止める（もう一度 push すれば通る）
+#   - 直せなかった lint は警告として出すだけで、push は止めない（CI の lint で error になるものは落ちる）
+#   - 作業ツリーに未コミットの変更があるときは、巻き込まないように自動修正を飛ばす（チェックだけ行う）
+# 飛ばしたいときは git push --no-verify か LEFTHOOK=0 git push。
+pre-push:
+  piped: true
+  commands:
+    0-init:
+      run: sh scripts/prepush.sh init
+    1-ts:
+      glob: "apps/desktop/**/*.{ts,tsx,js,json}"
+      run: sh scripts/prepush.sh ts
+    2-rust:
+      glob: "apps/desktop/src-tauri/**/*.{rs,toml}"
+      run: sh scripts/prepush.sh rust
+    3-commit:
+      run: sh scripts/prepush.sh commit

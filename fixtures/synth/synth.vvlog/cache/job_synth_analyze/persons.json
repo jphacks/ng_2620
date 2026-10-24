@@ -1,0 +1,18 @@
+[
+ {
+  "personId": 1,
+  "firstFrame": 0,
+  "lastFrame": 95,
+  "visibleRatio": 1.0,
+  "bestFrame": 48,
+  "thumb": "cache/job_synth_analyze/person_thumbs/1.jpg"
+ },
+ {
+  "personId": 2,
+  "firstFrame": 0,
+  "lastFrame": 95,
+  "visibleRatio": 1.0,
+  "bestFrame": 48,
+  "thumb": "cache/job_synth_analyze/person_thumbs/2.jpg"
+ }
+]
