@@ -47,12 +47,16 @@ jobs:
             exit 1
           fi
           mkdir -p out
-          npx -y @marp-team/marp-cli@4 \
-            --theme-set docs/slide/themes/virtualtwin.css \
-            --allow-local-files \
-            --pdf \
-            --output out/ \
-            "${slides[@]}"
+          # --output にディレクトリは渡せない（1 本だと EISDIR、2 本以上だと
+          # "Output path cannot specify with processing multiple files" で落ちる）ので、1 本ずつファイル名まで指定する
+          for f in "${slides[@]}"; do
+            npx -y @marp-team/marp-cli@4 \
+              --theme-set docs/slide/themes/virtualtwin.css \
+              --allow-local-files \
+              --pdf \
+              --output "out/$(basename "$f" .md).pdf" \
+              "$f"
+          done
           ls -la out
       - name: Release に添付する
         env:
