@@ -10,6 +10,10 @@ The frozen evidence.py stays the reference. Changes, none of which alter a value
   * link(): the 0/1 intersection matrices between frames t and t+g are computed on the GPU in float32 (exact:
     integer partial sums below 2^24) with each frame's masks converted once per pass; the IoU expression and the
     order-dependent union-find are the frozen ones.
+  * the per-part loop of each (segment, person) pair takes all parts at once: the pixel counts are bincounts over
+    the part labels, and the medians come from one sort by (part, value), each part's middle element(s) combined as
+    np.median does (float32: (a + b) / 2 for an even count), so the units are equal.
+  * part_image's nearest-vertex query runs on all cores (cKDTree.query workers=-1: the same neighbours).
 Candidates from keyframe_stage (run_gpu(keyframe=True)) are already tracked: their cands.npz 'track' ids replace
 link(), so a tracked object is one decision unit per (person, body part) over the frames it was followed.
 """
@@ -22,11 +26,49 @@ import numpy as np
 
 ME = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ME)
-from evidence import (DV, DV_MIN, K3, LINK_GAP, LINK_IOU, REFINE_DEPTH, load_person_dets, part_image,  # noqa: E402
+from evidence import (DV, DV_MIN, K3, LINK_GAP, LINK_IOU, REFINE_DEPTH, load_person_dets,  # noqa: E402
                       refine_visible, robust_scale, sandwiched)
 from gpu_stage import load_cands  # noqa: E402
 from prep import load  # noqa: E402
 from shared_cache import moge_z  # noqa: E402
+from evidence import VPARTS, cKDTree  # noqa: E402
+
+
+def part_image(V, f, depth):
+    """evidence.part_image with the nearest-vertex query on all cores (identical result)."""
+    H, W = depth.shape
+    out = np.full((H, W), 255, np.uint8)
+    u = f * V[:, 0] / V[:, 2] + W / 2
+    v = f * V[:, 1] / V[:, 2] + H / 2
+    px, py = np.floor(u).astype(int), np.floor(v).astype(int)
+    ok = (px >= 0) & (px < W) & (py >= 0) & (py < H)
+    ok[ok] &= np.abs(V[ok, 2] - depth[py[ok], px[ok]]) < 0.03
+    M = depth > 0
+    if ok.sum() == 0 or M.sum() == 0:
+        return out
+    tree = cKDTree(np.stack([u[ok], v[ok]], 1))
+    ys, xs = np.nonzero(M)
+    _, k = tree.query(np.stack([xs + 0.5, ys + 0.5], 1), workers=-1)
+    out[ys, xs] = VPARTS[ok][k]
+    return out
+
+
+def _group_medians(lab, val, parts):
+    """{part: np.median(val[lab == part])} for the parts present, as float (see the module docstring)."""
+    out = {}
+    if len(val) == 0:
+        return out
+    o = np.lexsort((val, lab))
+    ls, vs = lab[o], val[o]
+    lo = np.searchsorted(ls, parts, "left")
+    hi = np.searchsorted(ls, parts, "right")
+    for part, a, b in zip(parts, lo, hi):
+        k = b - a
+        if k == 0:
+            continue
+        m = a + k // 2
+        out[int(part)] = float(vs[m] if k % 2 else (vs[m - 1] + vs[m]) / vs.dtype.type(2))
+    return out
 
 
 def link(masks, fr):
@@ -206,28 +248,37 @@ def compute(run, cache):
                     if both.sum() >= 10:
                         mdq = float(np.median(D[both] - Dq[both]))
                 E0 = info["E0"][sl]
-                for part in np.unique(partsC[ovl]):
-                    u = ovl & (partsC == part)
-                    if u.sum() < 15:
+                # every part at once (module docstring): counts by bincount, medians by one sort
+                lab = partsC[ovl]
+                parts = np.unique(lab)
+                Vo, Zo, Eo, Co = V[ovl], Zc[ovl] > 0, E0[ovl], Cc[ovl]
+                coreo = Co & Zo
+                cnt = lambda m: np.bincount(lab[m], minlength=256)   # noqa: E731
+                n_ = np.bincount(lab, minlength=256)
+                nV_, a_, h_ = cnt(Vo), cnt(~Vo), cnt(Eo)
+                nvalO_, ncore_ = cnt(~Vo & Zo), cnt(coreo)
+                ncoreO_, ncoreI_ = cnt(coreo & ~Vo), cnt(coreo & Vo)
+                if r is not None:
+                    ro = r[ovl]
+                    med = _group_medians(lab[coreo], ro[coreo], parts)
+                    medO = _group_medians(lab[coreo & ~Vo], ro[coreo & ~Vo], parts)
+                    medI = _group_medians(lab[coreo & Vo], ro[coreo & Vo], parts)
+                for part in parts:
+                    pk = int(part)
+                    if n_[pk] < 15:
                         continue
-                    core = u & Cc & (Zc > 0)
-                    nV = int((u & V).sum())
-                    nvalO = int((u & ~V & (Zc > 0)).sum())
-                    a = int((u & ~V).sum())
-                    h = int((u & E0).sum())
-                    if r is not None and core.sum() > 0:
-                        mg = float(np.median(r[core]))
-                        coreO = core & ~V
-                        mgo = float(np.median(r[coreO])) if coreO.sum() >= 5 else np.nan
-                        coreI = core & V
-                        mgi = float(np.median(r[coreI])) if coreI.sum() >= 5 else np.nan
+                    nV, nvalO, a, h = int(nV_[pk]), int(nvalO_[pk]), int(a_[pk]), int(h_[pk])
+                    if r is not None and ncore_[pk] > 0:
+                        mg = med[pk]
+                        mgo = medO[pk] if ncoreO_[pk] >= 5 else np.nan
+                        mgi = medI[pk] if ncoreI_[pk] >= 5 else np.nan
                     else:
                         mg = mgo = mgi = np.nan
-                    units.append(dict(i=i, ci=ci, tr=tr, pid=p, part=int(part), n=int(u.sum()),
-                                      nV=nV, a=a, h=h, ncore=int(core.sum()), mg=mg, mgo=mgo, mgi=mgi,
+                    units.append(dict(i=i, ci=ci, tr=tr, pid=p, part=pk, n=int(n_[pk]),
+                                      nV=nV, a=a, h=h, ncore=int(ncore_[pk]), mg=mg, mgo=mgo, mgi=mgi,
                                       anchor=anchor, sig=info["sig"], s=info["s"], carea=carea,
                                       own=ov_people[p] / carea, cov=ov_people[p] / max(info["Varea"], 1),
-                                      ncoreO=int((core & ~V).sum()), ncoreI=int((core & V).sum()),
+                                      ncoreO=int(ncoreO_[pk]), ncoreI=int(ncoreI_[pk]),
                                       other=max([ov_people[q] for q in pids if q != p], default=0) / carea,
                                       inV=civ, score=csc, person=qperson, mdq=mdq, nvalO=nvalO))
         # no later frame reads this frame's per entries: pack them now (the same dicts the frozen code builds after

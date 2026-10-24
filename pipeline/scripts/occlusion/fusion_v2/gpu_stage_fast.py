@@ -524,8 +524,13 @@ def hf_depth_load(model_id):
     the model under a process-wide empty-weights (meta device) context, and a SAM3 build running at the same time in
     another thread then got meta parameters ("Cannot copy out of meta tensor")."""
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation
-    proc = AutoImageProcessor.from_pretrained(model_id)
-    return proc, AutoModelForDepthEstimation.from_pretrained(model_id).cuda().eval().half()
+    try:   # the local cache first: from_pretrained otherwise asks the Hub for updates (~0.5 s), every run
+        proc = AutoImageProcessor.from_pretrained(model_id, local_files_only=True)
+        m = AutoModelForDepthEstimation.from_pretrained(model_id, local_files_only=True)
+    except OSError:   # not downloaded yet
+        proc = AutoImageProcessor.from_pretrained(model_id)
+        m = AutoModelForDepthEstimation.from_pretrained(model_id)
+    return proc, m.cuda().eval().half()
 
 
 def hf_depth(run, Z, model_id, loaded=None):

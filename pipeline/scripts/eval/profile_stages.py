@@ -162,6 +162,7 @@ def phase_fusion(a):
     with sp.Stage(st, "render"):
         fusion.render(run, ev, cache, dec, a.occ, fusion.P, save=True)
     total = time.perf_counter() - t0
+    os.makedirs(a.prof, exist_ok=True)   # the mesh phase makes it; a fusion-only run may not have it
     np.savez_compressed(f"{a.prof}/points.npz", **{f"{i}_{k}": v for i, d in points.items() for k, v in d.items()})
     npts = [sum(len(v) for v in d.values()) for d in points.values()]
     with np.load(f"{cache}/cands.npz") as cz:
