@@ -106,3 +106,49 @@ def test_render(tmp_path, sample_video):
         assert cmd[cmd.index("--vrm_map") + 1].startswith("2=") and cmd[cmd.index("--fps") + 1] == "30.0"
         stages = [s["status"] for s in j["stages"]]
         assert stages == ["done", "done", "done"]
+
+
+def test_export(tmp_path, sample_video):
+    from test_adapters import make_vrm
+    FakePipelineRunner.calls.clear()
+    with make_client(tmp_path, runner_factory=FakePipelineRunner) as c:
+        pid, aid = analyze(c, sample_video)
+        av = c.post("/v1/avatars", headers=AUTH, files={"file": ("a.vrm", make_vrm(), "x")}).json()["avatarId"]
+        r = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "render", "params": {
+            "analyzeJobId": aid, "cast": [{"personId": 1, "action": "replace", "avatarId": av}]}}).json()
+        ovr = [{"id": "ovr_01", "kind": "unit", "personId": 1, "unitId": 1, "range": [5, 20], "mode": "front"},
+               {"id": "ovr_02", "kind": "brush", "personId": 1, "frame": 3, "mask": "x", "mode": "behind"}]
+        e = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "export", "params": {
+            "renderJobId": r["jobId"], "overrides": ovr, "settings": {"format": "mp4_h264", "crf": 20}}}).json()
+        assert e["dependsOn"] == r["jobId"]
+        j = wait_job(c, e["jobId"])
+        assert j["status"] == "succeeded", j
+        assert j["artifacts"] == ["export_video"]
+        work = c.app.state.deps.projects.root(pid) / "work" / e["jobId"]
+        items = json.loads((work / "ex" / "overrides.json").read_text())["items"]
+        assert items == [{"personId": 1, "tracks": [3], "range": [5, 20], "mode": "front", "id": "ovr_01"}]
+        cmd = [x for x, _ in FakePipelineRunner.calls if x[2].endswith("avatar_app.py") and "--overrides" in x][-1]
+        assert "--hq" not in cmd                       # the sample is 360x640: its proxy is the full resolution
+        data = c.get(f"/v1/jobs/{e['jobId']}/artifacts/export_video", headers=AUTH).content
+        out = tmp_path / "export.mp4"
+        out.write_bytes(data)
+        import subprocess
+        probe = json.loads(subprocess.run(["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", str(out)],
+                                          capture_output=True, text=True).stdout)
+        kinds = {s["codec_type"]: s for s in probe["streams"]}
+        assert kinds["video"]["codec_name"] == "h264" and kinds["video"]["pix_fmt"] == "yuv420p"
+        assert kinds["audio"]["codec_name"] == "aac"
+
+
+def test_export_rejects_unknown_unit(tmp_path, sample_video):
+    from test_adapters import make_vrm
+    with make_client(tmp_path, runner_factory=FakePipelineRunner) as c:
+        pid, aid = analyze(c, sample_video)
+        av = c.post("/v1/avatars", headers=AUTH, files={"file": ("a.vrm", make_vrm(), "x")}).json()["avatarId"]
+        r = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "render", "params": {
+            "analyzeJobId": aid, "cast": [{"personId": 1, "action": "replace", "avatarId": av}]}}).json()
+        e = c.post(f"/v1/projects/{pid}/jobs", headers=AUTH, json={"type": "export", "params": {
+            "renderJobId": r["jobId"], "overrides": [{"id": "o", "kind": "unit", "personId": 1, "unitId": 99,
+                                                     "range": [0, 1], "mode": "front"}]}}).json()
+        j = wait_job(c, e["jobId"])
+        assert j["status"] == "failed" and j["error"]["code"] == "VALIDATION_FAILED"

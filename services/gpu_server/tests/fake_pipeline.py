@@ -58,6 +58,12 @@ def fake_avatar_app(cmd):
     import json
     pout, av, name = _arg(cmd, "--pipeline_out"), _arg(cmd, "--out"), cmd[cmd.index("--name") + 1]
     targets = [int(x) for x in cmd[cmd.index("--targets") + 1].split(",")]
+    if "--overrides" in cmd:                     # export: one mp4, no layers
+        n = len(list((pout / "masks").glob("*.png")))
+        av.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30:duration=2",
+                        "-c:v", "libx264", "-crf", "12", str(av / f"avatar_{name}.mp4")], check=True)
+        return [f"[avatar] target {targets[0]}: x"] + [f"[avatar] frame {f + 1}/{n}" for f in range(n)], 0
     n = len(list((pout / "masks").glob("*.png")))
     lay = av / "layers"
     lines = ["[avatar] fusion v2 decisions from x", f"[avatar] target {targets[0]}: avatar scale 1.0"]
