@@ -2,6 +2,8 @@
 
 アプリ（レーン A・B）と GPU サーバー（レーン C）の契約。正本は [designdocs/architecture/contracts.md](../../designdocs/architecture/contracts.md)。
 
+**アプリから呼ぶ手順は [CLIENT_GUIDE.md](CLIENT_GUIDE.md)**（流れ・アップロード・SSE の読み方・成果物・手修正・モック）。
+
 | ファイル | 中身 | 作り方 |
 |---|---|---|
 | `openapi.yaml` | `/v1` の全エンドポイント・型・エラー。`x-sse-events` に SSE の各イベントの data の型 | **生成物**。`services/gpu_server` で `python scripts/export_openapi.py`（手で編集しない） |
