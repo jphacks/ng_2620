@@ -20,7 +20,14 @@ describe("SseParser", () => {
   it("断片の境界・改行コード・複数行 data・コメントを扱う", () => {
     const p = new SseParser();
     const out: SseMessage[] = [];
-    for (const chunk of [": hello\n", "id: 1\r", "\nevent: progress\ndata: {\"a\":", "1}\n\n", "id: 2\nevent: x\ndata: l1\ndata: l2\r\n\r\n", "data: no-event\n\n"]) {
+    for (const chunk of [
+      ": hello\n",
+      "id: 1\r",
+      '\nevent: progress\ndata: {"a":',
+      "1}\n\n",
+      "id: 2\nevent: x\ndata: l1\ndata: l2\r\n\r\n",
+      "data: no-event\n\n",
+    ]) {
       out.push(...p.push(chunk));
     }
     expect(out).toEqual([

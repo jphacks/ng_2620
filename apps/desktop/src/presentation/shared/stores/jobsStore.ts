@@ -38,9 +38,15 @@ interface JobsStore {
 
 const subs = new Map<string, AbortController>();
 
-function notify(kind: "success" | "error" | "info", title: string, body?: string, actions?: { label: string; run(): void }[]) {
+function notify(
+  kind: "success" | "error" | "info",
+  title: string,
+  body?: string,
+  actions?: { label: string; run(): void }[],
+) {
   toast({ kind, title, body, actions });
-  if (typeof document !== "undefined" && !document.hasFocus()) void getServices().platform.notifier.osNotify(title, body);
+  if (typeof document !== "undefined" && !document.hasFocus())
+    void getServices().platform.notifier.osNotify(title, body);
 }
 
 export const useJobsStore = create<JobsStore>((set, get) => {
@@ -80,7 +86,12 @@ export const useJobsStore = create<JobsStore>((set, get) => {
       if (a.name === "meta" || a.name === "persons") {
         const cur = useProjectStore.getState().current;
         if (!cur || cur.project.id !== session.project.id) return;
-        const apply = await uc.loadAnalysisResult.execute({ project: cur.project, jobId, name: a.name, defaultLabel: ja.cast.defaultLabel });
+        const apply = await uc.loadAnalysisResult.execute({
+          project: cur.project,
+          jobId,
+          name: a.name,
+          defaultLabel: ja.cast.defaultLabel,
+        });
         useProjectStore.getState().update(apply);
       }
     } catch (e) {
@@ -112,7 +123,9 @@ export const useJobsStore = create<JobsStore>((set, get) => {
       useProjectStore.getState().update(apply);
       setArtifact(job.jobId, "export_video", { status: "ready", path });
       const file = path.split(/[\\/]/).pop() ?? path;
-      notify("success", ja.notify.exportDone(file), undefined, [{ label: ja.export.reveal, run: () => void getServices().platform.shell.reveal(path) }]);
+      notify("success", ja.notify.exportDone(file), undefined, [
+        { label: ja.export.reveal, run: () => void getServices().platform.shell.reveal(path) },
+      ]);
     } catch (e) {
       setArtifact(job.jobId, "export_video", { status: "error", error: toAppError(e) });
       const t = jobErrorText({ code: toAppError(e).code, message: toAppError(e).message });
@@ -123,12 +136,15 @@ export const useJobsStore = create<JobsStore>((set, get) => {
   const onFinished = async (job: Job) => {
     const type = ja.jobType[job.type];
     if (job.status === "succeeded") {
-      if (job.type === "analyze") notify("success", ja.notify.analyzeDone(useProjectStore.getState().current?.project.persons.length ?? 0));
+      if (job.type === "analyze")
+        notify("success", ja.notify.analyzeDone(useProjectStore.getState().current?.project.persons.length ?? 0));
       if (job.type === "render") notify("success", ja.notify.renderDone);
       if (job.type === "export") await saveExport(job);
     } else if (job.status === "failed") {
       const t = jobErrorText(job.error);
-      notify("error", `${ja.notify.failed(type)}：${t.title}`, t.body, [{ label: ja.common.retry, run: () => void get().retry(job.jobId) }]);
+      notify("error", `${ja.notify.failed(type)}：${t.title}`, t.body, [
+        { label: ja.common.retry, run: () => void get().retry(job.jobId) },
+      ]);
     } else if (job.status === "canceled") {
       notify("info", ja.notify.canceled(type));
     }
@@ -192,7 +208,9 @@ export const useJobsStore = create<JobsStore>((set, get) => {
       const session = useProjectStore.getState().current;
       if (!job || !session) return null;
       try {
-        return get().accept(await getServices().uc.retryJob.execute({ project: session.project, backend: currentBackend(), job }));
+        return get().accept(
+          await getServices().uc.retryJob.execute({ project: session.project, backend: currentBackend(), job }),
+        );
       } catch (e) {
         const t = jobErrorText({ code: toAppError(e).code, message: toAppError(e).message });
         notify("error", t.title, t.body);

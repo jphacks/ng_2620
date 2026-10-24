@@ -18,7 +18,10 @@ export function useEditorSession() {
     let alive = true;
     (async () => {
       try {
-        const [data, doc] = await Promise.all([uc.loadEditorData.execute(project), uc.loadOverrides.execute(project.id)]);
+        const [data, doc] = await Promise.all([
+          uc.loadEditorData.execute(project),
+          uc.loadOverrides.execute(project.id),
+        ]);
         if (alive) useEditorStore.getState().open(project.id, data, doc.items);
       } catch (e) {
         if (alive) useEditorStore.getState().fail(e);

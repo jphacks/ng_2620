@@ -10,7 +10,19 @@ import { formatVram } from "@/presentation/shared/format";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
-import { Badge, Button, ConfirmDialog, cx, EmptyState, ErrorNotice, Label, Select, Spinner, StatusDot, TextInput } from "@/presentation/shared/ui";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  cx,
+  EmptyState,
+  ErrorNotice,
+  Label,
+  Select,
+  Spinner,
+  StatusDot,
+  TextInput,
+} from "@/presentation/shared/ui";
 import { LocalServerPanel } from "./LocalServerPanel";
 
 const T = ja.connection;
@@ -49,7 +61,10 @@ export function ConnectionSettings() {
             <button
               type="button"
               onClick={openLocal}
-              className={cx("flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-raised", showLocal && "bg-raised")}
+              className={cx(
+                "flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-raised",
+                showLocal && "bg-raised",
+              )}
             >
               <Cpu size={14} className="shrink-0 text-muted" />
               <span className="truncate font-medium">{T.local.title}</span>
@@ -77,7 +92,11 @@ export function ConnectionSettings() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="truncate">{p.name}</span>
-                    {p.id === activeProfileId && <StatusDot tone={status === "connected" ? "success" : status === "reconnecting" ? "warning" : "muted"} />}
+                    {p.id === activeProfileId && (
+                      <StatusDot
+                        tone={status === "connected" ? "success" : status === "reconnecting" ? "warning" : "muted"}
+                      />
+                    )}
                   </div>
                   <div className="truncate text-xs text-faint">{p.baseUrl}</div>
                 </div>
@@ -92,7 +111,12 @@ export function ConnectionSettings() {
         {showLocal ? (
           <LocalServerPanel />
         ) : editing ? (
-          <ProfileEditor key={editing.profile.id} initial={editing.profile} isNew={editing.isNew} onDone={() => setEditing(null)} />
+          <ProfileEditor
+            key={editing.profile.id}
+            initial={editing.profile}
+            isNew={editing.isNew}
+            onDone={() => setEditing(null)}
+          />
         ) : profiles.length === 0 ? (
           <EmptyState icon={<Server size={32} />} title={T.profiles} body={T.empty}>
             <Button variant="primary" icon={<Plus size={14} />} onClick={startNew}>
@@ -153,7 +177,12 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
       <div className="text-lg font-semibold">{isNew ? T.newProfile : p.name}</div>
       <div className="grid grid-cols-[8rem_1fr] items-center gap-x-3 gap-y-3">
         <Label htmlFor="pf-name">{T.name}</Label>
-        <TextInput id="pf-name" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder="remote-win" />
+        <TextInput
+          id="pf-name"
+          value={p.name}
+          onChange={(e) => setP({ ...p, name: e.target.value })}
+          placeholder="remote-win"
+        />
         <Label>{T.kind}</Label>
         <Select<ProfileKind>
           aria-label={T.kind}
@@ -165,7 +194,13 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
           ]}
         />
         <Label htmlFor="pf-url">{T.url}</Label>
-        <TextInput id="pf-url" value={p.baseUrl} onChange={(e) => setP({ ...p, baseUrl: e.target.value })} placeholder={T.urlHint[p.kind]} spellCheck={false} />
+        <TextInput
+          id="pf-url"
+          value={p.baseUrl}
+          onChange={(e) => setP({ ...p, baseUrl: e.target.value })}
+          placeholder={T.urlHint[p.kind]}
+          spellCheck={false}
+        />
         <Label htmlFor="pf-token">{T.token}</Label>
         <TextInput
           id="pf-token"
@@ -185,12 +220,21 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
         <Button variant="primary" onClick={() => void onSave()}>
           {ja.common.save}
         </Button>
-        <Button onClick={() => void onTest()} disabled={testing || problems.length > 0} icon={testing ? <Spinner /> : undefined}>
+        <Button
+          onClick={() => void onTest()}
+          disabled={testing || problems.length > 0}
+          icon={testing ? <Spinner /> : undefined}
+        >
           {testing ? T.testing : T.test}
         </Button>
         {!isNew && !isActive && <Button onClick={() => void select(p.id)}>{T.setDefault}</Button>}
         {!isNew && (
-          <Button variant="ghost" className="ml-auto text-danger" icon={<Trash2 size={14} />} onClick={() => setConfirmRemove(true)}>
+          <Button
+            variant="ghost"
+            className="ml-auto text-danger"
+            icon={<Trash2 size={14} />}
+            onClick={() => setConfirmRemove(true)}
+          >
             {ja.common.remove}
           </Button>
         )}

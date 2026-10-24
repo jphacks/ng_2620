@@ -13,9 +13,18 @@ function SaveState() {
   const state = useProjectStore((s) => s.saveState);
   const saveNow = useProjectStore((s) => s.saveNow);
   if (!hasProject) return null;
-  const label = { saved: ja.status.saved, dirty: ja.status.dirty, saving: ja.status.saving, error: ja.status.saveFailed }[state];
+  const label = {
+    saved: ja.status.saved,
+    dirty: ja.status.dirty,
+    saving: ja.status.saving,
+    error: ja.status.saveFailed,
+  }[state];
   return (
-    <button type="button" onClick={() => void saveNow()} className={cx("px-2 hover:bg-raised", state === "error" && "text-danger")}>
+    <button
+      type="button"
+      onClick={() => void saveNow()}
+      className={cx("px-2 hover:bg-raised", state === "error" && "text-danger")}
+    >
       {label}
     </button>
   );

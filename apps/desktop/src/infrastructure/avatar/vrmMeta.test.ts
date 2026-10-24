@@ -28,7 +28,10 @@ function glb(json: object, bin?: Uint8Array): Uint8Array {
 }
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
-const images = { images: [{ bufferView: 0, mimeType: "image/png" }], bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: PNG.length }] };
+const images = {
+  images: [{ bufferView: 0, mimeType: "image/png" }],
+  bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: PNG.length }],
+};
 
 describe("readVrm", () => {
   it("VRM 1.0 のメタ情報とサムネイル", () => {
@@ -83,7 +86,14 @@ describe("readVrm", () => {
         textures: [{ source: 0 }],
         extensions: {
           VRM: {
-            meta: { title: "Old", author: "Bob", licenseName: "CC_BY_NC", commercialUssageName: "Disallow", allowedUserName: "OnlyAuthor", texture: 0 },
+            meta: {
+              title: "Old",
+              author: "Bob",
+              licenseName: "CC_BY_NC",
+              commercialUssageName: "Disallow",
+              allowedUserName: "OnlyAuthor",
+              texture: 0,
+            },
             humanoid: { humanBones },
           },
         },
@@ -91,17 +101,26 @@ describe("readVrm", () => {
       PNG,
     );
     const r = readVrm(bytes);
-    expect(r.meta).toMatchObject({ name: "Old", authors: ["Bob"], version: "0.x", license: { name: "CC_BY_NC", commercial: "Disallow" } });
+    expect(r.meta).toMatchObject({
+      name: "Old",
+      authors: ["Bob"],
+      version: "0.x",
+      license: { name: "CC_BY_NC", commercial: "Disallow" },
+    });
     expect(r.thumbnail?.bytes.length).toBe(PNG.length);
     expect(licenseBadge({ ...r.meta })).toBe("commercial_ng");
   });
 
   it("必須ボーンが無い・VRM 拡張が無い・GLB でないものは AVATAR_INVALID", () => {
     const noHead = Object.fromEntries(REQUIRED_BONES.filter((b) => b !== "head").map((b, i) => [b, { node: i }]));
-    expect(() => readVrm(glb({ extensions: { VRMC_vrm: { meta: {}, humanoid: { humanBones: noHead } } } }))).toThrowError(
-      expect.objectContaining({ code: "AVATAR_INVALID", detail: { missing: ["head"] } }),
+    expect(() =>
+      readVrm(glb({ extensions: { VRMC_vrm: { meta: {}, humanoid: { humanBones: noHead } } } })),
+    ).toThrowError(expect.objectContaining({ code: "AVATAR_INVALID", detail: { missing: ["head"] } }));
+    expect(() => readVrm(glb({ asset: { version: "2.0" } }))).toThrowError(
+      expect.objectContaining({ code: "AVATAR_INVALID" }),
     );
-    expect(() => readVrm(glb({ asset: { version: "2.0" } }))).toThrowError(expect.objectContaining({ code: "AVATAR_INVALID" }));
-    expect(() => readVrm(new TextEncoder().encode("not a glb at all, really"))).toThrowError(expect.objectContaining({ code: "AVATAR_INVALID" }));
+    expect(() => readVrm(new TextEncoder().encode("not a glb at all, really"))).toThrowError(
+      expect.objectContaining({ code: "AVATAR_INVALID" }),
+    );
   });
 });

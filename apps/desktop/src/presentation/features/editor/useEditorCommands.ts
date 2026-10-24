@@ -11,8 +11,17 @@ const scope = "workspace:edit" as const;
 /** 選択中のユニット × 人物で、再生ヘッドにかかっている修正（I / O / Delete の対象） */
 function currentOverride(): UnitOverride | null {
   const s = S();
-  const list = s.overrides.filter((o): o is UnitOverride => o.kind === "unit" && o.unitId === s.selectedUnit && (s.selectedPerson === null || o.personId === s.selectedPerson));
-  return [...list].reverse().find((o) => o.range[0] <= s.playhead && s.playhead <= o.range[1]) ?? list[list.length - 1] ?? null;
+  const list = s.overrides.filter(
+    (o): o is UnitOverride =>
+      o.kind === "unit" &&
+      o.unitId === s.selectedUnit &&
+      (s.selectedPerson === null || o.personId === s.selectedPerson),
+  );
+  return (
+    [...list].reverse().find((o) => o.range[0] <= s.playhead && s.playhead <= o.range[1]) ??
+    list[list.length - 1] ??
+    null
+  );
 }
 
 function setSelectedMode(mode: "front" | "behind" | null) {

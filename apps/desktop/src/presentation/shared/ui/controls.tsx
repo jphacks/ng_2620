@@ -27,12 +27,20 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button({ variant = "secondary", size = "md", icon, className, children, type = "button", ...rest }, ref) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "secondary", size = "md", icon, className, children, type = "button", ...rest },
+  ref,
+) {
   return (
     <button
       ref={ref}
       type={type}
-      className={cx("inline-flex shrink-0 items-center justify-center rounded font-medium transition-colors disabled:cursor-not-allowed", VARIANT[variant], SIZE[size], className)}
+      className={cx(
+        "inline-flex shrink-0 items-center justify-center rounded font-medium transition-colors disabled:cursor-not-allowed",
+        VARIANT[variant],
+        SIZE[size],
+        className,
+      )}
       {...rest}
     >
       {icon}
@@ -41,8 +49,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-export const IconButton = forwardRef<HTMLButtonElement, ButtonProps & { label: string }>(function IconButton({ label, className, size = "sm", variant = "ghost", ...rest }, ref) {
-  return <Button ref={ref} aria-label={label} title={label} variant={variant} size={size} className={cx("!px-1.5", className)} {...rest} />;
+export const IconButton = forwardRef<HTMLButtonElement, ButtonProps & { label: string }>(function IconButton(
+  { label, className, size = "sm", variant = "ghost", ...rest },
+  ref,
+) {
+  return (
+    <Button
+      ref={ref}
+      aria-label={label}
+      title={label}
+      variant={variant}
+      size={size}
+      className={cx("!px-1.5", className)}
+      {...rest}
+    />
+  );
 });
 
 export function Label({ children, htmlFor, className }: { children: ReactNode; htmlFor?: string; className?: string }) {
@@ -53,17 +74,35 @@ export function Label({ children, htmlFor, className }: { children: ReactNode; h
   );
 }
 
-export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function TextInput({ className, ...rest }, ref) {
+export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function TextInput(
+  { className, ...rest },
+  ref,
+) {
   return (
     <input
       ref={ref}
-      className={cx("h-8 w-full rounded border border-border bg-bg px-2.5 text-base text-fg placeholder:text-faint focus:border-accent focus:outline-none", className)}
+      className={cx(
+        "h-8 w-full rounded border border-border bg-bg px-2.5 text-base text-fg placeholder:text-faint focus:border-accent focus:outline-none",
+        className,
+      )}
       {...rest}
     />
   );
 });
 
-export function Checkbox({ checked, onChange, label, disabled, id }: { checked: boolean; onChange(v: boolean): void; label?: ReactNode; disabled?: boolean; id?: string }) {
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  disabled,
+  id,
+}: {
+  checked: boolean;
+  onChange(v: boolean): void;
+  label?: ReactNode;
+  disabled?: boolean;
+  id?: string;
+}) {
   return (
     <label className={cx("inline-flex items-center gap-2", disabled ? "text-faint" : "cursor-pointer")}>
       <CheckboxPrimitive.Root
@@ -82,7 +121,17 @@ export function Checkbox({ checked, onChange, label, disabled, id }: { checked: 
   );
 }
 
-export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange(v: boolean): void; label?: ReactNode; disabled?: boolean }) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange(v: boolean): void;
+  label?: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <label className={cx("inline-flex items-center gap-2", disabled ? "text-faint" : "cursor-pointer")}>
       <SwitchPrimitive.Root
@@ -125,7 +174,10 @@ export function Select<T extends string>({
     <SelectPrimitive.Root value={value ?? undefined} onValueChange={(v) => onChange(v as T)} disabled={disabled}>
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
-        className={cx("inline-flex h-8 min-w-[10rem] items-center justify-between gap-2 rounded border border-border bg-bg px-2.5 text-base text-fg disabled:text-faint", className)}
+        className={cx(
+          "inline-flex h-8 min-w-[10rem] items-center justify-between gap-2 rounded border border-border bg-bg px-2.5 text-base text-fg disabled:text-faint",
+          className,
+        )}
       >
         <SelectPrimitive.Value placeholder={<span className="text-faint">{placeholder}</span>} />
         <SelectPrimitive.Icon>
@@ -133,7 +185,11 @@ export function Select<T extends string>({
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content position="popper" sideOffset={4} className="z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-border bg-panel-2 shadow-xl">
+        <SelectPrimitive.Content
+          position="popper"
+          sideOffset={4}
+          className="z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-border bg-panel-2 shadow-xl"
+        >
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
               <SelectPrimitive.Item

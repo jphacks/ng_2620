@@ -25,7 +25,11 @@ function draw(c: Compositor, data: EditorData, b: FrameBundle, overrides: readon
     {
       frame: b.frame,
       clean: b.clean,
-      persons: order.map((p) => ({ row: data.persons.indexOf(p), avatar: b.avatars.get(p)!, hide: b.hides.get(p) ?? null })),
+      persons: order.map((p) => ({
+        row: data.persons.indexOf(p),
+        avatar: b.avatars.get(p)!,
+        hide: b.hides.get(p) ?? null,
+      })),
       units: b.units,
       mask: b.mask,
     },
@@ -141,7 +145,7 @@ function ViewerCanvas({ data }: { data: EditorData }) {
   }, [s.playhead, s.playing, loader, unitOverrides, s.layers.mask]);
 
   // 表示だけの変更は描き直すだけ
-   
+
   useEffect(render, [s.view, s.split, s.peekOriginal, s.layers, s.hoverUnit, s.selectedUnit, s.altDown]);
 
   // 再生ループ：経過時間からフレームを決め、読み込み済みなら描く（間に合わなければ前のフレームのまま）
@@ -211,7 +215,7 @@ function ViewerCanvas({ data }: { data: EditorData }) {
   const unitAt = (clientX: number, clientY: number) => {
     const p = toImage(clientX, clientY);
     const u = bundleRef.current?.units;
-    return p && u ? u.data[p.y * u.width + p.x] ?? 0 : 0;
+    return p && u ? (u.data[p.y * u.width + p.x] ?? 0) : 0;
   };
 
   const drag = useRef<{ kind: "pan" | "split"; x: number; y: number; pan: { x: number; y: number } } | null>(null);
@@ -271,8 +275,14 @@ function ViewerCanvas({ data }: { data: EditorData }) {
             cursor: s.view === "split" ? "ew-resize" : s.hoverUnit ? "pointer" : "default",
           }}
         />
-        {frameError && <div className="absolute inset-x-2 bottom-2 rounded bg-danger/80 px-2 py-1 text-xs text-white">{frameError}</div>}
-        {s.peekOriginal && <div className="absolute left-2 top-2 rounded bg-overlay px-2 py-0.5 text-xs">{ja.editor.view.original}</div>}
+        {frameError && (
+          <div className="absolute inset-x-2 bottom-2 rounded bg-danger/80 px-2 py-1 text-xs text-white">
+            {frameError}
+          </div>
+        )}
+        {s.peekOriginal && (
+          <div className="absolute left-2 top-2 rounded bg-overlay px-2 py-0.5 text-xs">{ja.editor.view.original}</div>
+        )}
       </div>
       <div className="flex h-7 shrink-0 items-center gap-3 border-t border-border px-3 font-mono text-xs text-muted">
         <span className="text-text">{formatTimecode(s.playhead, data.fps)}</span>

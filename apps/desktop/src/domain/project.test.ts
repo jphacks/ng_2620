@@ -18,8 +18,17 @@ import {
   uniqueName,
 } from "./project";
 
-const source = { path: "/Users/me/Movies/IMG_0001.MOV", copied: false, durationSec: 9.8, width: 1080, height: 1920, fps: 29.97, hasAudio: true };
-const p0 = () => newProject({ id: "loc_1", name: "IMG_0001", now: "2026-10-24T00:00:00Z", source, profileId: "remote-win" });
+const source = {
+  path: "/Users/me/Movies/IMG_0001.MOV",
+  copied: false,
+  durationSec: 9.8,
+  width: 1080,
+  height: 1920,
+  fps: 29.97,
+  hasAudio: true,
+};
+const p0 = () =>
+  newProject({ id: "loc_1", name: "IMG_0001", now: "2026-10-24T00:00:00Z", source, profileId: "remote-win" });
 
 describe("migrate", () => {
   it("現行版はそのまま読める（往復で同じ）", () => {
@@ -42,7 +51,12 @@ describe("migrate", () => {
     expect(p.schemaVersion).toBe(1);
     expect(p.createdAt).toBe("2026-10-01T00:00:00Z");
     expect(p.updatedAt).toBe("2026-10-02T00:00:00Z");
-    expect(p.compute).toEqual({ profileId: "remote-win", serverProjectId: "prj_9", mediaId: "med_9", upload: undefined });
+    expect(p.compute).toEqual({
+      profileId: "remote-win",
+      serverProjectId: "prj_9",
+      mediaId: "med_9",
+      upload: undefined,
+    });
     expect(p.jobs.analyze).toEqual({ jobId: "job_a", status: "succeeded", finishedAt: undefined });
     expect(p.jobs.render?.jobId).toBe("job_r");
     expect(p.finish).toEqual({ smooth: 0.05, footLock: true, spring: true });
@@ -68,7 +82,16 @@ describe("migrate", () => {
 describe("再描画・再書き出しの要否", () => {
   const withRender = () => {
     let p = { ...p0(), cast: [{ personId: 1, action: "replace" as const, avatarId: "av_a" }] };
-    const job = { ...newJob({ jobId: "job_r", projectId: "prj", type: "render", params: { analyzeJobId: "job_a", cast: p.cast }, createdAt: "t" }), status: "succeeded" as const };
+    const job = {
+      ...newJob({
+        jobId: "job_r",
+        projectId: "prj",
+        type: "render",
+        params: { analyzeJobId: "job_a", cast: p.cast },
+        createdAt: "t",
+      }),
+      status: "succeeded" as const,
+    };
     p = recordJob(p, job, { castHash: projectCastHash(p) });
     return p;
   };
@@ -86,14 +109,30 @@ describe("再描画・再書き出しの要否", () => {
     let p = withRender();
     const doc = emptyOverrides();
     const job = {
-      ...newJob({ jobId: "job_e", projectId: "prj", type: "export", params: { renderJobId: "job_r", overrides: [], settings: { format: "mp4_h264" } }, createdAt: "t" }),
+      ...newJob({
+        jobId: "job_e",
+        projectId: "prj",
+        type: "export",
+        params: { renderJobId: "job_r", overrides: [], settings: { format: "mp4_h264" } },
+        createdAt: "t",
+      }),
       status: "succeeded" as const,
     };
     p = recordJob(p, job, { overridesHash: overridesHash(doc) });
     expect(needsExport(p, overridesHash(doc))).toBe(false);
     const edited = {
       ...doc,
-      items: [{ id: "ovr_1", kind: "unit" as const, personId: 1, unitId: 12, range: [40, 95] as [number, number], mode: "front" as const, createdAt: "t" }],
+      items: [
+        {
+          id: "ovr_1",
+          kind: "unit" as const,
+          personId: 1,
+          unitId: 12,
+          range: [40, 95] as [number, number],
+          mode: "front" as const,
+          createdAt: "t",
+        },
+      ],
     };
     expect(needsExport(p, overridesHash(edited))).toBe(true);
     // id と作成日時だけが違う修正は同じ内容とみなす

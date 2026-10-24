@@ -68,9 +68,27 @@ export function ProjectRoute() {
   }, [connected, restore, restoreJobs]);
 
   const go = (w: Workspace) => projectId && navigate(`/project/${projectId}/${w}`);
-  useCommand({ id: "workspace.import", keys: ["mod+1"], scope: "project", label: ja.workspace.import, run: () => go("import") });
-  useCommand({ id: "workspace.edit", keys: ["mod+2"], scope: "project", label: ja.workspace.edit, run: () => go("edit") });
-  useCommand({ id: "workspace.export", keys: ["mod+3", "mod+e"], scope: "project", label: ja.workspace.export, run: () => go("export") });
+  useCommand({
+    id: "workspace.import",
+    keys: ["mod+1"],
+    scope: "project",
+    label: ja.workspace.import,
+    run: () => go("import"),
+  });
+  useCommand({
+    id: "workspace.edit",
+    keys: ["mod+2"],
+    scope: "project",
+    label: ja.workspace.edit,
+    run: () => go("edit"),
+  });
+  useCommand({
+    id: "workspace.export",
+    keys: ["mod+3", "mod+e"],
+    scope: "project",
+    label: ja.workspace.export,
+    run: () => go("export"),
+  });
 
   if (!projectId || current !== projectId) return <Navigate to="/" replace />;
 

@@ -22,7 +22,10 @@ export function LayersPanel() {
           <button
             key={v}
             type="button"
-            className={cx("flex-1 rounded px-1 py-0.5", view === v ? "bg-accent text-accent-fg" : "text-muted hover:bg-raised")}
+            className={cx(
+              "flex-1 rounded px-1 py-0.5",
+              view === v ? "bg-accent text-accent-fg" : "text-muted hover:bg-raised",
+            )}
             onClick={() => useEditorStore.getState().setView(v)}
           >
             {ja.editor.view[v]}
@@ -38,7 +41,9 @@ export function LayersPanel() {
               onChange={() => useEditorStore.getState().toggleLayer(k)}
               label={ja.editor.layerNames[k]}
             />
-            {ja.editor.layerKeys[k] && <span className="font-mono text-[10px] text-faint">{ja.editor.layerKeys[k]}</span>}
+            {ja.editor.layerKeys[k] && (
+              <span className="font-mono text-[10px] text-faint">{ja.editor.layerKeys[k]}</span>
+            )}
           </div>
         ))}
       </div>

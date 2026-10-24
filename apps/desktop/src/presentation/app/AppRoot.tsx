@@ -19,20 +19,29 @@ import { DevEditorRoute } from "./routes/EditRoute";
 import { ProjectRoute } from "./routes/ProjectRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 
-const router = createHashRouter([
+const router = createHashRouter(
+  [
+    {
+      element: <AppFrame />,
+      children: [
+        { path: "/", element: <HomeRoute /> },
+        { path: "/project/:projectId/:workspace", element: <ProjectRoute /> },
+        { path: "/settings/:tab?", element: <SettingsRoute /> },
+        { path: "*", element: <Navigate to="/" replace /> },
+      ],
+    },
+    { path: "/dev/editor", element: <DevEditorRoute /> },
+  ],
   {
-    element: <AppFrame />,
-    children: [
-      { path: "/", element: <HomeRoute /> },
-      { path: "/project/:projectId/:workspace", element: <ProjectRoute /> },
-      { path: "/settings/:tab?", element: <SettingsRoute /> },
-      { path: "*", element: <Navigate to="/" replace /> },
-    ],
+    future: {
+      v7_relativeSplatPath: true,
+      v7_fetcherPersist: true,
+      v7_normalizeFormMethod: true,
+      v7_partialHydration: true,
+      v7_skipActionErrorRevalidation: true,
+    },
   },
-  { path: "/dev/editor", element: <DevEditorRoute /> },
-], {
-  future: { v7_relativeSplatPath: true, v7_fetcherPersist: true, v7_normalizeFormMethod: true, v7_partialHydration: true, v7_skipActionErrorRevalidation: true },
-});
+);
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -52,7 +61,15 @@ function Boot({ children }: { children: ReactNode }) {
 export function AppRoot({ services }: { services: Services }) {
   useEffect(() => {
     // 起動時の自己診断（F15）：WebGL2 と fetch のストリーム（SSE）
-    void services.diagnose().then((d) => console.info("[self-check]", { runtime: services.env.isTauri ? "tauri" : "browser", backend: services.env.backendMode, ...d }));
+    void services
+      .diagnose()
+      .then((d) =>
+        console.info("[self-check]", {
+          runtime: services.env.isTauri ? "tauri" : "browser",
+          backend: services.env.backendMode,
+          ...d,
+        }),
+      );
   }, [services]);
   return (
     <ServicesProvider services={services}>

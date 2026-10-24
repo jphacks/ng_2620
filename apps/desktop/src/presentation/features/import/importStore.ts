@@ -29,7 +29,9 @@ export const useImportStore = create<ImportStore>((set, get) => ({
     const id = session.project.id;
     if (get().runs[id]?.status === "running") return;
     const put = (r: Partial<ImportRun>) =>
-      set((s) => ({ runs: { ...s.runs, [id]: { ...(s.runs[id] ?? { status: "running", progress: null, error: null }), ...r } } }));
+      set((s) => ({
+        runs: { ...s.runs, [id]: { ...(s.runs[id] ?? { status: "running", progress: null, error: null }), ...r } },
+      }));
     put({ status: "running", progress: null, error: null });
 
     const { uc } = getServices();

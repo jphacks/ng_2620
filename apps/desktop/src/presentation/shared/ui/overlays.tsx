@@ -30,7 +30,10 @@ export function Dialog({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-overlay" />
         <DialogPrimitive.Content
-          className={cx("fixed left-1/2 top-1/2 z-50 max-h-[85vh] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-border bg-panel p-5 shadow-2xl", width)}
+          className={cx(
+            "fixed left-1/2 top-1/2 z-50 max-h-[85vh] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border border-border bg-panel p-5 shadow-2xl",
+            width,
+          )}
         >
           <div className="flex items-start justify-between gap-4">
             <DialogPrimitive.Title className="text-lg font-semibold text-fg">{title}</DialogPrimitive.Title>
@@ -97,7 +100,19 @@ export function ConfirmDialog({
 }
 
 /** 右から出るドロワー（ジョブパネル S5） */
-export function Drawer({ open, onOpenChange, title, children, actions }: { open: boolean; onOpenChange(open: boolean): void; title: string; children: ReactNode; actions?: ReactNode }) {
+export function Drawer({
+  open,
+  onOpenChange,
+  title,
+  children,
+  actions,
+}: {
+  open: boolean;
+  onOpenChange(open: boolean): void;
+  title: string;
+  children: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -127,7 +142,10 @@ export function Tooltip({ content, children }: { content: ReactNode; children: R
     <TooltipPrimitive.Root delayDuration={400}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content sideOffset={4} className="z-50 max-w-xs rounded-sm border border-border bg-panel-2 px-2 py-1 text-xs text-fg shadow-lg">
+        <TooltipPrimitive.Content
+          sideOffset={4}
+          className="z-50 max-w-xs rounded-sm border border-border bg-panel-2 px-2 py-1 text-xs text-fg shadow-lg"
+        >
           {content}
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
@@ -135,7 +153,13 @@ export function Tooltip({ content, children }: { content: ReactNode; children: R
   );
 }
 
-export function ContextMenu({ children, items }: { children: ReactNode; items: { label: string; onSelect(): void; danger?: boolean; disabled?: boolean }[] }) {
+export function ContextMenu({
+  children,
+  items,
+}: {
+  children: ReactNode;
+  items: { label: string; onSelect(): void; danger?: boolean; disabled?: boolean }[];
+}) {
   return (
     <ContextMenuPrimitive.Root>
       <ContextMenuPrimitive.Trigger asChild>{children}</ContextMenuPrimitive.Trigger>

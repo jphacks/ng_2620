@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { avatarIdFromSha256, licenseBadge, modificationAllowed } from "./avatar";
 import type { AvatarMeta } from "./avatar";
-import { initialConnection, isInsecureRemote, nextConnectionState, normalizeBaseUrl, validateProfile } from "./connection";
+import {
+  initialConnection,
+  isInsecureRemote,
+  nextConnectionState,
+  normalizeBaseUrl,
+  validateProfile,
+} from "./connection";
 import { chunkCount, chunkRange, missingChunks, receivedBytes } from "./upload";
 
 describe("upload", () => {

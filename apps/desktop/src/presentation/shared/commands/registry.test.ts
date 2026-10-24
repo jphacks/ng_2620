@@ -17,8 +17,12 @@ describe("normalizeCombo", () => {
     const ev = { key: "Z", code: "KeyZ", metaKey: true, ctrlKey: false, altKey: false, shiftKey: true };
     expect(comboFromEvent(ev, true)).toBe("mod+shift+z");
     expect(comboFromEvent({ ...ev, key: "!", code: "Digit1", shiftKey: false }, true)).toBe("mod+1");
-    expect(comboFromEvent({ key: "j", code: "KeyJ", metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }, true)).toBe("ctrl+j");
-    expect(comboFromEvent({ key: "j", code: "KeyJ", metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }, false)).toBe("mod+j");
+    expect(
+      comboFromEvent({ key: "j", code: "KeyJ", metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }, true),
+    ).toBe("ctrl+j");
+    expect(
+      comboFromEvent({ key: "j", code: "KeyJ", metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }, false),
+    ).toBe("mod+j");
   });
 });
 
@@ -26,9 +30,13 @@ describe("CommandRegistry", () => {
   it("同じ範囲・重なる範囲の重複キーは登録できない", () => {
     const r = new CommandRegistry(true);
     r.register({ id: "save", keys: ["mod+s"], scope: "global", run: noop });
-    expect(() => r.register({ id: "other", keys: ["Mod+S"], scope: "workspace:edit", run: noop })).toThrow(DuplicateShortcutError);
+    expect(() => r.register({ id: "other", keys: ["Mod+S"], scope: "workspace:edit", run: noop })).toThrow(
+      DuplicateShortcutError,
+    );
     r.register({ id: "tab1", keys: ["mod+1"], scope: "project", run: noop });
-    expect(() => r.register({ id: "x", keys: ["mod+1"], scope: "workspace:export", run: noop })).toThrow(DuplicateShortcutError);
+    expect(() => r.register({ id: "x", keys: ["mod+1"], scope: "workspace:export", run: noop })).toThrow(
+      DuplicateShortcutError,
+    );
   });
 
   it("別々のワークスペースでは同じキーを使える。有効なものだけ解決される", () => {

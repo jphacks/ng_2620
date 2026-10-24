@@ -109,9 +109,11 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
           [DEV_MOCK_PROFILE, "mock"],
           [DEV_SIM_PROFILE, ""],
         ] as const) {
-          if (!profiles.some((x) => x.id === p.id)) ({ profiles, activeProfileId } = await uc.saveProfile.execute({ profile: p, token }));
+          if (!profiles.some((x) => x.id === p.id))
+            ({ profiles, activeProfileId } = await uc.saveProfile.execute({ profile: p, token }));
         }
-        const preferred = env.backendMode === "memory" ? DEV_SIM_PROFILE.id : env.backendMode === "mock" ? DEV_MOCK_PROFILE.id : null;
+        const preferred =
+          env.backendMode === "memory" ? DEV_SIM_PROFILE.id : env.backendMode === "mock" ? DEV_MOCK_PROFILE.id : null;
         const current = profiles.find((p) => p.id === activeProfileId);
         if (preferred && (!current || current.devOnly) && activeProfileId !== preferred) {
           ({ activeProfileId } = await uc.selectActiveProfile.execute(preferred));

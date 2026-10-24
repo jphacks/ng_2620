@@ -8,9 +8,11 @@ export const tauriFs: FileSystem = {
   exists: (path) => invoke<boolean>("fs_exists", { path }),
   stat: (path) => invoke<FileStat>("fs_stat", { path }),
   readText: (path) => invoke<string>("fs_read_text", { path }),
-  writeTextAtomic: (path, contents, opts) => invoke("fs_write_atomic", { path, contents, private: opts?.private ?? false }),
+  writeTextAtomic: (path, contents, opts) =>
+    invoke("fs_write_atomic", { path, contents, private: opts?.private ?? false }),
   readBytes: async (path) => new Uint8Array(await invoke<ArrayBuffer>("fs_read_bytes", { path })),
-  readChunk: async (path, offset, length) => new Uint8Array(await invoke<ArrayBuffer>("fs_read_chunk", { path, offset, length })),
+  readChunk: async (path, offset, length) =>
+    new Uint8Array(await invoke<ArrayBuffer>("fs_read_chunk", { path, offset, length })),
   // 本体はそのままバイト列で渡す（JSON に変換しない）。パスはヘッダーで
   writeBytes: (path, bytes) => invoke("fs_write_bytes", bytes, { headers: { "x-path": encodeURIComponent(path) } }),
   copyFile: (src, dest) => invoke("fs_copy_file", { src, dest }),

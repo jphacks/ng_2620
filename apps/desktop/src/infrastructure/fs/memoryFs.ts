@@ -61,7 +61,11 @@ export class MemoryFs implements FileSystem {
     return new Uint8Array(await this.get(path).blob.arrayBuffer());
   }
   async readChunk(path: string, offset: number, length: number) {
-    return new Uint8Array(await this.get(path).blob.slice(offset, offset + length).arrayBuffer());
+    return new Uint8Array(
+      await this.get(path)
+        .blob.slice(offset, offset + length)
+        .arrayBuffer(),
+    );
   }
   async writeBytes(path: string, bytes: Uint8Array) {
     this.setBlob(path, new Blob([bytes]));
@@ -112,5 +116,14 @@ export class MemoryFs implements FileSystem {
 
 function guessType(name: string): string {
   const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
-  return { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", json: "application/json", mp4: "video/mp4" }[ext] ?? "";
+  return (
+    {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      json: "application/json",
+      mp4: "video/mp4",
+    }[ext] ?? ""
+  );
 }

@@ -18,7 +18,11 @@ export function Tabs<T extends string>({
   className?: string;
 }) {
   return (
-    <TabsPrimitive.Root value={value} onValueChange={(v) => onChange(v as T)} className={cx("flex min-h-0 flex-col", className)}>
+    <TabsPrimitive.Root
+      value={value}
+      onValueChange={(v) => onChange(v as T)}
+      className={cx("flex min-h-0 flex-col", className)}
+    >
       <TabsPrimitive.List className="flex shrink-0 gap-1 border-b border-border px-4">
         {tabs.map((t) => (
           <TabsPrimitive.Trigger

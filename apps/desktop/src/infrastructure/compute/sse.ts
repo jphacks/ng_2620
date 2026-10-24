@@ -68,7 +68,10 @@ function withTimeout<T>(p: Promise<T>, ms: number | undefined): Promise<T> {
 }
 
 /** ReadableStream から SSE のメッセージを順に取り出す。idleTimeoutMs の間なにも届かなければ切る */
-export async function* readSse(body: ReadableStream<Uint8Array>, opts: { idleTimeoutMs?: number } = {}): AsyncGenerator<SseMessage> {
+export async function* readSse(
+  body: ReadableStream<Uint8Array>,
+  opts: { idleTimeoutMs?: number } = {},
+): AsyncGenerator<SseMessage> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const parser = new SseParser();
@@ -98,7 +101,8 @@ export interface ResilientSseOptions {
   onRetry?(attempt: number, error: unknown): void;
 }
 
-const fatal = (e: unknown) => isAppError(e) && (e.code === "UNAUTHORIZED" || e.code === "NOT_FOUND" || e.detail?.fatal === true);
+const fatal = (e: unknown) =>
+  isAppError(e) && (e.code === "UNAUTHORIZED" || e.code === "NOT_FOUND" || e.detail?.fatal === true);
 
 export function backoffMs(attempt: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.max(0, attempt - 1));
@@ -128,7 +132,9 @@ export async function* resilientSse(o: ResilientSseOptions): AsyncGenerator<SseM
     try {
       const res = await o.open(lastId, ctrl.signal);
       if (!res.ok) {
-        err = o.toError ? await o.toError(res) : new AppError("NETWORK", `SSE の接続に失敗しました（HTTP ${res.status}）`, { status: res.status });
+        err = o.toError
+          ? await o.toError(res)
+          : new AppError("NETWORK", `SSE の接続に失敗しました（HTTP ${res.status}）`, { status: res.status });
         if (fatal(err)) throw err;
       } else if (!res.body) {
         throw new AppError("NETWORK", "この環境では SSE のストリームを読めません", { detail: { fatal: true } });

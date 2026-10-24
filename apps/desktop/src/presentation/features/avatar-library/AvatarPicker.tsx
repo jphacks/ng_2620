@@ -11,7 +11,15 @@ import { AvatarThumb } from "./AvatarThumb";
 import { LicenseBadge } from "./license";
 import { useImportAvatars } from "./useImportAvatars";
 
-export function AvatarPicker({ value, onChange, disabled }: { value: string | null; onChange(avatarId: string | null): void; disabled?: boolean }) {
+export function AvatarPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string | null;
+  onChange(avatarId: string | null): void;
+  disabled?: boolean;
+}) {
   const avatars = useAvatars();
   const { pickAndImport } = useImportAvatars();
   const [open, setOpen] = useState(false);
@@ -32,7 +40,9 @@ export function AvatarPicker({ value, onChange, disabled }: { value: string | nu
           className="flex h-9 min-w-[13rem] items-center gap-2 rounded border border-border bg-bg px-2 text-left hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AvatarThumb avatar={selected} size={24} />
-          <span className={cx("min-w-0 flex-1 truncate", !selected && "text-faint")}>{selected ? selected.meta.name : ja.avatar.choose}</span>
+          <span className={cx("min-w-0 flex-1 truncate", !selected && "text-faint")}>
+            {selected ? selected.meta.name : ja.avatar.choose}
+          </span>
           <ChevronDown size={14} className="text-muted" />
         </button>
       </Popover.Trigger>
@@ -54,13 +64,18 @@ export function AvatarPicker({ value, onChange, disabled }: { value: string | nu
           </div>
           <Popover.Description className="sr-only">{ja.avatar.choose}</Popover.Description>
           <div className="mt-3 grid min-h-0 flex-1 grid-cols-3 gap-2 overflow-auto">
-            {list.length === 0 && <div className="col-span-3 p-6 text-center text-sm text-muted">{ja.avatar.empty}</div>}
+            {list.length === 0 && (
+              <div className="col-span-3 p-6 text-center text-sm text-muted">{ja.avatar.empty}</div>
+            )}
             {list.map((a) => (
               <button
                 key={a.avatarId}
                 type="button"
                 onClick={() => choose(a)}
-                className={cx("flex flex-col items-center gap-1.5 rounded border p-2 text-center hover:border-accent", a.avatarId === value ? "border-accent bg-accent/10" : "border-border")}
+                className={cx(
+                  "flex flex-col items-center gap-1.5 rounded border p-2 text-center hover:border-accent",
+                  a.avatarId === value ? "border-accent bg-accent/10" : "border-border",
+                )}
               >
                 <AvatarThumb avatar={a} size={72} />
                 <span className="w-full truncate text-sm">{a.meta.name}</span>

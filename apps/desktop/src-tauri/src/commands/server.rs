@@ -115,11 +115,17 @@ pub async fn server_start(config: StartConfig, state: State<'_, ServerState>) ->
     }
     let dir = PathBuf::from(&config.server_dir);
     if !dir.join("vvlog_server").is_dir() {
-        return Err(format!("{} に vvlog_server がありません。services/gpu_server のフォルダを選んでください", dir.display()));
+        return Err(format!(
+            "{} に vvlog_server がありません。services/gpu_server のフォルダを選んでください",
+            dir.display()
+        ));
     }
     let py = venv_python(&dir);
     if !py.exists() {
-        return Err(format!("サーバーの Python（{}）がありません。services/gpu_server で run_local.ps1 を一度実行して作ってください", py.display()));
+        return Err(format!(
+            "サーバーの Python（{}）がありません。services/gpu_server で run_local.ps1 を一度実行して作ってください",
+            py.display()
+        ));
     }
     if !Path::new(&config.python_path).is_file() {
         return Err(format!("推論用の Python（{}）が見つかりません", config.python_path));
@@ -164,7 +170,12 @@ pub async fn server_status(state: State<'_, ServerState>) -> CmdResult<ServerSta
     let pid = state.reap();
     let exit_code = *state.exit_code.lock().map_err(err)?;
     let log = state.log.lock().map_err(err)?.iter().cloned().collect();
-    Ok(ServerStatus { running: pid.is_some(), pid, exit_code, log })
+    Ok(ServerStatus {
+        running: pid.is_some(),
+        pid,
+        exit_code,
+        log,
+    })
 }
 
 #[cfg(test)]

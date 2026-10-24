@@ -46,7 +46,17 @@ const EMPTY: Person[] = [];
 const EMPTY_CAST: never[] = [];
 const EMPTY_ROWS: CastDraftRow[] = [];
 
-export function CastStep({ slots, onBack, onRenderStarted, onPickOtherVideo }: { slots: CastSlots; onBack(): void; onRenderStarted(): void; onPickOtherVideo(): void }) {
+export function CastStep({
+  slots,
+  onBack,
+  onRenderStarted,
+  onPickOtherVideo,
+}: {
+  slots: CastSlots;
+  onBack(): void;
+  onRenderStarted(): void;
+  onPickOtherVideo(): void;
+}) {
   const { uc } = useServices();
   const project = useProjectStore((s) => s.current?.project);
   const update = useProjectStore((s) => s.update);
@@ -108,7 +118,9 @@ export function CastStep({ slots, onBack, onRenderStarted, onPickOtherVideo }: {
       <div className="flex min-h-0 flex-col">
         <div className="mb-3">
           <span className="font-medium">{T.title}</span>
-          {analyze && analyze.status !== "succeeded" && <span className="ml-1 text-sm text-muted">{T.backgroundProgress(overallProgress(analyze))}</span>}
+          {analyze && analyze.status !== "succeeded" && (
+            <span className="ml-1 text-sm text-muted">{T.backgroundProgress(overallProgress(analyze))}</span>
+          )}
         </div>
         {!trackDone ? (
           <div className="flex items-center gap-2 text-muted">
@@ -117,7 +129,11 @@ export function CastStep({ slots, onBack, onRenderStarted, onPickOtherVideo }: {
         ) : (
           <ul className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
             {project.persons.map((p) => {
-              const row = draft.find((r) => r.personId === p.personId) ?? { personId: p.personId, selected: false, avatarId: null };
+              const row = draft.find((r) => r.personId === p.personId) ?? {
+                personId: p.personId,
+                selected: false,
+                avatarId: null,
+              };
               return (
                 <PersonRow
                   key={p.personId}
@@ -127,7 +143,11 @@ export function CastStep({ slots, onBack, onRenderStarted, onPickOtherVideo }: {
                   slots={slots}
                   onHover={setHover}
                   onChange={(patch) => change(p.personId, patch)}
-                  onRename={(label) => update(uc.renamePerson.execute({ personId: p.personId, label, fallback: T.defaultLabel(p.personId) }))}
+                  onRename={(label) =>
+                    update(
+                      uc.renamePerson.execute({ personId: p.personId, label, fallback: T.defaultLabel(p.personId) }),
+                    )
+                  }
                 />
               );
             })}
@@ -138,7 +158,12 @@ export function CastStep({ slots, onBack, onRenderStarted, onPickOtherVideo }: {
           <div className="ml-auto flex items-center gap-2">
             {rstate === "stale" && <Badge tone="warning">{T.needsRender}</Badge>}
             {reason && trackDone && <span className="text-sm text-muted">{reason}</span>}
-            <Button variant="primary" disabled={!check.ok || submitting || !connected || !trackDone} onClick={() => void startRender()} icon={submitting ? <Spinner /> : undefined}>
+            <Button
+              variant="primary"
+              disabled={!check.ok || submitting || !connected || !trackDone}
+              onClick={() => void startRender()}
+              icon={submitting ? <Spinner /> : undefined}
+            >
               {rstate === "stale" || rstate === "fresh" ? T.rerender : T.render} ▶
             </Button>
           </div>
@@ -193,7 +218,10 @@ function PersonRow({
       {...drop.props}
       onMouseEnter={() => onHover(person.personId)}
       onMouseLeave={() => onHover(null)}
-      className={cx("flex gap-3 rounded border p-2", row.selected ? "border-accent/60 bg-accent/5" : "border-border bg-panel-2")}
+      className={cx(
+        "flex gap-3 rounded border p-2",
+        row.selected ? "border-accent/60 bg-accent/5" : "border-border bg-panel-2",
+      )}
     >
       {thumb ? (
         <img src={thumb} alt="" className="h-20 w-20 shrink-0 rounded bg-raised object-cover" draggable={false} />
@@ -204,7 +232,11 @@ function PersonRow({
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Checkbox checked={row.selected} onChange={(selected) => onChange({ selected })} label={editing ? undefined : <span className="font-medium">{person.label}</span>} />
+          <Checkbox
+            checked={row.selected}
+            onChange={(selected) => onChange({ selected })}
+            label={editing ? undefined : <span className="font-medium">{person.label}</span>}
+          />
           {editing ? (
             <TextInput
               autoFocus
@@ -224,7 +256,12 @@ function PersonRow({
               className="!h-7 max-w-[12rem]"
             />
           ) : (
-            <button type="button" title={T.rename} onClick={() => setEditing(true)} className="text-faint hover:text-fg">
+            <button
+              type="button"
+              title={T.rename}
+              onClick={() => setEditing(true)}
+              className="text-faint hover:text-fg"
+            >
               <Pencil size={12} />
             </button>
           )}

@@ -51,7 +51,15 @@ fn parse_f64(v: &Value) -> Option<f64> {
 
 fn probe_blocking(path: &str) -> CmdResult<ProbeResult> {
     let mut cmd = Command::new(ffprobe_path());
-    cmd.args(["-v", "error", "-print_format", "json", "-show_format", "-show_streams", path]);
+    cmd.args([
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        path,
+    ]);
     hide_console(&mut cmd);
     let out = cmd.output().map_err(|e| format!("ffprobe を起動できません: {e}"))?;
     if !out.status.success() {
@@ -78,7 +86,9 @@ fn probe_blocking(path: &str) -> CmdResult<ProbeResult> {
         .unwrap_or(0)
         .rem_euclid(360);
 
-    let duration_sec = parse_f64(&v["format"]["duration"]).or_else(|| parse_f64(&video["duration"])).unwrap_or(0.0);
+    let duration_sec = parse_f64(&v["format"]["duration"])
+        .or_else(|| parse_f64(&video["duration"]))
+        .unwrap_or(0.0);
     let fps = parse_rate(&video["avg_frame_rate"]).or_else(|| parse_rate(&video["r_frame_rate"]));
     let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
@@ -96,7 +106,9 @@ fn probe_blocking(path: &str) -> CmdResult<ProbeResult> {
 
 #[tauri::command]
 pub async fn media_probe(path: String) -> CmdResult<ProbeResult> {
-    tauri::async_runtime::spawn_blocking(move || probe_blocking(&path)).await.map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || probe_blocking(&path))
+        .await
+        .map_err(err)?
 }
 
 #[cfg(test)]

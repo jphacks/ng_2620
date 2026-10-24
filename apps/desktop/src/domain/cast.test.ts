@@ -3,7 +3,10 @@ import { canRender, castHash, draftFromCast, parsePersons, renamePerson, toCast 
 
 describe("canRender", () => {
   it("1 人以上を選び、全員にアバターがあれば描画できる", () => {
-    expect(canRender([{ personId: 1, selected: false, avatarId: null }])).toEqual({ ok: false, reason: "none_selected" });
+    expect(canRender([{ personId: 1, selected: false, avatarId: null }])).toEqual({
+      ok: false,
+      reason: "none_selected",
+    });
     expect(
       canRender([
         { personId: 1, selected: true, avatarId: "av_a" },
@@ -46,7 +49,15 @@ describe("castHash", () => {
 describe("parsePersons", () => {
   it("persons.json を読み、既存の名前を引き継ぐ", () => {
     const raw = [
-      { personId: 2, firstFrame: 90, lastFrame: 210, visibleRatio: 0.41, bestFrame: 150, bbox: [1, 2, 3, 4], thumb: "person_thumbs/2.jpg" },
+      {
+        personId: 2,
+        firstFrame: 90,
+        lastFrame: 210,
+        visibleRatio: 0.41,
+        bestFrame: 150,
+        bbox: [1, 2, 3, 4],
+        thumb: "person_thumbs/2.jpg",
+      },
       { personId: 1, firstFrame: 0, lastFrame: 293, visibleRatio: 0.97, thumb: "person_thumbs/1.jpg" },
       { firstFrame: 0 },
     ];

@@ -10,7 +10,12 @@ import type { ComputeBackendPort } from "../ports/compute";
 import type { ProjectRepositoryPort, RecentEntry } from "../ports/project";
 import type { ClockPort, IdPort } from "../ports/system";
 
-export function recentEntryOf(projects: ProjectRepositoryPort, project: Project, path: string, overridesCount: number): RecentEntry {
+export function recentEntryOf(
+  projects: ProjectRepositoryPort,
+  project: Project,
+  path: string,
+  overridesCount: number,
+): RecentEntry {
   const thumbRel = project.persons.find((p) => p.thumb)?.thumb;
   return {
     path,
@@ -28,7 +33,12 @@ export class CreateProject {
   constructor(private readonly d: { projects: ProjectRepositoryPort; clock: ClockPort; ids: IdPort }) {}
 
   /** 動画から名前を付けてプロジェクトを作る（既定の保存先 ~/Movies/vvlog/<名前>.vvlog/） */
-  async execute(input: { sourcePath: string; info: LocalMediaInfo; profileId: string | null; dir?: string }): Promise<{ project: Project; path: string }> {
+  async execute(input: {
+    sourcePath: string;
+    info: LocalMediaInfo;
+    profileId: string | null;
+    dir?: string;
+  }): Promise<{ project: Project; path: string }> {
     const { projects, clock, ids } = this.d;
     const { name, path } = await projects.allocate(nameFromSourcePath(input.sourcePath), input.dir);
     const size = displaySize(input.info);

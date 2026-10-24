@@ -94,7 +94,13 @@ export interface Project {
   createdBy: null;
 }
 
-export function newProject(input: { id: string; name: string; now: string; source: SourceMedia; profileId: string | null }): Project {
+export function newProject(input: {
+  id: string;
+  name: string;
+  now: string;
+  source: SourceMedia;
+  profileId: string | null;
+}): Project {
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: input.id,
@@ -133,7 +139,11 @@ const status = (v: unknown): JobStatus => (JOB_STATUSES.includes(v as JobStatus)
 
 function jobRef(v: unknown): JobRef | undefined {
   if (!isObj(v) || typeof v.jobId !== "string") return undefined;
-  return { jobId: v.jobId, status: status(v.status), finishedAt: typeof v.finishedAt === "string" ? v.finishedAt : undefined };
+  return {
+    jobId: v.jobId,
+    status: status(v.status),
+    finishedAt: typeof v.finishedAt === "string" ? v.finishedAt : undefined,
+  };
 }
 
 /**
@@ -210,9 +220,13 @@ function normalizeV1(raw: Raw): Project {
       }),
     },
     meta: isObj(raw.meta) && typeof raw.meta.frameCount === "number" ? (raw.meta as unknown as MediaMeta) : null,
-    persons: Array.isArray(raw.persons) ? (raw.persons as Person[]).filter((p) => isObj(p) && typeof p.personId === "number") : [],
+    persons: Array.isArray(raw.persons)
+      ? (raw.persons as Person[]).filter((p) => isObj(p) && typeof p.personId === "number")
+      : [],
     cast: Array.isArray(raw.cast)
-      ? (raw.cast as CastEntry[]).filter((c) => isObj(c) && typeof c.personId === "number" && typeof c.avatarId === "string")
+      ? (raw.cast as CastEntry[]).filter(
+          (c) => isObj(c) && typeof c.personId === "number" && typeof c.avatarId === "string",
+        )
       : [],
     finish: { ...DEFAULT_FINISH, ...(isObj(raw.finish) ? (raw.finish as FinishParams) : {}) },
     avatars: isObj(raw.avatars) ? (raw.avatars as Record<string, AvatarRef>) : {},
@@ -283,7 +297,11 @@ export function needsExport(p: Project, currentOverridesHash: string): boolean {
 
 // --- ジョブの記録 ---
 
-export function recordJob(p: Project, job: Job, extra: { castHash?: string; overridesHash?: string; file?: string; settings?: ExportSettings } = {}): Project {
+export function recordJob(
+  p: Project,
+  job: Job,
+  extra: { castHash?: string; overridesHash?: string; file?: string; settings?: ExportSettings } = {},
+): Project {
   const ref: JobRef = { jobId: job.jobId, status: job.status, finishedAt: job.finishedAt };
   switch (job.type) {
     case "analyze":
@@ -292,7 +310,13 @@ export function recordJob(p: Project, job: Job, extra: { castHash?: string; over
       return { ...p, jobs: { ...p.jobs, render: { ...ref, castHash: extra.castHash ?? projectCastHash(p) } } };
     case "export": {
       const renderJobId = "renderJobId" in job.params ? job.params.renderJobId : undefined;
-      const entry: ExportJobRef = { ...ref, overridesHash: extra.overridesHash ?? "", file: extra.file, renderJobId, settings: extra.settings };
+      const entry: ExportJobRef = {
+        ...ref,
+        overridesHash: extra.overridesHash ?? "",
+        file: extra.file,
+        renderJobId,
+        settings: extra.settings,
+      };
       return { ...p, jobs: { ...p.jobs, exports: [...p.jobs.exports.filter((e) => e.jobId !== job.jobId), entry] } };
     }
   }

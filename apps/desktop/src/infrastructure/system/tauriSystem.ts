@@ -32,7 +32,10 @@ export const tauriFileDrop: FileDropPort = {
     let lastPaths: string[] = [];
     let unlisten: (() => void) | null = null;
     let disposed = false;
-    const toCss = (p: { x: number; y: number }) => ({ x: p.x / window.devicePixelRatio, y: p.y / window.devicePixelRatio });
+    const toCss = (p: { x: number; y: number }) => ({
+      x: p.x / window.devicePixelRatio,
+      y: p.y / window.devicePixelRatio,
+    });
     void getCurrentWebview()
       .onDragDropEvent((e) => {
         const p = e.payload;

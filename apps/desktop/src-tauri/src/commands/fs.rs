@@ -32,7 +32,10 @@ pub fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> std::io::Result
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
     let tmp = path.with_file_name(format!(".{}.tmp-{}", name, std::process::id()));
     {
         let mut f = fs::File::create(&tmp)?;
@@ -63,7 +66,9 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            let hex = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok());
+            let hex = std::str::from_utf8(&b[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok());
             if let Some(v) = hex {
                 out.push(v);
                 i += 3;
@@ -90,7 +95,10 @@ pub fn fs_stat(path: String) -> CmdResult<FileStat> {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as f64)
         .unwrap_or(0.0);
-    Ok(FileStat { size: m.len(), mtime_ms })
+    Ok(FileStat {
+        size: m.len(),
+        mtime_ms,
+    })
 }
 
 #[tauri::command]
@@ -191,7 +199,10 @@ mod tests {
 
     #[test]
     fn decodes_percent_encoding() {
-        assert_eq!(percent_decode("%2FUsers%2Fme%2F%E5%8B%95%E7%94%BB.mp4"), "/Users/me/動画.mp4");
+        assert_eq!(
+            percent_decode("%2FUsers%2Fme%2F%E5%8B%95%E7%94%BB.mp4"),
+            "/Users/me/動画.mp4"
+        );
         assert_eq!(percent_decode("C%3A%5Cx%5Cy"), "C:\\x\\y");
         assert_eq!(percent_decode("plain"), "plain");
         assert_eq!(percent_decode("bad%zz"), "bad%zz");

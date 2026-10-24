@@ -61,7 +61,14 @@ export function useProjectNavigation() {
 export function HomeRoute() {
   const navigate = useNavigate();
   const { open, browse, created } = useProjectNavigation();
-  return <HomeScreen onOpenProject={(p) => void open(p)} onCreated={created} onOpenConnection={() => navigate("/settings/connection")} onBrowse={() => void browse()} />;
+  return (
+    <HomeScreen
+      onOpenProject={(p) => void open(p)}
+      onCreated={created}
+      onOpenConnection={() => navigate("/settings/connection")}
+      onBrowse={() => void browse()}
+    />
+  );
 }
 
 function GlobalCommands() {
@@ -83,7 +90,13 @@ function GlobalCommands() {
     },
   });
   useCommand({ id: "app.jobs", keys: ["ctrl+j"], scope: "global", label: ja.commands.jobs, run: toggleJobs });
-  useCommand({ id: "app.settings", keys: ["mod+,"], scope: "global", label: ja.commands.settings, run: () => navigate("/settings") });
+  useCommand({
+    id: "app.settings",
+    keys: ["mod+,"],
+    scope: "global",
+    label: ja.commands.settings,
+    run: () => navigate("/settings"),
+  });
   return null;
 }
 

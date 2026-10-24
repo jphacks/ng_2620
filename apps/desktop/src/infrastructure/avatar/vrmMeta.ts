@@ -123,7 +123,9 @@ export function readVrm(bytes: Uint8Array): ParsedVrm {
     const vrm = ext.VRM;
     const meta = isObj(vrm.meta) ? vrm.meta : {};
     const list = isObj(vrm.humanoid) && Array.isArray(vrm.humanoid.humanBones) ? vrm.humanoid.humanBones : [];
-    const names = new Set(list.flatMap((b) => (isObj(b) && typeof b.bone === "string" && typeof b.node === "number" ? [b.bone] : [])));
+    const names = new Set(
+      list.flatMap((b) => (isObj(b) && typeof b.bone === "string" && typeof b.node === "number" ? [b.bone] : [])),
+    );
     const missing = missingBones(names);
     if (missing.length) throw new AppError("AVATAR_INVALID", "必要なボーンがありません", { detail: { missing } });
     const licenseName = str(meta.licenseName);

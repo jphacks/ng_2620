@@ -32,7 +32,8 @@ function StageRow({ index, stage, dim }: { index: number; stage: StageState; dim
       <span className="truncate text-right text-sm text-muted">
         {stage.status === "running" && (
           <>
-            {Math.round(stage.progress * 100)}% {stage.etaSec !== undefined ? ja.time.eta(stage.etaSec) : ja.common.calculating}
+            {Math.round(stage.progress * 100)}%{" "}
+            {stage.etaSec !== undefined ? ja.time.eta(stage.etaSec) : ja.common.calculating}
           </>
         )}
         {stage.status === "done" && stage.durationSec !== undefined && ja.time.took(stage.durationSec)}
@@ -49,7 +50,11 @@ export function JobStageList({ job, only, startIndex = 0 }: { job: Job; only?: S
     <div>
       {job.status === "queued" && (
         <div className="mb-1 text-sm text-muted">
-          {job.dependsOn ? (job.type === "export" ? ja.job.waitingRender : ja.job.waitingDependency) : ja.job.queuePosition(job.queuePosition ?? 0)}
+          {job.dependsOn
+            ? job.type === "export"
+              ? ja.job.waitingRender
+              : ja.job.waitingDependency
+            : ja.job.queuePosition(job.queuePosition ?? 0)}
         </div>
       )}
       <ol>

@@ -77,8 +77,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       const { project } = await getServices().uc.openProject.execute(path);
       const conn = useConnectionStore.getState();
       const mismatch =
-        project.compute.serverProjectId && project.compute.profileId && project.compute.profileId !== conn.activeProfileId ? project.compute.profileId : null;
-      set({ current: { project, path, offline: !!project.sample }, saveState: "saved", saveError: null, restore: "idle", profileMismatch: mismatch });
+        project.compute.serverProjectId &&
+        project.compute.profileId &&
+        project.compute.profileId !== conn.activeProfileId
+          ? project.compute.profileId
+          : null;
+      set({
+        current: { project, path, offline: !!project.sample },
+        saveState: "saved",
+        saveError: null,
+        restore: "idle",
+        profileMismatch: mismatch,
+      });
       if (!mismatch) void get().restoreJobs();
       return project;
     },
@@ -90,7 +100,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         info,
         profileId: useConnectionStore.getState().activeProfileId,
       });
-      set({ current: { project, path, offline: false }, saveState: "saved", saveError: null, restore: "none", profileMismatch: null });
+      set({
+        current: { project, path, offline: false },
+        saveState: "saved",
+        saveError: null,
+        restore: "none",
+        profileMismatch: null,
+      });
       return project;
     },
 

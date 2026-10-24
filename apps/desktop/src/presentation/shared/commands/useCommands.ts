@@ -5,7 +5,8 @@ import { useAppStore } from "../stores/appStore";
 import type { Command } from "./registry";
 import { CommandRegistry, comboFromEvent } from "./registry";
 
-export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+export const IS_MAC =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 export const commandRegistry = new CommandRegistry(IS_MAC);
 
@@ -17,7 +18,14 @@ export function useCommand(cmd: Omit<Command, "run"> & { run: () => void; enable
   const keys = cmd.keys.join("|");
   useEffect(() => {
     if (!enabled) return;
-    return commandRegistry.register({ id, keys: keys.split("|"), scope, label, allowInInput, run: () => runRef.current() });
+    return commandRegistry.register({
+      id,
+      keys: keys.split("|"),
+      scope,
+      label,
+      allowInInput,
+      run: () => runRef.current(),
+    });
   }, [id, keys, scope, label, allowInInput, enabled]);
 }
 
