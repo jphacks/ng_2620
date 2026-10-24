@@ -22,13 +22,14 @@ export function normalizeHealth(raw: unknown): Health {
 export function normalizeCapabilities(raw: unknown): Capabilities {
   const r = isObj(raw) ? raw : {};
   const gpu = isObj(r.gpu) ? r.gpu : Array.isArray(r.gpus) && isObj(r.gpus[0]) ? (r.gpus[0] as Raw) : {};
-  const vramMb = num(gpu.vramMb) ?? num(r.vramMb) ?? (num(gpu.vramGb) !== undefined ? num(gpu.vramGb)! * 1024 : undefined);
+  // packages/contracts/openapi.yaml: gpu.vramMB, limits.maxLongSide（古い推測の名前も受け付ける）
+  const vramMb = num(gpu.vramMB) ?? num(gpu.vramMb) ?? num(r.vramMb) ?? (num(gpu.vramGb) !== undefined ? num(gpu.vramGb)! * 1024 : undefined);
   const limits = isObj(r.limits) ? r.limits : {};
   const queue = isObj(r.queue) ? r.queue : {};
   return {
     gpuName: typeof gpu.name === "string" ? gpu.name : typeof r.gpuName === "string" ? r.gpuName : null,
     vramMb: vramMb ?? null,
-    limits: { maxDurationSec: num(limits.maxDurationSec), maxLongEdge: num(limits.maxLongEdge), maxTargets: num(limits.maxTargets) },
+    limits: { maxDurationSec: num(limits.maxDurationSec), maxLongEdge: num(limits.maxLongSide) ?? num(limits.maxLongEdge), maxTargets: num(limits.maxTargets) },
     queueLength: num(r.queueLength) ?? num(queue.length) ?? 0,
   };
 }
