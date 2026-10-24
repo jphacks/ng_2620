@@ -1,9 +1,20 @@
+node_modules/
+.vite/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Tauri / Rust
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
 # Python
 __pycache__/
 *.pyc
 .venv/
 *.egg-info/
 .pytest_cache/
+build/
 
 # server data and weights (designdocs/adr/0008: weights are fetched, never committed)
 services/gpu_server/data/
@@ -12,7 +23,10 @@ weights/*
 !weights/fetch.py
 !weights/README.md
 
+# VRM はコミットしない（ADR-0008）
 # VRM avatars have their own licenses; never commit them
 *.vrm
 
-.DS_Store
+# ローカル環境
+.env.local
+.env.*.local

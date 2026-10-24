@@ -109,7 +109,8 @@ class Worker:
             try:
                 await task
             except asyncio.CancelledError:
-                if not task.done():
+                # stop() can land after the job finished but before this resumes: that cancel is ours, never swallow it
+                if not task.done() or asyncio.current_task().cancelling():
                     raise
             finally:
                 self.current = None

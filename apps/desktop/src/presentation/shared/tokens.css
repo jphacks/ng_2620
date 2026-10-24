@@ -1,0 +1,59 @@
+/* デザイントークン（ux/screens：背景 #1e1e1e、パネル #252526、アクセント #4f8cff）。
+   色・余白・角丸はここだけで定義し、Tailwind（tailwind.config.ts）から var() で参照する。
+   P0 はダークテーマのみ。ライトテーマ（P2）は :root[data-theme="light"] で上書きする */
+
+:root {
+  color-scheme: dark;
+
+  /* 色は RGB の 3 値で持ち、--color-* と Tailwind（rgb(var(--rgb-*) / α)）の両方から使う */
+  --rgb-bg: 30 30 30; /* #1e1e1e */
+  --rgb-panel: 37 37 38; /* #252526 */
+  --rgb-panel-2: 45 45 48;
+  --rgb-raised: 51 51 55;
+  --rgb-border: 60 60 60;
+  --rgb-text: 230 230 230;
+  --rgb-text-muted: 160 160 160;
+  --rgb-text-faint: 110 110 110;
+  --rgb-accent: 79 140 255; /* #4f8cff */
+  --rgb-accent-fg: 255 255 255;
+  --rgb-success: 63 185 80;
+  --rgb-warning: 210 153 34;
+  --rgb-danger: 248 81 73;
+
+  --color-bg: rgb(var(--rgb-bg));
+  --color-panel: rgb(var(--rgb-panel));
+  --color-panel-2: rgb(var(--rgb-panel-2));
+  --color-raised: rgb(var(--rgb-raised));
+  --color-border: rgb(var(--rgb-border));
+  --color-text: rgb(var(--rgb-text));
+  --color-text-muted: rgb(var(--rgb-text-muted));
+  --color-text-faint: rgb(var(--rgb-text-faint));
+  --color-accent: rgb(var(--rgb-accent));
+  --color-accent-fg: rgb(var(--rgb-accent-fg));
+  --color-success: rgb(var(--rgb-success));
+  --color-warning: rgb(var(--rgb-warning));
+  --color-danger: rgb(var(--rgb-danger));
+  --color-overlay: rgba(0, 0, 0, 0.55);
+
+  /* 人物の色（追跡マスクの重ね表示、最大 4 人） */
+  --color-person-1: #4f8cff;
+  --color-person-2: #f0883e;
+  --color-person-3: #3fb950;
+  --color-person-4: #db61a2;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  --space-gutter: 16px;
+  --titlebar-height: 44px;
+  --statusbar-height: 26px;
+
+  --font-xs: 11px;
+  --font-sm: 12px;
+  --font-md: 13px;
+  --font-lg: 15px;
+  --font-xl: 20px;
+  --font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
