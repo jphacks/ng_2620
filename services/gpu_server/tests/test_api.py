@@ -74,7 +74,8 @@ def test_upload_and_job_flow(client, sample_video):
 
     proj = client.get(f"/v1/projects/{pid}", headers=AUTH).json()
     assert proj["media"][0]["mediaId"] == media["mediaId"] and proj["jobs"][0]["jobId"] == job["jobId"]
-    assert client.get(f"/v1/jobs/{job['jobId']}/artifacts", headers=AUTH).json() == []
+    assert [a["name"] for a in client.get(f"/v1/jobs/{job['jobId']}/artifacts", headers=AUTH).json()] == \
+        ["meta", "proxy_frames"]
     assert client.get("/v1/queue", headers=AUTH).json() == {"items": []}
 
 
@@ -139,3 +140,21 @@ def test_artifact_range(client, tmp_path):
     assert r.status_code == 206 and r.content == b"234" and r.headers["content-range"] == "bytes 2-4/10"
     assert client.get(url, headers=dict(AUTH, Range="bytes=-3")).content == b"789"
     assert client.get(url, headers=dict(AUTH, Range="bytes=20-")).status_code == 416
+
+
+def test_ingest_stage(client, sample_video):
+    pid = new_project(client)
+    uid = upload(client, pid, sample_video)
+    media = client.post(f"/v1/uploads/{uid}/complete", headers=AUTH).json()
+    job = client.post(f"/v1/projects/{pid}/jobs", headers=AUTH,
+                      json={"type": "analyze", "params": {"mediaId": media["mediaId"]}}).json()
+    j = wait_job(client, job["jobId"])
+    assert j["status"] == "succeeded", j
+    assert j["artifacts"] == ["meta", "proxy_frames"]
+    meta = client.get(f"/v1/jobs/{job['jobId']}/artifacts/meta", headers=AUTH).json()
+    assert meta["frameCount"] == 60 and meta["proxy"] == {"width": 360, "height": 640} and meta["proxyScale"] == 1
+    work = client.app.state.deps.projects.root(pid) / "work" / job["jobId"]
+    assert len(list((work / "full").glob("*.jpg"))) == 60 and (work / "audio.m4a").stat().st_size > 0
+    import io, zipfile
+    z = zipfile.ZipFile(io.BytesIO(client.get(f"/v1/jobs/{job['jobId']}/artifacts/proxy_frames", headers=AUTH).content))
+    assert z.namelist()[:2] == ["frames/00000.jpg", "frames/00001.jpg"] and len(z.namelist()) == 60

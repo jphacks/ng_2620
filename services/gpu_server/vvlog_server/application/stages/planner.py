@@ -12,5 +12,8 @@ class Planner:
         return list(self.table.get(job_type, []))
 
 
-def planner_for(settings) -> Planner:
-    return Planner({"analyze": [], "render": [], "export": []})
+def planner_for(settings, media=None) -> Planner:
+    from ...adapters.media_ffmpeg import FfmpegMedia
+    from .ingest import IngestStage
+    media = media or FfmpegMedia()
+    return Planner({"analyze": [IngestStage(media)], "render": [], "export": []})
