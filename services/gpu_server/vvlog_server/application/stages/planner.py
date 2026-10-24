@@ -17,6 +17,7 @@ def planner_for(settings, media=None, outputs=None) -> Planner:
     from ...adapters.media_ffmpeg import FfmpegMedia
     from ...adapters.pipeline_outputs import FsPipelineOutputs
     from .ingest import IngestStage
+    from .occlusion import OcclusionStage
     from .track_mesh import TrackMeshStage
     media, outputs = media or FfmpegMedia(), outputs or FsPipelineOutputs()
-    return Planner({"analyze": [IngestStage(media), TrackMeshStage(outputs)], "render": [], "export": []})
+    return Planner({"analyze": [IngestStage(media), TrackMeshStage(outputs), OcclusionStage()], "render": [], "export": []})

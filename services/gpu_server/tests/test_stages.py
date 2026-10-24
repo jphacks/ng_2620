@@ -26,8 +26,12 @@ def test_track_mesh(tmp_path, sample_video):
         _, jid = analyze(c, sample_video)
         j = wait_job(c, jid)
         assert j["status"] == "succeeded", j
-        assert j["artifacts"][:6] == ["meta", "proxy_frames", "persons", "person_thumbs", "track_masks",
-                                      "mesh_preview"]
+        assert j["artifacts"] == ["meta", "proxy_frames", "persons", "person_thumbs", "track_masks",
+                                  "mesh_preview", "units_index", "units"]
+        assert c.get(f"/v1/jobs/{jid}/artifacts/units_index", headers=AUTH).json()["units"][0]["unitId"] == 1
+        z = zipfile.ZipFile(io.BytesIO(c.get(f"/v1/jobs/{jid}/artifacts/units", headers=AUTH).content))
+        u0 = np.array(Image.open(io.BytesIO(z.read("units/00000.png"))))
+        assert u0.dtype == np.uint16 and u0.max() == 1 and len(z.namelist()) == 60
         persons = c.get(f"/v1/jobs/{jid}/artifacts/persons", headers=AUTH).json()
         assert [p["personId"] for p in persons] == [1, 2]
         assert persons[0]["firstFrame"] == 0 and persons[0]["lastFrame"] == 59 and persons[0]["visibleRatio"] == 1
@@ -47,7 +51,7 @@ def test_track_mesh(tmp_path, sample_video):
         prog = [json.loads(e["data"])["progress"] for e in events if e["event"] == "progress"
                 and json.loads(e["data"])["stage"] == "track"]
         assert prog == sorted(prog) and prog[-1] == 1.0
-        cmd, env = FakePipelineRunner.calls[-1]
+        cmd, env = [c for c in FakePipelineRunner.calls if c[0][2].endswith("offline_app_lite.py")][-1]
         assert cmd[2].endswith("scripts/offline_app_lite.py") and env["BODY4D_MAX_TARGETS"] == "3"
         assert env["USE_TF"] == "0"
 

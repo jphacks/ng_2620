@@ -38,7 +38,23 @@ def fake_offline_app_lite(cmd, persons=(1, 2)):
     return lines, 0
 
 
-SCRIPTS = {"offline_app_lite.py": fake_offline_app_lite}
+def fake_occlusion(cmd):
+    pout, occ = _arg(cmd, "--pipeline_out"), _arg(cmd, "--out")
+    n = len(list((pout / "masks").glob("*.png")))
+    (occ / "units").mkdir(parents=True, exist_ok=True)
+    lines = []
+    for f in range(n):
+        Image.fromarray(np.full((8, 8), 1 if f < n // 2 else 0, np.uint16)).save(occ / "units" / f"{f:05d}.png")
+        lines.append(f"{_arg(cmd, '--name').name} {f} pts 12 raw 5 kept 3 t 0.01")
+    (occ / "fusion_state.pkl").write_bytes(b"state")
+    import json
+    (occ / "units.json").write_text(json.dumps({"units": [{"unitId": 1, "frames": [0, n // 2 - 1], "label": "object",
+                                                         "tracks": [3], "areaPx": 64, "perPerson": {}}]}))
+    lines += ["x gpu stage 3.0 s", "[fusion_v2] x: 60 frames, pids [1, 2]; prep 1s, gpu 2s, cpu 1s, total 4s"]
+    return lines, 0
+
+
+SCRIPTS = {"offline_app_lite.py": fake_offline_app_lite, "run_occlusion_stage.py": fake_occlusion}
 
 
 class FakePipelineRunner:
