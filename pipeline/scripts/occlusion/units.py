@@ -1,8 +1,10 @@
 """Occluder units for the editor (designdocs/architecture/pipeline-integration §3.2, contracts §4.1).
 
-fusion v2 decides per (track, person, part); its tracks are short (cut at keyframes). A unit links the tracks of one
-real object over time: track b continues track a when b starts within GAP frames after a ends and the masks of a's
-last frame and b's first frame overlap with IoU >= IOU_LINK. Each frame then gets a 16-bit label image (0 = none,
+fusion v2 decides per (track, person, part); its evidence tracks are short (half of them one frame long on downtown_bar,
+300 frames). A unit links the tracks of one real object over time: track b continues track a when b starts within
+GAP frames (= FUSION_KF_MAX, the longest stretch between keyframes) after a ends and the masks of a's last frame and b's first frame overlap with
+IoU >= IOU_LINK (downtown_bar, 300 frames: 1142 tracks -> 172 units). Units shorter than MIN_FRAMES that fusion put in
+front of nobody are left out: nothing to correct there, and hundreds of flickering fragments make the editor unusable. Each frame then gets a 16-bit label image (0 = none,
 value = unitId; where units overlap the smaller one wins) and units.json says, per unit and person, what fusion
 decided (front / behind / none) and over which frames the unit touches that person.
 """
@@ -13,8 +15,9 @@ import os
 
 import numpy as np
 
-GAP = 3
-IOU_LINK = 0.5
+GAP = 10
+IOU_LINK = 0.3
+MIN_FRAMES = 5
 
 
 class _UF:
@@ -99,15 +102,20 @@ def build_units(ev, dec, masks, n_frames: int, pids) -> tuple[list[dict], dict[i
     """-> (units for units.json, frame -> [(unitId, candidate index)] for the label images)."""
     tracks = object_tracks(ev)
     units, by_frame = [], {}
-    for uid, group in enumerate(link_tracks(tracks, masks), start=1):
+    uid = 0
+    for group in link_tracks(tracks, masks):
         frames = sorted({f for t in group for f in tracks[t]})
+        pp = per_person(group, ev, dec, pids)
+        if frames[-1] - frames[0] + 1 < MIN_FRAMES and not any(v["auto"] == "front" for v in pp.values()):
+            continue
+        uid += 1
         areas = []
         for t in group:
             for f, ci in tracks[t].items():
                 by_frame.setdefault(f, []).append((uid, ci))
                 areas.append(int(masks[ci].sum()))
         units.append({"unitId": uid, "frames": [frames[0], frames[-1]], "label": "object", "tracks": group,
-                      "areaPx": int(np.mean(areas)) if areas else 0, "perPerson": per_person(group, ev, dec, pids)})
+                      "areaPx": int(np.mean(areas)) if areas else 0, "perPerson": pp})
     return units, by_frame
 
 
