@@ -17,7 +17,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
                  resolution so that intersecting avatars do not alias), each hidden where a real object is in front
                  of it; hidden pixels show the real frame (the occluder)
 Steps 2, 4-6 stream over the frames in one pass: a hide mask is smoothed over frames t-1..t+1, so frame t is
-composited once frame t+1 is rendered (two frames of render buffers in memory, every frame skinned and rendered once).
+composited once frame t+1 is rendered and its raw hide masks computed, which a worker thread does while frame t+2
+renders (three frames of render buffers in memory, every frame skinned and rendered once).
 
 usage (repo root):
   .venv/Scripts/python.exe scripts/avatar_app.py --pipeline_out <run>/pipeline_out --out <run>/avatar
@@ -29,6 +30,7 @@ usage (repo root):
 avatar the avatar is hidden. --fusion_state: the decisions of scripts/occlusion/run_occlusion_stage.py instead of
 running fusion v2 again. --export_layers: the editor's preview layers (scripts/avatar/layers_export.py).
 writes <out>/frames/<stem>.jpg, <out>/avatar_<name>.mp4, <out>/compare_<name>.mp4 (input | mesh | avatar), stats.json
+(--no_frames / --no_compare leave out the frames and the compare video: review aids, not product outputs)
 """
 import argparse
 import glob
@@ -518,14 +520,16 @@ def main(a):
     # 4-6. render, hide, composite: frame j is composited once frame j+1 has been rendered and its raw hide masks
     # computed (on hide_pool, while frame j+2 renders)
     fdir = os.path.join(a.out, "frames")
-    os.makedirs(fdir, exist_ok=True)
+    write_frames, write_compare = not getattr(a, "no_frames", False), not getattr(a, "no_compare", False)
+    if write_frames:
+        os.makedirs(fdir, exist_ok=True)
     SW, SH = OW * rz.ssaa, OH * rz.ssaa
     # both videos are encoded as the frames come (utils.Mp4Writer: images_to_mp4's per-frame steps), not collected
     from utils import Mp4Writer
     crf = a.crf if a.crf is not None else (12 if a.source else None)
     outs = Mp4Writer(os.path.join(a.out, f"avatar_{run.name}.mp4"), fps=a.fps, crf=crf)
-    comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf)
-    sinks = [Sink() for _ in range(3)]   # frame files, avatar mp4, compare mp4
+    comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf) if write_compare else None
+    sinks = [Sink() if on else None for on in (write_frames, True, write_compare)]   # frame files, avatar / compare mp4
     layer_out = None
     if a.export_layers:
         if sc != 1:
@@ -579,12 +583,15 @@ def main(a):
         base[hide_any] = frames[j][hide_any]          # what hides the avatar is the real occluder
         out = composite_gpu(base, layers, ss)
         t_gpu += time.perf_counter() - t0
-        if a.source:
+        if not write_frames:
+            pass
+        elif a.source:
             sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.png"), out)
         else:
             sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.jpg"), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
         sinks[1].put(lambda o: outs.append(cv2.cvtColor(o, cv2.COLOR_BGR2RGB)), out)
-        sinks[2].put(compare_row, j, out)
+        if write_compare:
+            sinks[2].put(compare_row, j, out)
         bufs.pop(j)
         raws.pop(j - 1, None)
         t_comp += time.perf_counter() - t0
@@ -595,7 +602,8 @@ def main(a):
     stats["hide_s"] = round(t_hide, 1)
     t0 = time.perf_counter()
     for k in sinks:   # the writes / encodes still queued
-        k.close()
+        if k is not None:
+            k.close()
     if layer_out is not None:
         layer_out.close()
     stats["write_wait_s"] = round(time.perf_counter() - t0, 1)
@@ -610,7 +618,8 @@ def main(a):
           + ", ".join(f"{k.split('_')[1]} IK correction (median) {v} cm" for k, v in stats.items()
                       if k.startswith("ik_")), flush=True)
     outs.close()
-    comps.close()
+    if comps is not None:
+        comps.close()
     del frames, plates, removal, base, hider, fus, face   # every view of the scratch arrays, so the files can go
     for f in ("frames", "person_masks", "removal_holes", "removal_excl", "removal_grays", "removal_plates"):
         release(f"{sdir}/{f}.npy")
@@ -668,6 +677,10 @@ if __name__ == "__main__":
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
+    ap.add_argument("--no_compare", action="store_true",
+                    help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
+    ap.add_argument("--no_frames", action="store_true",
+                    help="do not write <out>/frames/ (the avatar mp4 only)")
     ap.add_argument("--no_spring", action="store_true")
     ap.add_argument("--no_ik", action="store_true")
     ap.add_argument("--fusion_reference", action="store_true",
