@@ -33,9 +33,10 @@ def _nearest_parts(parts, M):
     return parts[iy, ix]
 
 
-def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False):
+def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False, real=()):
     """Hide mask over the avatar region A of target p (index k) in frame i. c: prep cache, DA: avatar depth (inf =
-    empty). Mirrors fusion.render's per-(i, p) body."""
+    empty). Mirrors fusion.render's per-(i, p) body. real: people who are not replaced (their bodies stay in the
+    frame), for whom the person-person rule applies even with people=False."""
     from fusion import grasp_veto, unpack
     H, W = A.shape
     hide = np.zeros((H, W), np.float32)
@@ -52,7 +53,7 @@ def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False)
     r = Dx - info["s"] * Zm if np.isfinite(info["s"]) else None
     for u in byf.get((i, p), []):
         if u.get("person") is not None:
-            if people:
+            if people or u["person"] in real:
                 d = dec.get((u["tr"], u["pid"], u["part"], "p", i))
                 if d is not None and d[0]:
                     C = unpack(ev["Vr"][(i, u["person"])], H, W)
@@ -98,12 +99,12 @@ class AvatarHider:
     """Per-frame hide masks over the avatars (streaming form of avatar_hides: raw masks of frame i need only frame i;
     the TSMOOTH=2 majority needs the raw masks of i-1, i, i+1)."""
 
-    def __init__(self, fus, people=False):
+    def __init__(self, fus, people=False, real=()):
         from fusion import P
         from gpu_stage import load_cands
         from prep import load
         from shared_cache import moge_z
-        self.P, self.people = P, people
+        self.P, self.people, self.real = P, people, set(real)
         self.ev, self.dec, cache = fus["ev"], fus["dec"], fus["cache"]
         self.c = load(cache)
         self.pids = list(self.c["pids"])
@@ -129,9 +130,10 @@ class AvatarHider:
             if a is None:
                 continue
             A = a > 0.02
-            h = hide_frame(i, p, k, c, self.ev, self.byf, self.dec, self.masks, Zm, gnd, A, depth[p], P, self.people)
-            if not self.people:
-                others = np.isin(c["L"][i], [q for q in self.pids if q != p])
+            h = hide_frame(i, p, k, c, self.ev, self.byf, self.dec, self.masks, Zm, gnd, A, depth[p], P, self.people,
+                           self.real)
+            if not self.people:   # erased targets only: a real person's body in front keeps hiding the avatar
+                others = np.isin(c["L"][i], [q for q in self.pids if q != p and q not in self.real])
                 h[cv2.dilate(others.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0] = 0
             out[p] = (h, A)
         return out

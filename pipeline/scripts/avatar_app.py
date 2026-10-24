@@ -20,6 +20,10 @@ usage (repo root):
   .venv/Scripts/python.exe scripts/avatar_app.py --pipeline_out <run>/pipeline_out --out <run>/avatar
       [--vrm assets/vrm_models/yuzuhako_Shuera.vrm] [--fps 30] [--no_occlusion] [--no_removal] [--no_spring]
       [--hq <input video or frames dir>] [--smooth 0.05] [--no_foot_lock]
+      [--targets 1,3] [--vrm_map 1=a.vrm,3=b.vrm] [--fusion_state <occ>/fusion_state.pkl] [--export_layers <dir>]
+--targets: only these people are erased and replaced; the others stay real, and where one of them is in front of an
+avatar the avatar is hidden. --fusion_state: the decisions of scripts/occlusion/run_occlusion_stage.py instead of
+running fusion v2 again. --export_layers: the editor's preview layers (scripts/avatar/layers_export.py).
 writes <out>/frames/<stem>.jpg, <out>/avatar_<name>.mp4, <out>/compare_<name>.mp4 (input | mesh | avatar), stats.json
 """
 import argparse
@@ -236,6 +240,20 @@ def main(a):
     pids = sorted({p for p, _ in sk})
     if not pids:
         raise SystemExit(f"no skeleton_4d_individual/ in {run.pout}: re-run the mesh pipeline (it now saves skeletons)")
+    real_people = set()
+    if a.targets:
+        want = [int(x) for x in a.targets.split(",") if x.strip()]
+        missing = [p for p in want if p not in pids]
+        if missing:
+            raise SystemExit(f"--targets {missing}: no skeleton for them (tracked: {pids})")
+        real_people = set(pids) - set(want)
+        pids = want
+        sk = {k: v for k, v in sk.items() if k[0] in pids}
+    vrm_of = {p: a.vrm for p in pids}
+    for item in (a.vrm_map.split(",") if a.vrm_map else []):
+        pid, _, path = item.partition("=")
+        vrm_of[int(pid)] = path
+    stats["vrm"] = {str(p): os.path.basename(v) for p, v in vrm_of.items()}
     if a.smooth > 0 or a.foot_lock:
         from avatar.smooth import smooth_skeletons
         sk, ss = smooth_skeletons(sk, pids, sigma_s=a.smooth, fps=a.fps, foot_lock=a.foot_lock)
@@ -285,7 +303,18 @@ def main(a):
 
     # 1. occlusion decisions (fusion v2 on the meshes)
     fus = None
-    if not a.no_occlusion:
+    if not a.no_occlusion and a.fusion_state:
+        import pickle
+        t0 = time.perf_counter()
+        with open(a.fusion_state, "rb") as fh:
+            st = pickle.load(fh)
+        cache = os.path.join(os.path.dirname(os.path.abspath(a.fusion_state)), "_r3cache", st["name"])
+        import shared_cache
+        shared_cache.install()
+        fus = dict(run=run, ev=st["ev"], dec=st["dec"], cache=cache)
+        stats["fusion_s"] = round(time.perf_counter() - t0, 1)
+        print(f"[avatar] fusion v2 decisions from {a.fusion_state}", flush=True)
+    elif not a.no_occlusion:
         from run_fusion_v2 import run_fusion
         t0 = time.perf_counter()
         fus = run_fusion(run.pout, os.path.join(a.out, "occlusion"), run.name, save=False,
@@ -298,14 +327,14 @@ def main(a):
 
     # 2. avatars (retarget + render are done per frame below)
     t0 = time.perf_counter()
-    model = load_vrm(a.vrm)
+    models = {v: load_vrm(v) for v in sorted(set(vrm_of.values()))}
     rz = Rasterizer(OW, OH, ssaa=a.ssaa)
     K = np.array([[focal * sc, 0, OW / 2], [0, focal * sc, OH / 2], [0, 0, 1]])
     mvp = camera_mvp(K, OW, OH)
     actors = {}
     for pid in pids:
         coords = [sk[(pid, i)]["joint_coords"] for i in range(n) if (pid, i) in sk]
-        act = AvatarActor(model, rz, scale=1.0, fps=a.fps, spring=not a.no_spring)
+        act = AvatarActor(models[vrm_of[pid]], rz, scale=1.0, fps=a.fps, spring=not a.no_spring)
         act.scale = act.rt.leg_scale(coords)
         actors[pid] = act
         stats[f"scale_{pid}"] = round(act.scale, 4)
@@ -329,7 +358,7 @@ def main(a):
     hider = None
     if fus is not None:
         from avatar.occlusion import AvatarHider
-        hider = AvatarHider(fus)
+        hider = AvatarHider(fus, real=real_people)
     ik_err = {}
 
     ss = rz.ssaa
@@ -402,6 +431,14 @@ def main(a):
     outs = Mp4Writer(os.path.join(a.out, f"avatar_{run.name}.mp4"), fps=a.fps, crf=crf)
     comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf)
     sinks = [Sink() for _ in range(3)]   # frame files, avatar mp4, compare mp4
+    layer_out = None
+    if a.export_layers:
+        if sc != 1:
+            raise SystemExit("--export_layers is written at the pipeline's resolution: not with --hq")
+        from avatar.layers_export import LayerWriter
+        sinks.append(Sink())
+        ids = {int(p): v for p, _, v in (s.partition("=") for s in a.avatar_ids.split(","))} if a.avatar_ids else {}
+        layer_out = LayerWriter(a.export_layers, (OW, OH), pids, ids, sinks[-1])
 
     def compare_row(j, out):
         mesh = cv2.imread(f"{run.pout}/rendered_frames/{stems[j]}.jpg")
@@ -411,7 +448,7 @@ def main(a):
         comps.append(cv2.cvtColor(np.hstack(row), cv2.COLOR_BGR2RGB))
     hidden_px = cov_px = 0
     t_render = t_hide = t_comp = t_gpu = 0.0
-    bufs, raws = {}, {}
+    bufs, raws, hides_j = {}, {}, {}
     for i in range(n + 1):
         if i < n:
             t0 = time.perf_counter()
@@ -436,6 +473,11 @@ def main(a):
                 hidden_px += int((h >= 0.5).sum())
                 hide_any[by0:by1, bx0:bx1] |= (h[by0:by1, bx0:bx1] >= 0.5) & (al_n > 0.02)
             layers.append((im, d, box, h))
+            if layer_out is not None:
+                hides_j[pid] = h
+        if layer_out is not None:
+            layer_out.frame(j, plates[j], bufs[j], hides_j, ss)
+            hides_j = {}
         t_hide += time.perf_counter() - t0
         t0 = time.perf_counter()
         base[hide_any] = frames[j][hide_any]          # what hides the avatar is the real occluder
@@ -450,11 +492,14 @@ def main(a):
         bufs.pop(j)
         raws.pop(j - 1, None)
         t_comp += time.perf_counter() - t0
+        print(f"[avatar] frame {j + 1}/{n}", flush=True)
     stats["render_s"] = round(t_setup + t_render, 1)
     stats["hide_s"] = round(t_hide, 1)
     t0 = time.perf_counter()
     for k in sinks:   # the writes / encodes still queued
         k.close()
+    if layer_out is not None:
+        layer_out.close()
     stats["write_wait_s"] = round(time.perf_counter() - t0, 1)
     stats["composite_s"] = round(t_comp, 1)          # incl. the GPU composite; the writes and encodes run in Sinks
     stats["composite_gpu_s"] = round(t_gpu, 1)
@@ -504,6 +549,12 @@ if __name__ == "__main__":
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
     ap.add_argument("--no_occlusion", action="store_true")
+    ap.add_argument("--targets", default=None, help="comma-separated pids to replace (default: every tracked person)")
+    ap.add_argument("--vrm_map", default=None, help="pid=path.vrm,... per target (default: --vrm for all)")
+    ap.add_argument("--avatar_ids", default=None, help="pid=avatarId,... recorded in layers.json")
+    ap.add_argument("--fusion_state", default=None,
+                    help="fusion_state.pkl of scripts/occlusion/run_occlusion_stage.py: reuse its decisions")
+    ap.add_argument("--export_layers", default=None, help="write the editor's preview layers to this directory")
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
