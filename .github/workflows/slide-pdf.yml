@@ -1,7 +1,9 @@
 name: スライドの PDF
 
 # develop に入ったとき、または手動（Run workflow でブランチを選ぶ）で、
-# docs/slide/*.md を PDF にして、成果物（artifact）に残す。
+# docs/slide/*.md を PDF にして、GitHub Release（プレリリース）に添付する。
+# Release は slide-<実行番号>-<SHA> のタグで毎回作る。不要になったら
+# Releases の画面、または `gh release delete <タグ> --cleanup-tag` で消せる。
 on:
   push:
     branches: [develop]
@@ -16,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write # Release とタグを作るため
 
 jobs:
   pdf:
@@ -52,9 +54,14 @@ jobs:
             --output out/ \
             "${slides[@]}"
           ls -la out
-      - uses: actions/upload-artifact@v4
-        with:
-          name: slide-pdf-${{ github.sha }}
-          path: out/*.pdf
-          if-no-files-found: error
-          retention-days: 90
+      - name: Release に添付する
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          tag="slide-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          gh release create "$tag" out/*.pdf \
+            --target "$GITHUB_SHA" \
+            --title "スライド PDF（$BRANCH @ ${GITHUB_SHA::7}）" \
+            --notes "ブランチ \`$BRANCH\` のコミット $GITHUB_SHA から自動で作ったスライドの PDF。不要になったら消してよい。" \
+            --prerelease
