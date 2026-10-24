@@ -8,3 +8,4 @@ packages:
 allowBuilds:
   esbuild: true # vite が使う。ネイティブバイナリの確認
   unrs-resolver: true # eslint-import-resolver-typescript が使う。ネイティブバインディングの確認
+  lefthook: true # git hook（pre-push）を入れるバイナリの確認
