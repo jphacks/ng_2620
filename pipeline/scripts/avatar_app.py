@@ -452,6 +452,24 @@ def main(a):
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
         hider.prefetch(range(n))
         hide_pool = ThreadPoolExecutor(1)   # raw hide masks of frame i beside the rendering of frame i + 1
+        if not a.no_removal and getattr(a, "cover", True):
+            # what covers a target (AvatarHider.cover: fusion's in-front segments) stays real: the removal hole is the
+            # dilated target mask, which also took held objects, the table in front and people passing in front
+            t0 = time.perf_counter()
+            holes, cover_px = removal["out"][1], 0
+            for i in range(n):
+                cv = hider.cover(i)
+                if not cv.any():
+                    continue
+                U = cv if sc == 1 else cv2.resize(cv.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
+                R = U & np.asarray(holes[i])
+                if R.any():
+                    pl = np.asarray(plates[i]).copy()
+                    pl[R] = frames[i][R]
+                    plates[i] = pl
+                    cover_px += int(R.sum())
+            stats["cover_px"] = cover_px
+            stats["cover_s"] = round(time.perf_counter() - t0, 1)
     ik_err = {}
     head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
@@ -689,6 +707,8 @@ if __name__ == "__main__":
                          "(sole .. crown; retarget_mhr.height_scale)")
     ap.add_argument("--anchor", type=float, default=0.5,
                     help="placement point: 0 = the hips on the person's hips .. 1 = the neck on the person's neck")
+    ap.add_argument("--no_cover", dest="cover", action="store_false",
+                    help="erase what covers a target too (default: fusion's in-front segments stay real in the removal)")
     ap.add_argument("--no_compare", action="store_true",
                     help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
     ap.add_argument("--no_frames", action="store_true",

@@ -168,10 +168,33 @@ class AvatarHider:
         """Compute the ground masks of these frames in order on a worker thread, ahead of raw() (12 ms per frame
         at 480x270 that raw() would otherwise spend first; the same function on the same inputs)."""
         from concurrent.futures import ThreadPoolExecutor
+        for k in ("L", "foc", "KP", "has", "D"):   # the lazy cache members, unpacked here and not by two threads at once
+            self.c[k]
         pool = ThreadPoolExecutor(1)
         for i in frames:
             self._gnd[i] = pool.submit(self._ground, i)
         pool.shutdown(wait=False)
+
+    def cover(self, i):
+        """Frame i's 'cover': every candidate segment that fusion v2 decided is in front of a target (any body part,
+        'o' or 'i' decision), minus the targets' own visible masks; pipeline resolution, bool (H, W). Whatever covers
+        a person - a held object, a table, another person passing in front - is the real scene in front of the avatar,
+        so the removal must not erase it either (removal holes are the dilated target masks)."""
+        from fusion import unpack
+        H, W = self.masks.shape[1:]
+        out = np.zeros((H, W), bool)
+        for p in self.pids:
+            for u in self.byf.get((i, p), []):
+                if u.get("person") is not None:
+                    continue
+                d = [self.dec.get((u["tr"], u["pid"], u["part"], m)) for m in ("o", "i")]
+                if any(x is not None and x[0] for x in d):
+                    out |= self.masks[u["ci"]]
+        if out.any():
+            for p in self.pids:
+                if (i, p) in self.ev["Vr"]:
+                    out &= ~unpack(self.ev["Vr"][(i, p)], H, W)
+        return out
 
     def raw(self, i, alpha, depth):
         """alpha / depth: {pid: (H,W)} of frame i (alpha 0..1, depth inf where empty) -> {pid: (hide, region)}."""
