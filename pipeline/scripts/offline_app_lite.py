@@ -413,7 +413,8 @@ def inference_lite(args):
     # 1. person boxes on the first frame with a person (ViTDet only)
     with Stage("detect"):
         start_idx, boxes, width, height, image_list = detect_first_frame(cfg, args.input_video)
-        boxes = [boxes[i] for i in oa.select_targets(boxes, cfg.runtime.get("max_targets", 2))]
+        max_targets = args.max_targets or cfg.runtime.get("max_targets", 2)
+        boxes = [boxes[i] for i in oa.select_targets(boxes, max_targets)]
 
     # 2. SAM3 tracking (tracker + vision backbone; frames on CPU)
     with Stage("sam3_load"):
@@ -559,6 +560,9 @@ if __name__ == "__main__":
     p.add_argument("--moge_ahead", action="store_true")
     p.add_argument("--individual_overlays", action="store_true")
     p.add_argument("--hmr_stride", type=int, default=3)
+    p.add_argument("--max_targets", type=int, default=None,
+                   help="people tracked: the N largest boxes on the first frame with a person (default: "
+                        "runtime.max_targets of configs/body4d.yaml)")
     args = p.parse_args()
     if not os.path.exists(args.input_video):
         raise FileNotFoundError(args.input_video)
