@@ -7,8 +7,10 @@
 
 前提：Node 26（`nvm use` / `fnm use` はリポジトリ直下の `.nvmrc`・`.node-version` を読む。mise は idiomatic version file を有効にすると読む）、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
 
+初めては、リポジトリのルートで `make doctor`（足りないものの一覧）→ `make setup`（入れる。[SETUP.md](../../SETUP.md)）。Windows は make / sh の対象外なので、下の pnpm のコマンドをそのまま使う。
+
 ```sh
-pnpm install                         # リポジトリのルートで
+pnpm install                         # リポジトリのルートで（make install）
 
 # Tauri なし（ブラウザで http://localhost:1420）。ファイルはメモリ上にだけ置かれ、再読み込みで消える
 pnpm --filter @vvlog/desktop dev          # 既定の接続 = 登録した接続（開発用モック・シミュレーターも一覧に出る。モックは `pnpm mock` で起動）
@@ -76,7 +78,7 @@ feature をまたぐ画面（取り込みウィザード、設定）は `present
 ## 未対応・確認していないこと
 
 - Rust 側は Windows（stable、MSVC）で `cargo check` / `cargo clippy` / `cargo build` / `cargo test` が通ることを確かめた。macOS ではまだビルドしていない。
-- `pnpm tauri dev` が `cargo metadata ... program not found` で止まるときは、`cargo` が PATH に無い。Rust を入れた後はターミナル（VS Code なら VS Code ごと）を起動し直す。
+- `pnpm tauri dev` が `failed to run 'cargo metadata' command ... No such file or directory (os error 2)`（`program not found`）で止まるときは、Rust が無いか `cargo` が PATH に無い。`make doctor` で確かめ、無ければ `make setup`。Rust を入れた後はターミナル（VS Code なら VS Code ごと）を起動し直す。
 - ffprobe のサイドカーは同梱していない。実行ファイルの隣か PATH の `ffprobe` を使い、無ければ `<video>` で長さと寸法だけを読む（コーデック・音声はサーバーの ingest に任せる）。
 - macOS の `.icns` は未作成。`pnpm tauri icon src-tauri/icons/icon.png` で作れる。
 - キーチェーン保存（P1）、HTTP 許可範囲の絞り込み（P1）。

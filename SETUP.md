@@ -11,6 +11,21 @@
 
 設計は [designdocs/](designdocs/README.md)、アプリとサーバーの約束（API）は [packages/contracts/CLIENT_GUIDE.md](packages/contracts/CLIENT_GUIDE.md)。
 
+## まず：make setup（macOS / Linux）
+
+```sh
+make doctor     # 何も入れずに、足りないもの（NG）と版を一覧にする。足りなければ失敗で終わる
+make setup      # 足りないものを入れる：Node（.nvmrc）・pnpm・Rust・Xcode CLT・Python 環境・ffmpeg、最後に pnpm install
+make help       # ほかのコマンド（make dev / make mock / make test …）
+```
+
+`make setup`（= `scripts/setup.sh`）は、ネットのスクリプトを実行するもの（rustup、uv）とシステムに入れるもの（`brew install ffmpeg`、Xcode CLT）を
+実行する前に y/N で聞く（`make setup ARGS=--yes` で聞かない。アプリだけなら `ARGS=--app-only`）。Node は nvm か fnm で入れるので、
+どちらも無ければ案内して止まる。`pipeline/` の環境 B（GPU 機だけ）は作らない。
+終わったら、今のシェルで `nvm use`（Node を切り替えたとき）と、新しいターミナル（Rust を入れたとき）。
+
+**Windows は make / sh の対象外**。下の表のツールを手で入れて、`pnpm install` → `pnpm tauri dev`。
+
 ## 前提のツール
 
 | ツール | 版 | 何に要る | 入れ方（macOS） |
@@ -91,7 +106,7 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 
 | 症状 | 対処 |
 |---|---|
-| `pnpm tauri dev` で `cargo: command not found` | Rust を入れたあと新しいターミナルを開く（または `source ~/.cargo/env`） |
+| `pnpm tauri dev` が `failed to run 'cargo metadata' command ... No such file or directory (os error 2)`（または `cargo: command not found`）で止まる | Rust が入っていないか、PATH に無い。`make doctor` で確かめ、無ければ `make setup`。入れたあとは新しいターミナルを開く（または `source ~/.cargo/env`。VS Code の中なら VS Code ごと起動し直す） |
 | アプリで動画を入れると「動画として読めません」 | サーバー（モック）側の ffprobe が PATH に無い。`brew install ffmpeg` してモックを再起動 |
 | モックが `ModuleNotFoundError: fastapi` | `python -m mock_server` を素の Python で起動している。`sh services/mock_server/run.sh` を使う |
 | `pnpm` が `WARN Unsupported engine: wanted: {"node":">=26"}` と出す | Node が 26 より古い（止まりはしない）。`nvm use`（`.nvmrc` を読む）などで 26 に切り替える |
