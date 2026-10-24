@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { ComputeBackendFactory } from "@/application/ports/compute";
+import type { EditorMediaPort } from "@/application/ports/editor";
 import type { LocalServerStatus } from "@/application/ports/localServer";
 import type { LocalFilePort } from "@/application/ports/media";
 import type { ProjectRepositoryPort } from "@/application/ports/project";
@@ -70,7 +71,11 @@ export interface Services {
     removeAvatar: UC.RemoveAvatar;
     startExport: UC.StartExport;
     saveExportResult: UC.SaveExportResult;
+    loadEditorData: UC.LoadEditorData;
+    saveOverrides: UC.SaveOverrides;
   };
+  /** エディタ（F09）が読む画像のデコード */
+  editorMedia: EditorMediaPort;
   /** F12（レーン B）が差し込む。同梱サンプルをコピーして、そのパスを返す */
   openSample?: () => Promise<{ path: string }>;
   diagnose(): Promise<Diagnostics>;
