@@ -319,8 +319,9 @@ def main(a):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
             from avatar.inpaint_lama import inpaint as lama
             extra = dict(work_short=480, inpaint=lama)
-            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5),
-                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True)}[mode])
+            rc = getattr(a, "ring_check", True)   # candidates misaligned around the hole dropped (removal_gpu)
+            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5, ring_check=rc),
+                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True, ring_check=rc)}[mode])
             a.gpu_removal = True
         elif getattr(a, "gpu_removal", False):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
@@ -746,6 +747,9 @@ if __name__ == "__main__":
                     help="erase what covers a target too (default: fusion's in-front segments stay real in the removal)")
     ap.add_argument("--no_blend", dest="blend", action="store_false",
                     help="no colour matching of the plate to the frame around each removal hole (scripts/avatar/plate_blend.py)")
+    ap.add_argument("--no_ring_check", dest="ring_check", action="store_false",
+                    help="keep every candidate frame's pixels in the mosaic removal (default: a candidate that does not match "
+                         "the frame around the hole is not used there; removal_gpu._ring_reject)")
     ap.add_argument("--no_compare", action="store_true",
                     help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
     ap.add_argument("--no_frames", action="store_true",
