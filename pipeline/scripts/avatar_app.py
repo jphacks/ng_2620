@@ -376,7 +376,7 @@ def main(a):
         stats["removal_s"] = round(removal["s"], 1)                    # its own run time (overlapped with fusion)
         stats["removal_wait_s"] = round(time.perf_counter() - t0, 1)   # what it still added after fusion
 
-    expr, fmap = {}, None
+    expr, fmap = {}, {}          # fmap: per target (each may have its own VRM and expression names)
     if face is not None:
         from avatar.face import vrm_mapping
         t0 = time.perf_counter()
@@ -389,7 +389,9 @@ def main(a):
             fr = None
         if fr is not None:
             expr = fr["expr"]
-            fmap, stats["face_mapping"] = vrm_mapping(model.blendshapes)
+            fmap = {pid: vrm_mapping(models[vrm_of[pid]].blendshapes) for pid in pids}
+            stats["face_mapping"] = {str(pid): m[1] for pid, m in fmap.items()}
+            fmap = {pid: m[0] for pid, m in fmap.items()}
             stats["face_s"] = round(fr["s"], 1)                            # its own run time (overlapped)
             stats["face_wait_s"] = round(time.perf_counter() - t0, 1)      # what it still added
             stats["face_read"] = len(fr["raw"])
@@ -428,7 +430,7 @@ def main(a):
                 continue
             e = expr.get((pid, i))
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
-                     gpu=dev, expr=fmap(e) if e is not None else None)
+                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None)
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
             hb = act.bone_cam("head")
