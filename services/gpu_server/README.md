@@ -43,21 +43,29 @@ uv が無い場合：`python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 
 `pipeline/` を動かす Python。サーバーとは別の venv にする（torch・CUDA が重く、版の縛りが強いため）。
 
-### Linux（L4 で確認済み、Python 3.11〜3.13）
+### Linux（新しい L4 の VM でこの手順どおりに確認済み：Python 3.13・CUDA 13.0・torch 2.14 cu130）
+
+uv で作る（素の `python3 -m venv` は Ubuntu / Debian では pip が入らず失敗する。使うなら先に `apt install python3-venv`）。
+**torch は `nvcc --version` と同じ CUDA 版のものを入れる**：detectron2 はインストール時に CUDA 拡張をビルドし、
+版が違うと `The detected CUDA version (13.0) mismatches the version that was used to compile PyTorch (12.4)` で止まる
+（nvcc が無い機械は CUDA Toolkit を入れる）。
 
 ```sh
 cd pipeline
-python3 -m venv .venv && . .venv/bin/activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124      # GPU の CUDA に合わせる
-pip install --no-build-isolation --no-deps 'git+https://github.com/facebookresearch/detectron2.git@a1ce2f9'
-pip install --no-deps -e models/sam3
-pip install opencv-python~=4.12.0.88 einops~=0.8.1 pycocotools~=2.0.10 roma~=1.5.4 omegaconf~=2.3.0 pytorch_lightning \
+uv venv .venv -p 3.13                     # 3.13 が無ければ uv が取ってくる
+P="uv pip install -p .venv/bin/python"
+CU=$(nvcc --version | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/cu\1\2/p')   # 例 cu130、cu128、cu126
+$P torch torchvision --index-url https://download.pytorch.org/whl/$CU        # nvcc と同じ CUDA 版の torch
+$P setuptools wheel                                                           # detectron2 のビルドに要る
+$P --no-build-isolation --no-deps 'git+https://github.com/facebookresearch/detectron2.git@a1ce2f9'
+$P --no-deps -e models/sam3
+$P opencv-python~=4.12.0.88 einops~=0.8.1 pycocotools~=2.0.10 roma~=1.5.4 omegaconf~=2.3.0 pytorch_lightning \
   yacs~=0.1.8 fvcore pyrender~=0.1.45 termcolor~=3.2.0 diffusers==0.29.1 transformers~=4.57.3 accelerate~=1.12.0 \
   'imageio[ffmpeg]' timm ftfy regex iopath trimesh braceexpand~=0.1.7 cloudpickle~=3.1.2 psutil torchmetrics \
-  webdataset scipy moderngl ai-edge-litert 'huggingface-hub<1.0'
-pip install 'git+https://github.com/microsoft/MoGe.git' && pip uninstall -y utils3d_moge \
-  && pip install --no-deps 'git+https://github.com/EasternJournalist/utils3d.git'
-pip install eva-decord            # Python 3.13。3.12 以下なら decord
+  webdataset scipy moderngl ai-edge-litert 'huggingface-hub<1.0' eva-decord
+$P 'git+https://github.com/microsoft/MoGe.git'
+uv pip uninstall -p .venv/bin/python utils3d_moge || true                     # MoGe 同梱版は utils3d.pt が無い
+$P --no-deps 'git+https://github.com/EasternJournalist/utils3d.git'
 ```
 
 ヘッドレスの Linux では描画に EGL を使う：サーバーが `PYOPENGL_PLATFORM=egl`・`MODERNGL_BACKEND=egl` を自動で渡す（`libegl1` が要る）。
@@ -88,7 +96,7 @@ HF_TOKEN=hf_... <環境 B の python> weights/fetch.py --dest <重みの置き�
 | 変数 | 必須 | 例 | 意味 |
 |---|---|---|---|
 | `VVLOG_API_TOKEN` | ✓ | `openssl rand -hex 24` の出力 | アプリの接続設定に入れるトークン |
-| `VVLOG_PYTHON` | GPU 機 | `pipeline/.venv/bin/python` | 環境 B の Python |
+| `VVLOG_PYTHON` | GPU 機 | `pipeline/.venv/bin/python`（**絶対パス**で） | 環境 B の Python |
 | `VVLOG_DATA_ROOT` | | `services/gpu_server/data` | ジョブ・成果物の保存先（既定 `./data`） |
 | `VVLOG_PORT` | | `8765` | 待受ポート（127.0.0.1 のみで待ち受ける） |
 | `VVLOG_GPU_IDS` | | `0` | 使う GPU |
