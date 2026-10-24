@@ -1,0 +1,387 @@
+/*
+ * @theme virtualtwin
+ * @auto-scaling true
+ *
+ * VirtualTwin のロゴ（designdocs/brand/）に合わせた Marp テーマ。
+ * 緑（メイン）・黄色（サブ）・白の「ゆるふわ・ポップ」な配色。
+ *
+ * ロゴは designdocs/brand/ の SVG を参照する。url() は CSS ファイルではなく
+ * スライド（.md）の場所から解決されるので、スライドは docs/slide/ 直下に置くこと。
+ * （docs/slide/ → ../../designdocs/brand/）
+ *
+ * 使えるクラス（<!-- _class: ... --> で指定）:
+ *   lead    タイトル・章扉。緑のグラデーション背景、中央寄せ
+ *   invert  暗い緑の背景（強調したいスライド）
+ *   accent  黄色の背景（ひと息つくスライド）
+ *   cols    2 カラム（直下に <div> を 2 つ置く）
+ *   small   本文を小さく
+ *   nologo  右下のマークを出さない
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap');
+
+:root {
+  --vt-green-100: #e9faf0;
+  --vt-green-200: #c9f3da;
+  --vt-green-300: #7beba6;
+  --vt-green-500: #2dbe6c;
+  --vt-green-700: #128a48;
+  --vt-green-900: #14532d;
+  --vt-yellow-200: #fff1b8;
+  --vt-yellow-300: #ffe57a;
+  --vt-yellow-500: #ffc93c;
+  --vt-yellow-700: #e89c0c;
+  --vt-ink: #1b3a2a;
+  --vt-white: #ffffff;
+}
+
+section {
+  --logo-mark: url('../../designdocs/brand/color/svg/virtualtwin-mark.svg');
+  --logo-horizontal: url('../../designdocs/brand/color/svg/virtualtwin-logo-horizontal.svg');
+
+  width: 1280px;
+  height: 720px;
+  padding: 72px 88px 80px;
+  font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Hiragino Sans',
+    'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-size: 30px;
+  line-height: 1.6;
+  color: var(--vt-ink);
+  background-color: var(--vt-white);
+  /* 左下と右上にうっすら丸い子たち */
+  background-image:
+    radial-gradient(circle at 96% -6%, var(--vt-yellow-200) 0 150px, transparent 151px),
+    radial-gradient(circle at -4% 108%, var(--vt-green-200) 0 190px, transparent 191px);
+}
+
+/* ---------- 見出し ---------- */
+
+h1, h2, h3, h4 {
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--vt-green-700);
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: 1.9em;
+}
+
+h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.18em;
+  /* 緑→黄色の下線。ロゴの「Virtual」「Twin」の色分け */
+  background-image: linear-gradient(90deg, var(--vt-green-500) 0 62%, var(--vt-yellow-500) 62% 100%);
+  background-size: 100% 6px;
+  background-position: left bottom;
+  background-repeat: no-repeat;
+  border-radius: 3px;
+  margin-bottom: 0.7em;
+  /* 右上のページ番号と被らないように */
+  margin-right: 90px;
+}
+
+h3 {
+  font-size: 1.1em;
+  color: var(--vt-green-900);
+}
+
+h4 {
+  font-size: 0.9em;
+  color: var(--vt-yellow-700);
+}
+
+/* ---------- 本文 ---------- */
+
+p { margin: 0 0 0.7em; }
+
+strong {
+  color: var(--vt-green-700);
+  font-weight: 800;
+  /* 蛍光ペン風 */
+  background: linear-gradient(transparent 62%, var(--vt-yellow-300) 62%);
+}
+
+em {
+  font-style: normal;
+  color: var(--vt-yellow-700);
+  font-weight: 700;
+}
+
+a {
+  color: var(--vt-green-700);
+  text-decoration-color: var(--vt-yellow-500);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+ul, ol {
+  padding-left: 1.3em;
+  margin: 0 0 0.7em;
+}
+
+li { margin: 0.18em 0; }
+
+ul > li { list-style: none; position: relative; }
+
+/* 箇条書きのマーカーは緑の丸 */
+ul > li::before {
+  content: '';
+  position: absolute;
+  left: -1.05em;
+  top: 0.62em;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--vt-green-300), var(--vt-green-500) 60%, var(--vt-green-700));
+}
+
+/* 入れ子の 2 段目は黄色い丸 */
+ul ul > li::before {
+  background: radial-gradient(circle at 35% 30%, var(--vt-yellow-300), var(--vt-yellow-500) 60%, #ffae1a);
+}
+
+ol > li::marker {
+  color: var(--vt-green-500);
+  font-weight: 800;
+}
+
+code {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 0.82em;
+  padding: 0.1em 0.4em;
+  border-radius: 0.4em;
+  background: var(--vt-green-100);
+  color: var(--vt-green-900);
+}
+
+pre {
+  padding: 0.9em 1.1em;
+  border-radius: 20px;
+  background: var(--vt-green-900);
+  border: 4px solid var(--vt-green-500);
+  font-size: 0.7em;
+  line-height: 1.5;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+  color: var(--vt-green-100);
+}
+
+blockquote {
+  margin: 0.4em 0 0.8em;
+  padding: 0.5em 1.1em;
+  border-left: 8px solid var(--vt-yellow-500);
+  border-radius: 0 20px 20px 0;
+  background: var(--vt-yellow-200);
+  color: var(--vt-green-900);
+}
+
+blockquote > :last-child { margin-bottom: 0; }
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8em;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 3px solid var(--vt-green-500);
+}
+
+th, td {
+  padding: 0.35em 0.9em;
+  border: 0;
+  border-bottom: 2px solid var(--vt-green-200);
+}
+
+th {
+  background: var(--vt-green-500);
+  color: var(--vt-white);
+  font-weight: 800;
+}
+
+tr:nth-child(even) td { background: var(--vt-green-100); }
+tr:last-child td { border-bottom: 0; }
+
+img { background: transparent; }
+
+hr {
+  border: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--vt-green-500) 62%, var(--vt-yellow-500) 62%);
+}
+
+/* ---------- ヘッダー・フッター ---------- */
+
+header, footer {
+  position: absolute;
+  left: 88px;
+  right: 88px;
+  font-size: 18px;
+  color: var(--vt-green-700);
+  opacity: 0.8;
+}
+
+header { top: 28px; }
+
+/* 最下部のコピーライト（footer ディレクティブ）。中央寄せ */
+footer {
+  bottom: 22px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+/* ページ番号は右上 */
+section::after {
+  content: attr(data-marpit-pagination);
+  position: absolute;
+  top: 34px;
+  right: 56px;
+  padding: 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--vt-green-700);
+}
+
+/* 右下のロゴマーク（正方形マーク） */
+section::before {
+  content: '';
+  position: absolute;
+  bottom: 40px;
+  right: 48px;
+  width: 72px;
+  height: 72px;
+  background: var(--logo-mark) center / contain no-repeat;
+}
+
+section.nologo::before { display: none; }
+
+/* ---------- lead: タイトル・章扉 ---------- */
+
+section.lead {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: var(--vt-white);
+  background-color: var(--vt-green-500);
+  background-image:
+    radial-gradient(circle at 92% 8%, rgba(255, 229, 122, 0.95) 0 170px, transparent 171px),
+    radial-gradient(circle at 6% 96%, rgba(255, 255, 255, 0.28) 0 230px, transparent 231px),
+    linear-gradient(135deg, var(--vt-green-300) 0%, var(--vt-green-500) 50%, var(--vt-green-700) 100%);
+}
+
+section.lead h1,
+section.lead h2,
+section.lead h3 {
+  color: var(--vt-white);
+  background: none;
+  margin-right: 0;
+  text-shadow: 0 4px 0 rgba(20, 83, 45, 0.25);
+}
+
+section.lead h1 { font-size: 2.3em; }
+
+section.lead p { color: var(--vt-green-100); }
+
+section.lead strong {
+  color: var(--vt-green-900);
+}
+
+section.lead::before,
+section.lead::after { display: none; }
+
+section.lead header,
+section.lead footer { color: var(--vt-white); text-align: left; }
+
+/* タイトルスライドのロゴ: alt に logo を入れる。![w:480 logo](...) */
+section.lead img[alt~='logo'] {
+  display: block;
+  margin: 0 auto 0.8em;
+  padding: 24px 48px;
+  box-sizing: content-box;
+  border-radius: 40px;
+  /* 中間の緑の上にカラー版を直置きしない（ガイドライン §6.1）ので白い板に載せる */
+  background: var(--vt-white);
+  box-shadow: 0 8px 0 rgba(20, 83, 45, 0.2);
+}
+
+/* ---------- invert: 暗い緑 ---------- */
+
+section.invert {
+  color: var(--vt-green-100);
+  background-color: var(--vt-green-900);
+  background-image:
+    radial-gradient(circle at 96% -6%, rgba(255, 201, 60, 0.9) 0 150px, transparent 151px),
+    radial-gradient(circle at -4% 108%, rgba(45, 190, 108, 0.45) 0 190px, transparent 191px);
+  --logo-mark: url('../../designdocs/brand/color-dark/svg/virtualtwin-mark-dark.svg');
+}
+
+section.invert h1,
+section.invert h2,
+section.invert h3 { color: var(--vt-white); }
+
+section.invert h2 {
+  background-image: linear-gradient(90deg, var(--vt-green-300) 0 62%, var(--vt-yellow-500) 62% 100%);
+}
+
+section.invert h4 { color: var(--vt-yellow-300); }
+section.invert strong { color: var(--vt-yellow-300); background: none; }
+section.invert a { color: var(--vt-yellow-300); }
+section.invert code { background: rgba(255, 255, 255, 0.12); color: var(--vt-green-100); }
+section.invert pre code { background: none; }
+section.invert tr:nth-child(even) td { background: rgba(255, 255, 255, 0.08); }
+section.invert td { border-bottom-color: rgba(255, 255, 255, 0.15); }
+section.invert header, section.invert footer { color: var(--vt-green-200); }
+section.invert::after { color: var(--vt-yellow-300); }
+section.invert blockquote { background: rgba(255, 255, 255, 0.1); color: var(--vt-green-100); }
+
+/* ---------- accent: 黄色 ---------- */
+
+section.accent {
+  background-color: var(--vt-yellow-300);
+  background-image:
+    radial-gradient(circle at 96% -6%, rgba(255, 255, 255, 0.55) 0 150px, transparent 151px),
+    radial-gradient(circle at -4% 108%, rgba(255, 255, 255, 0.45) 0 190px, transparent 191px);
+  color: var(--vt-green-900);
+}
+
+section.accent h2 {
+  background-image: linear-gradient(90deg, var(--vt-green-700) 0 62%, var(--vt-white) 62% 100%);
+}
+
+section.accent strong { background: linear-gradient(transparent 62%, var(--vt-white) 62%); }
+section.accent blockquote { background: rgba(255, 255, 255, 0.65); }
+
+/* ---------- ユーティリティ ---------- */
+
+section.small { font-size: 24px; }
+
+section.cols > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+}
+
+/* 吹き出し風のカード: <div class="card">…</div> */
+.card {
+  padding: 0.7em 1em;
+  border-radius: 24px;
+  background: var(--vt-green-100);
+  border: 3px solid var(--vt-green-500);
+}
+
+.card.yellow {
+  background: var(--vt-yellow-200);
+  border-color: var(--vt-yellow-500);
+}
+
+section.invert .card {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--vt-green-300);
+}
