@@ -5,8 +5,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
 
   1. occlusion   R3_fusion v2 on the meshes (scripts/occlusion/run_fusion_v2.py; cached in <out>/occlusion)
   2. retarget    every target's MHR skeleton -> the VRM (scripts/avatar/retarget_mhr.py): rotation transfer with a
-                 rest-pose correction, leg-length scale, hips placement (a person close to the camera: the head's
-                 scale and the neck's placement), 2-bone IK for wrists and soles,
+                 rest-pose correction, whole-height scale, placement at the hips-neck midpoint (a person close
+                 to the camera: the head's scale and the neck's placement), 2-bone IK for wrists and soles,
                  VRM spring bones (hair, skirt)
   3. removal     the targets' real bodies erased by a temporal clean plate (scripts/avatar/removal.py)
   4. render      unlit VRM, supersampled RGBA + depth per target (scripts/avatar/raster.py)
@@ -384,7 +384,7 @@ def main(a):
                 if m is not None:
                     out.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
             return out
-        if getattr(a, "fit", "legs") == "height":   # sole -> crown instead of the legs (retarget_mhr.height_scale)
+        if getattr(a, "fit", "height") == "height":   # sole -> crown instead of the legs (retarget_mhr.height_scale)
             crown = act.rt.crown_height(crown_frames([fi[k] for k in np.linspace(0, len(fi) - 1, 8).astype(int)]))
             if crown is not None:
                 act.scale = act.rt.height_scale(coords, crown)
@@ -481,7 +481,7 @@ def main(a):
             act.scale = (1 - wn) * s_leg + wn * s_head if wn > 0 else s_leg
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
                      gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn,
-                     anchor=getattr(a, "anchor", 0.0))
+                     anchor=getattr(a, "anchor", 0.5))
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
             hb = act.bone_cam("head")
@@ -684,10 +684,10 @@ if __name__ == "__main__":
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
-    ap.add_argument("--fit", choices=["legs", "height"], default="legs",
+    ap.add_argument("--fit", choices=["legs", "height"], default="height",
                     help="avatar scale from the leg length (hips and soles land on the person's) or from the whole height "
                          "(sole .. crown; retarget_mhr.height_scale)")
-    ap.add_argument("--anchor", type=float, default=0.0,
+    ap.add_argument("--anchor", type=float, default=0.5,
                     help="placement point: 0 = the hips on the person's hips .. 1 = the neck on the person's neck")
     ap.add_argument("--no_compare", action="store_true",
                     help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")

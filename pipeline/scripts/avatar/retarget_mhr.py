@@ -26,6 +26,11 @@ Placement: one uniform scale per person and a per-frame translation.
           the whole skeleton length instead puts the soles 13-25 cm into the floor when the hips are matched, or the
           hands 17-30 cm off when the soles are matched, as virtual-vlog S06 does).
   translation = the hips joint (3D).
+  avatar_app's default since 2026-10-25 (--fit height --anchor 0.5): the leg scale left the avatar a size smaller than
+          the person (IMG_3386, 3-5 m away: its head ~18% of the person's height low). scale = the whole height
+          (height_scale: leg + trunk + neck .. crown), translation = the midpoint of hips and neck; the leg IK keeps
+          the soles on the person's (head 34-46 -> 16-23 px low at 360 px, soles within 2-8 px, mask IoU +0.08-0.11;
+          the neck itself (anchor 1) matched the head closest but was judged less clean by eye).
   near  = a person close to the camera shows the head and the upper body only; with the hips placement the shorter
           trunk puts the avatar's head on the person's chest (a selfie at 0.7 m: the head 159 px low at 480 px, the
           hips out of frame). near_weights() turns the head's distance into a weight (1 within NEAR_M[0], 0 beyond
