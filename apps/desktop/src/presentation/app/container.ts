@@ -12,6 +12,7 @@ import { InMemoryComputeBackend } from "@/infrastructure/compute/InMemoryCompute
 import { canvasSynth } from "@/infrastructure/compute/simArtifacts";
 import { browserTransport, tauriTransport } from "@/infrastructure/compute/transports";
 import type { FileSystem } from "@/infrastructure/fs/FileSystem";
+import { BrowserEditorMedia } from "@/infrastructure/editor/editorMedia";
 import { LocalFiles } from "@/infrastructure/fs/LocalFiles";
 import { MEM_ROOT, MemoryFs } from "@/infrastructure/fs/memoryFs";
 import { joinPath } from "@/infrastructure/fs/path";
@@ -95,6 +96,7 @@ export function createServices(): Services {
     compute,
     paths: projects,
     settings,
+    editorMedia: new BrowserEditorMedia(files),
     uc: {
       createProject: new UC.CreateProject({ projects, clock, ids: randomIds }),
       openProject: new UC.OpenProject({ projects }),
@@ -132,6 +134,8 @@ export function createServices(): Services {
       removeAvatar: new UC.RemoveAvatar({ avatars }),
       startExport: new UC.StartExport({ projects, submit }),
       saveExportResult: new UC.SaveExportResult({ projects, files }),
+      loadEditorData: new UC.LoadEditorData({ projects, files }),
+      saveOverrides: new UC.SaveOverrides({ projects }),
     },
     async diagnose() {
       const webgl2 = !!document.createElement("canvas").getContext("webgl2");

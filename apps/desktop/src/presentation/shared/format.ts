@@ -41,3 +41,11 @@ export function formatVram(mb: number | null): string {
   if (mb === null) return ja.common.unknown;
   return mb >= 1024 ? `${(mb / 1024).toFixed(mb % 1024 ? 1 : 0)} GB` : `${mb} MB`;
 }
+
+/** m:ss.ff（ff = フレーム）。エディタの時刻表示 */
+export function formatTimecode(f: number, fps: number): string {
+  const r = Math.max(1, Math.round(fps));
+  const sec = Math.floor(f / r);
+  const ff = f % r;
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}.${String(ff).padStart(2, "0")}`;
+}
