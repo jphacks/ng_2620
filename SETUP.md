@@ -45,6 +45,35 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 2. デモの接続は Tailscale：[services/gpu_server/DEPLOY.md §4](services/gpu_server/DEPLOY.md#4-デモmac-から-tailscale-越し)。
 3. Mac のアプリの「設定 > 接続」に URL（`https://<機名>.<tailnet>.ts.net`）とトークンを登録する。
 
+## 接続先の切り替え（モック ⇄ 実際の GPU サーバー）
+
+アプリは**接続プロファイル**で接続先を選ぶ。モックも実サーバーも同じ API なので、アプリ側で変えるのは接続先（URL とトークン）だけ。
+
+| 接続先 | URL | トークン | どう用意するか |
+|---|---|---|---|
+| 開発用シミュレーター | `memory://sim` | — | アプリの中だけで動く（サーバー不要、成果物は合成画像）。開発ビルドに最初から入っている |
+| 開発用モック | `http://127.0.0.1:8766` | `mock` | `sh services/mock_server/run.sh`。開発ビルドに最初から入っている |
+| GPU サーバー（同じ PC） | `http://127.0.0.1:8765` | サーバーの `VVLOG_API_TOKEN` | `services/gpu_server/README.md` §4 で起動して、プロファイルを追加 |
+| GPU サーバー（別の PC） | `https://<機名>.<tailnet>.ts.net` | 同上 | GPU 機で起動 ＋ Tailscale（`DEPLOY.md` §4）して、プロファイルを追加 |
+
+**アプリでの操作**：右上の歯車（設定）→「接続」→「プロファイルを追加」→ 名前・種別（ローカル / リモート）・URL・トークンを入れる →
+「接続テスト」（GPU 名・VRAM・API 版が出れば OK）→「既定にする」。ステータスバー左のランプが緑になれば、その接続先を使っている。
+「開発用」と付いた 2 つは開発ビルド（`pnpm tauri dev`）にだけ出る。
+
+**起動時の既定**は `apps/desktop/.env.*` の `VITE_BACKEND` で決まる：
+
+| モード | ファイル | `VITE_BACKEND` | 既定の接続 |
+|---|---|---|---|
+| `pnpm tauri dev` / `pnpm dev` | `.env.development` | `mock` | 開発用モック |
+| `pnpm --filter @vvlog/desktop dev:memory` | `.env.memory` | `memory` | 開発用シミュレーター |
+| 製品ビルド | `.env.production` | `http` | 登録したプロファイルだけ（開発用の 2 つは出ない） |
+
+注意：
+
+- **解析・描画の結果はサーバー側にある**。あるサーバーで解析したプロジェクトを別のサーバーで続けることはできない（開くと「接続先の切り替え」を聞かれる。モックで作ったプロジェクトは実サーバーでは描画・書き出しできないので、実サーバーでは取り込みからやり直す）。
+- トークンは設定の保存先に入る（キーチェーン保存は P1）。`http://` のリモートは警告が出る（デモは Tailscale の `https://`）。
+- 接続できないとき：`curl <URL>/v1/health` が `{"status":"ok"...}` を返すか、トークン付きの `curl -H "Authorization: Bearer <token>" <URL>/v1/capabilities` が通るかを先に確かめる。
+
 ## テスト
 
 | 部品 | コマンド | GPU |
