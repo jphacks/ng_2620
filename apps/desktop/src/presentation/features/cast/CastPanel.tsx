@@ -11,6 +11,7 @@ import { useJobsStore } from "@/presentation/shared/stores/jobsStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { Badge, Button } from "@/presentation/shared/ui";
+import { askNotifyPermission } from "@/presentation/shared/notifyPermission";
 
 export function CastPanel({ onEditCast }: { onEditCast(): void }) {
   const { uc } = useServices();
@@ -22,6 +23,7 @@ export function CastPanel({ onEditCast }: { onEditCast(): void }) {
   const stale = renderState(project) === "stale";
 
   const rerender = async () => {
+    askNotifyPermission();
     setBusy(true);
     try {
       accept(await uc.startRender.execute({ project, backend: currentBackend() }));

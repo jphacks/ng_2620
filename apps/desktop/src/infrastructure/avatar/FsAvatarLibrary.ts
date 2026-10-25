@@ -1,4 +1,4 @@
-// AvatarLibraryPort の実装（F07）。アプリデータの avatars/ に <sha256>.vrm でコピーし、library.json に一覧を持つ（TauriAvatarLibrary）
+// AvatarLibraryPort の実装（F07）。アプリデータの avatars/ に <sha256>.vrm でコピーし、library.json に一覧を持つ
 
 import type { AvatarLibraryPort } from "@/application/ports/avatar";
 import type { Avatar } from "@/domain/avatar";

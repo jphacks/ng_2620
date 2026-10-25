@@ -27,10 +27,9 @@ EdgeTAM（Apache-2.0）は実験用の選択肢で、既定では使わない。
 | 部分 | 確認した範囲 | ライセンス |
 |---|---|---|
 | 画面（`apps/desktop`） | 実行時に入る npm パッケージ 53 個 | MIT 46、MIT OR Apache-2.0 5、ISC 1（lucide-react）、MIT AND Zlib 1（pako）。React・Radix UI・TanStack Query・Zustand・react-router・Tailwind CSS・Vite は MIT、TypeScript は Apache-2.0 |
-| デスクトップ基盤（`src-tauri`） | Rust のクレート 530 個 | ほぼ MIT / Apache-2.0。ほかに MPL-2.0（cssparser・selectors など 5 個、ファイル単位のコピーレフト）、Unicode-3.0、CDLA-Permissive-2.0（webpki-roots）。Tauri は Apache-2.0 OR MIT |
-| GPU サーバー（`services/gpu_server`） | 直接の依存 | FastAPI・pydantic・PyYAML は MIT、uvicorn・sse-starlette は BSD-3-Clause、python-multipart は Apache-2.0、NumPy は BSD-3-Clause ほか、Pillow は MIT-CMU |
+| GPU サーバー（`services/gpu_server`） | 直接の依存 | FastAPI・pydantic・PyYAML は MIT、uvicorn・sse-starlette は BSD-3-Clause、python-multipart は Apache-2.0、NumPy は BSD-3-Clause ほか、Pillow は MIT-CMU、send2trash は BSD-3-Clause、pystray（Windows のトレイアイコン）は LGPL-3.0 |
 | 推論パイプライン（`pipeline`） | 直接の依存 | PyTorch は BSD 系（同梱の部品に Apache-2.0 などを含む）、torchvision は BSD、detectron2・diffusers・transformers・accelerate・OpenCV・decord・fvcore・gradio・pytorch-lightning は Apache-2.0、pyrender・moderngl・einops・triton は MIT、imageio・imageio-ffmpeg は BSD-2-Clause、matplotlib は PSF 系、MoGe のコードは MIT |
-| 外部コマンド | ffmpeg / ffprobe | ビルドにより LGPL-2.1 または GPL。このリポジトリには同梱しない |
+| 外部コマンド | ffmpeg / ffprobe、uv | Windows の配布物に同梱：ffmpeg は BtbN の LGPL ビルド（LGPL-3.0-or-later）、uv は MIT OR Apache-2.0。同梱物の一覧は [NOTICE](../NOTICE) |
 
 ### データとアバター
 

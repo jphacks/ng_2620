@@ -43,7 +43,7 @@ export interface QueueItem {
 }
 
 /**
- * 送る断片。ファイルの範囲で渡すと、実装は WebView を通さずに送れる（Tauri では Rust 側が読む）
+ * 送る断片。ファイルの範囲で渡すと、実装は必要な範囲だけを読んで送れる（丸ごとメモリに載せない）
  */
 export type ChunkBody = Uint8Array | { path: string; offset: number; length: number };
 
@@ -76,7 +76,7 @@ export interface ComputeBackendPort {
   /** SSE。切断時は Last-Event-ID で再開する。終了イベント（job_finished / job_failed）の後で終わる */
   events(jobId: string, opts?: { lastEventId?: string; signal?: AbortSignal }): AsyncIterable<JobEvent>;
   listArtifacts(jobId: string): Promise<Artifact[]>;
-  /** 成果物をディスクの dest に保存する（Tauri は Rust 側で Range 再開） */
+  /** 成果物を dest に保存する（途中で切れたら Range で続きから） */
   downloadArtifact(jobId: string, name: string, dest: string, onProgress?: DownloadProgress): Promise<void>;
   logs(jobId: string, tail?: number): Promise<string>;
 }

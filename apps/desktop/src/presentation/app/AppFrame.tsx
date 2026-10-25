@@ -15,7 +15,10 @@ import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
+import { DropUploadHost } from "./DropUploadHost";
+import { RestrictedBanner } from "./RestrictedBanner";
 import { ToastHost } from "./ToastHost";
+import { SetupPrompt } from "./SetupPrompt";
 
 /** 開いたプロジェクトの既定のワークスペース：描画済みなら編集、それ以外は取り込み */
 function defaultWorkspace(p: Project) {
@@ -81,7 +84,8 @@ function GlobalCommands() {
   useCommand({ id: "app.open", keys: ["mod+o"], scope: "global", label: ja.commands.open, run: () => void browse() });
   useCommand({
     id: "app.new",
-    keys: ["mod+n"],
+    // ブラウザのタブでは Ctrl/⌘+N（新しいウィンドウ）をページが取れないので、⌘⌥N / Ctrl+Alt+N も使えるようにする
+    keys: ["mod+n", "mod+alt+n"],
     scope: "global",
     label: ja.commands.newProject,
     run: () => {
@@ -104,12 +108,15 @@ export function AppFrame() {
   return (
     <div className="flex h-full min-w-[1280px] flex-col">
       <TitleBar />
+      <RestrictedBanner />
+      <SetupPrompt />
       <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
       <StatusBar />
       <JobDrawer />
       <ToastHost />
+      <DropUploadHost />
       <GlobalCommands />
     </div>
   );

@@ -54,9 +54,16 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--fixture", default=None)
+    ap.add_argument("--local", action="store_true",
+                    help="behave as the local app server (ADR-0015): serves the SPA, /v1/local/*, replayed GPU stages")
+    ap.add_argument("--spa-dir", default=None, help="with --local: the built SPA (apps/desktop/dist)")
     a = ap.parse_args()
     if a.fixture:
         os.environ["VVLOG_MOCK_FIXTURE"] = a.fixture
+    if a.local:  # end-to-end tests (apps/desktop/e2e) drive the real UI against this
+        os.environ.update(VVLOG_LOCAL="1", VVLOG_PORT=str(a.port))
+        if a.spa_dir:
+            os.environ["VVLOG_SPA_DIR"] = a.spa_dir
     print(f"vvlog mock server: http://{a.host}:{a.port}  token: mock  speed: x{os.environ.get('VVLOG_MOCK_SPEED', '10')}")
     uvicorn.run(build(), host=a.host, port=a.port, log_level="info")
 

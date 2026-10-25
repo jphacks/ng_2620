@@ -17,6 +17,20 @@ export const API_ERROR_CODES = [
   "INTERRUPTED",
   "CANCELED",
   "NOT_IMPLEMENTED",
+  // ローカルアプリサーバー（/v1/local/*、ADR-0015）
+  "PATH_NOT_ALLOWED", // 許可されたフォルダの外
+  "FS_CONFLICT",
+  "FS_FAILED",
+  "FFPROBE_UNAVAILABLE",
+  "DIALOG_LOCAL_ONLY", // ネイティブダイアログはローカルアプリからだけ
+  "DIALOG_BUSY",
+  "DIALOG_UNAVAILABLE",
+  "DIALOG_FAILED",
+  "WEIGHTS_BUSY", // 重みの取得がすでに実行中（#33）
+  "WEIGHTS_DISK_FULL", // 取得を始める前の空き容量チェック
+  "BOOTSTRAP_BUSY", // 解析環境の作成がすでに実行中（#32）
+  "BOOTSTRAP_UNSUPPORTED", // この PC の GPU では作れない
+  "BOOTSTRAP_UV_MISSING",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

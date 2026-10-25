@@ -70,7 +70,15 @@ https://github.com/user-attachments/assets/533117e1-965b-4a22-8f6f-0287970d9dfd
   - 公開モデルの組み合わせを最適化し、手元の GPU で既存の AI サービスより大幅に速く、前後関係まで正しく仕上げる
 
 処理は 4 段階。人を見つけて最後まで追いかけ、体の 3D の動きを推定し、手前にある物と奥にある物を見分けてから、人を消して背景を埋め、同じ動きのアバターを合成する。
-推論は GPU サーバーで、取り込み・アバターの割り当て・編集・書き出しはデスクトップアプリで行う。
+操作はすべてブラウザで行い、重い推論は GPU 機が担う。
+
+**使い方**：① 動画を取り込む（ファイル選択かドロップ） → ② 映っている人を解析して追跡 → ③ 人ごとに VRM アバターを割り当て → ④ 描画 → ⑤ エディタで前後関係を手直し → ⑥ MP4 で書き出し。
+「既定のアバターで自動仕上げ」を選んでおけば、①の後は④まで自動で進む。
+
+| 使い方 | 環境 |
+|---|---|
+| GPU 機で使う | Windows + NVIDIA GPU（GPU メモリ 12GB 級以上。RTX 5060 Ti で確認）にインストーラーで入れ、ブラウザで操作する |
+| GPU が無い | GitHub Pages の画面（Chrome / Edge / Safari）から、自分で用意した GPU サーバー（クラウドの GPU など。Docker イメージあり）につなぐ。機能は一部制限される |
 
 <table>
   <tr>
@@ -130,6 +138,7 @@ VirtualTwin は動画生成 AI を使わず、追跡・3D 推定・前後判定�
 - 精度向上：物を持っていても置き換えられるようにする、人の除去を確実にする
 - 補正・編集しやすい形で出力する
 - *顔は見せたくないけどロケ動画を作りたい*人にも届ける
+- Windows 以外の機械でのローカル実行と、インストーラーのコード署名
 
 ### 注力したこと（こだわり等）
 
@@ -188,15 +197,17 @@ VirtualTwin は動画生成 AI を使わず、追跡・3D 推定・前後判定�
 
 #### フレームワーク・ライブラリ・モジュール
 
-* 画面：Tauri 2（Rust）、React 18 + TypeScript、Vite、Tailwind CSS、Radix UI、Zustand、TanStack Query、WebGL2（エディタでの合成）
+* 画面（ブラウザ）：React 18 + TypeScript、Vite、Tailwind CSS、Radix UI、Zustand、TanStack Query、WebGL2（エディタでの合成）、Playwright（E2E）
 * GPU サーバー：FastAPI、uvicorn、SSE（進捗の配信）、ffmpeg
+* ローカルアプリ（Windows）：画面を持たないランチャー + ローカルサーバー、Inno Setup（インストーラー）、uv（初回の環境構築）、pystray（トレイアイコン）
+* 外部 GPU：CUDA 対応の Docker イメージ
 * 推論パイプライン：PyTorch（CUDA）、Triton、detectron2、pyrender / moderngl（VRM の描画）、OpenCV
 * 発表：Marp
 
 #### デバイス
 
 * 推論：NVIDIA GPU（RTX 5060 Ti の Windows 機、L4 の Linux VM で動作を確認）
-* 画面：MacBook（Apple Silicon）。GPU サーバーには Tailscale 越しにつなぐ
+* 画面：Windows のローカルアプリ、または Chrome / Edge / Safari で開く GitHub Pages。デモでは MacBook（Apple Silicon）のブラウザから Windows の GPU 機に Tailscale 越しでつなぐ
 
 ### 独自技術
 
@@ -208,6 +219,7 @@ VirtualTwin は動画生成 AI を使わず、追跡・3D 推定・前後判定�
 * 推論のサービス化：遮蔽判定の保存と遮蔽物ユニット（[pipeline/scripts/occlusion/](pipeline/scripts/occlusion)）、ターゲット指定・VRM 割り当て・手修正の適用・編集用レイヤーの書き出し（[avatar_app.py](pipeline/scripts/avatar_app.py)、[occlusion.py](pipeline/scripts/avatar/occlusion.py)、[layers_export.py](pipeline/scripts/avatar/layers_export.py)）
 * GPU サーバー：ジョブキュー、分割アップロード（8MB、再開可）、成果物の Range 配信、SSE による段階的な進捗（[services/gpu_server/vvlog_server/](services/gpu_server/vvlog_server)）
 * 画面：取り込みから書き出しまでの流れ、遮蔽の手修正を WebGL2 で即時に合成するエディタ（[compositor/](apps/desktop/src/presentation/features/editor/compositor)）、既定のアバターでの自動仕上げ（[autoFinishStore.ts](apps/desktop/src/presentation/shared/stores/autoFinishStore.ts)）
+* Web 化：ローカルアプリサーバー（ランチャー、ネイティブダイアログ、ファイル API、初回の環境構築、重みの取得）と、Pages 向けの制限モード・外部 GPU への接続（[services/gpu_server/vvlog_server/](services/gpu_server/vvlog_server)、[installer/](installer)）
 
 ## ライセンス
 

@@ -1,25 +1,29 @@
 // composition root（DI）。ポートの実装を組み立てる唯一の場所（architecture/overview §3）。
-//   Tauri の中   ：Rust コマンド（fs / media / hash / net）＋ tauri-plugin-http / dialog / opener / notification
-//   ブラウザだけ ：メモリ上のファイル＋ fetch（`pnpm dev` を Tauri なしで開いたとき。開発用）
+//   full       ：ローカルアプリサーバー（/v1/local/*）越しのファイル・ハッシュ・probe・ダイアログ・ドロップ取り込み＋ブラウザの fetch（ADR-0015）
+//   restricted ：IndexedDB（無ければメモリ）上のファイル＋ fetch。Pages 単体、`pnpm dev` を単体で開いたとき
 //   VITE_BACKEND ：mock = モックサーバー（F14、:8766）を既定に、memory = シミュレーターを既定に、http = 登録した接続だけ
 
-import { appConfigDir, appDataDir, join, videoDir } from "@tauri-apps/api/path";
 import * as UC from "@/application/usecases";
 import { FsAvatarLibrary } from "@/infrastructure/avatar/FsAvatarLibrary";
-import { FsLayerCache } from "@/infrastructure/cache/TauriLayerCache";
+import { FsLayerCache } from "@/infrastructure/cache/FsLayerCache";
 import { DefaultComputeBackendFactory } from "@/infrastructure/compute/factory";
 import { InMemoryComputeBackend } from "@/infrastructure/compute/InMemoryComputeBackend";
 import { canvasSynth } from "@/infrastructure/compute/simArtifacts";
-import { browserTransport, tauriTransport } from "@/infrastructure/compute/transports";
+import { fetchTransport } from "@/infrastructure/compute/fetchTransport";
 import type { FileSystem } from "@/infrastructure/fs/FileSystem";
 import { BrowserEditorMedia } from "@/infrastructure/editor/editorMedia";
 import { LocalFiles } from "@/infrastructure/fs/LocalFiles";
 import { MEM_ROOT, MemoryFs } from "@/infrastructure/fs/memoryFs";
+import { RoutingFs } from "@/infrastructure/fs/routingFs";
 import { joinPath } from "@/infrastructure/fs/path";
-import { tauriFs } from "@/infrastructure/fs/tauriFs";
-import { TauriFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hashers";
-import { TauriMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
-import { isTauri } from "@/infrastructure/platform";
+import { HttpFileSystem } from "@/infrastructure/fs/httpFs";
+import { HttpFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hashers";
+import { HttpMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
+import type { Runtime } from "@/infrastructure/platform";
+import { HttpAppQuit } from "@/infrastructure/system/httpAppQuit";
+import { LocalApi } from "@/infrastructure/local/localApi";
+import { createLocalApp } from "@/infrastructure/local/probeLocalApp";
+import { FsProjectArchive } from "@/infrastructure/project/FsProjectArchive";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
 import {
   FileSecretStore,
@@ -27,10 +31,21 @@ import {
   LocalStorageSecretStore,
   LocalStorageSettings,
 } from "@/infrastructure/settings/settingsStores";
-import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
-import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
-import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
-import { tauriDialog, tauriFileDrop, tauriNotifier, tauriShell } from "@/infrastructure/system/tauriSystem";
+import { HttpDialog } from "@/infrastructure/system/httpDialog";
+import { HttpBootstrap } from "@/infrastructure/bootstrap/HttpBootstrap";
+import { HttpWeights } from "@/infrastructure/weights/HttpWeights";
+import { serverFileDrop, sweepImports } from "@/infrastructure/system/serverDrop";
+import { useDropUploadStore } from "@/presentation/shared/stores/dropUploadStore";
+import {
+  browserDialog,
+  browserFileDrop,
+  browserFileExchange,
+  browserNetworkProbe,
+  browserNotifier,
+  browserShell,
+} from "@/infrastructure/system/browserSystem";
+import { randomIds, systemClock } from "@/infrastructure/system/common";
+import { ja } from "@/presentation/shared/i18n/ja";
 import type { BackendMode, Services } from "@/presentation/shared/services";
 
 function backendMode(): BackendMode {
@@ -38,17 +53,23 @@ function backendMode(): BackendMode {
   return v === "mock" || v === "memory" ? v : "http";
 }
 
-export function createServices(): Services {
-  const inTauri = isTauri();
+/** detectRuntime() の結果を渡す。省略時は restricted（テストと単体の開発用） */
+export function createServices(runtime: Runtime = { mode: "restricted" }): Services {
+  const local = runtime.mode === "full" && runtime.local ? runtime.local : null;
+  const api = local ? new LocalApi(local) : null;
+  const diskBacked = !!api; // 実ディスクに置く（設定・シークレットもファイル）
   const isDev = import.meta.env.DEV;
-  const memFs = inTauri ? null : new MemoryFs();
-  const fs: FileSystem = memFs ?? tauriFs;
+  // restricted：ドロップ・選択した端末のファイルは memFs（File への参照。閉じると消える）、それ以外は IndexedDB（storage があれば）
+  const memFs = diskBacked ? null : new MemoryFs();
+  const fs: FileSystem = memFs
+    ? new RoutingFs(runtime.storage ?? new MemoryFs(), memFs, (p) => p.startsWith(`${MEM_ROOT}/drops/`))
+    : new HttpFileSystem(api!);
 
-  const dirs = inTauri
+  const dirs = local
     ? {
-        projects: async () => join(await videoDir(), "vvlog"),
-        appData: () => appDataDir(),
-        config: () => appConfigDir(),
+        projects: async () => local.dirs.projects,
+        appData: async () => local.dirs.appData,
+        config: async () => local.dirs.config,
       }
     : {
         projects: async () => `${MEM_ROOT}/Movies/vvlog`,
@@ -56,10 +77,12 @@ export function createServices(): Services {
         config: async () => `${MEM_ROOT}/Config`,
       };
 
-  const settings = inTauri
+  // 設定とトークンはファイルに（フルモード＝ローカルサーバーの設定フォルダ／制限モード＝IndexedDB）。IndexedDB が使えないときだけ localStorage
+  const persistent = diskBacked || !!runtime.storage;
+  const settings = persistent
     ? new FileSettings(fs, async () => joinPath(await dirs.config(), "settings.json"))
     : new LocalStorageSettings();
-  const secrets = inTauri
+  const secrets = persistent
     ? new FileSecretStore(fs, async () => joinPath(await dirs.config(), "secrets.json"))
     : new LocalStorageSecretStore();
   const projects = new FsProjectRepository(fs, {
@@ -67,11 +90,12 @@ export function createServices(): Services {
     appDataDir: dirs.appData,
   });
   const files = new LocalFiles(fs);
-  const hasher = inTauri ? new TauriFileHasher() : new WebCryptoFileHasher(fs);
-  const probe = inTauri ? new TauriMediaProbe(fs) : new VideoElementMediaProbe(fs);
+  const archive = new FsProjectArchive(fs);
+  const hasher = api ? new HttpFileHasher(api) : new WebCryptoFileHasher(fs);
+  const probe = api ? new HttpMediaProbe(api, fs) : new VideoElementMediaProbe(fs);
   const cache = new FsLayerCache(fs, hasher);
   const avatars = new FsAvatarLibrary(fs, async () => joinPath(await dirs.appData(), "avatars"));
-  const transport = inTauri ? tauriTransport(fs) : browserTransport(fs);
+  const transport = fetchTransport(fs);
 
   let sim: InMemoryComputeBackend | null = null;
   const compute = new DefaultComputeBackendFactory({
@@ -88,20 +112,50 @@ export function createServices(): Services {
       : undefined,
   });
 
+  const importsDir = async () => joinPath(await dirs.appData(), "imports");
   const clock = systemClock;
   const submit = new UC.SubmitJob();
-  const localServer = inTauri ? tauriLocalServer : browserLocalServer;
 
   return {
-    env: { isTauri: inTauri, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
+    env: { mode: runtime.mode, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
     platform: {
       files,
-      dialog: memFs ? browserDialog(memFs) : tauriDialog,
-      shell: memFs ? browserShell(memFs) : tauriShell,
-      drops: memFs ? browserFileDrop(memFs) : tauriFileDrop,
-      notifier: inTauri ? tauriNotifier : browserNotifier,
+      // full：ネイティブダイアログはサーバー側（#46）、ドロップはサーバーの取り込みフォルダへ転送（#47）
+      dialog: memFs ? browserDialog(memFs) : new HttpDialog(api!),
+      shell: browserShell(fs),
+      drops: memFs
+        ? browserFileDrop(memFs)
+        : serverFileDrop({
+            fs,
+            importsDir,
+            newId: () => randomIds.newId("imp"),
+            onUpload: (ev) => useDropUploadStore.getState().update(ev),
+          }),
+      notifier: browserNotifier,
+      localApp: memFs && window.location.protocol === "https:" ? createLocalApp() : undefined,
+      appQuit: api ? new HttpAppQuit(api) : undefined,
       clock,
+      weights: api ? new HttpWeights(api) : undefined,
+      bootstrap: api ? new HttpBootstrap(api) : undefined,
     },
+    maintenance: api
+      ? async () => {
+          // 取り込みフォルダの掃除：最近のプロジェクトが元の動画として使っているものは残す
+          const referenced: string[] = [];
+          for (const r of await projects.listRecent()) {
+            try {
+              const raw = JSON.parse(await fs.readText(joinPath(r.path, "project.json"))) as {
+                source?: { path?: string };
+              };
+              if (raw.source?.path) referenced.push(raw.source.path);
+            } catch {
+              // 読めないプロジェクトは参照なしとして扱わず、安全側に倒す（掃除しすぎない）
+              referenced.push(r.path);
+            }
+          }
+          await sweepImports(fs, await importsDir(), referenced);
+        }
+      : undefined,
     compute,
     paths: projects,
     settings,
@@ -113,26 +167,34 @@ export function createServices(): Services {
       listRecent: new UC.ListRecentProjects({ projects }),
       loadOverrides: new UC.LoadOverrides({ projects }),
       deleteProject: new UC.DeleteProject({ projects }),
+      ...(memFs
+        ? {
+            exportProjectZip: new UC.ExportProjectZip({ archive, exchange: browserFileExchange }),
+            importProjectZip: new UC.ImportProjectZip({ archive, exchange: browserFileExchange, projects }),
+          }
+        : {}),
       clearCache: (project) => projects.clearCache(project),
       probeMedia: new UC.ProbeMedia({ probe }),
       importMedia: new UC.ImportMedia({ files, hasher, clock }),
+      relinkSource: new UC.RelinkSource({ files, hasher }),
       listProfiles: new UC.ListProfiles({ settings }),
       saveProfile: new UC.SaveProfile({ settings, secrets }),
       deleteProfile: new UC.DeleteProfile({ settings, secrets }),
       selectActiveProfile: new UC.SelectActiveProfile({ settings }),
-      testConnection: new UC.TestConnection({ compute }),
+      testConnection: new UC.TestConnection({ compute, net: browserNetworkProbe }),
+      recordUploadConsent: new UC.RecordUploadConsent({ settings }),
       watchConnection: new UC.WatchConnection({ clock }),
-      saveLocalServerConfig: new UC.SaveLocalServerConfig({ settings }),
-      startLocalServer: new UC.StartLocalServer({
-        settings,
-        secrets,
-        server: localServer,
-        compute,
-        clock,
-        newToken: randomToken,
-      }),
-      stopLocalServer: new UC.StopLocalServer({ server: localServer }),
-      localServerStatus: () => localServer.status(),
+      ...(local
+        ? {
+            // この画面を配信しているサーバー自身につなぐ（開発プロキシ越しでも、見えている origin がそのまま宛先）
+            ensureLocalProfile: () =>
+              new UC.EnsureLocalProfile({ settings, secrets }).execute({
+                baseUrl: window.location.origin,
+                token: local.token,
+                name: ja.connection.local.profileName,
+              }),
+          }
+        : {}),
       submitJob: submit,
       subscribeJob: new UC.SubscribeJob({ clock }),
       fetchArtifact: new UC.FetchArtifact({ projects, cache }),

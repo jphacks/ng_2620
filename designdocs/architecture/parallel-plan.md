@@ -1,5 +1,8 @@
 # 並列開発計画（3 アカウント＝3 レーン以上）
 
+> **注（ADR-0015）**：これはハッカソン 2 日間の計画（Tauri 前提）の記録です。Tauri 廃止後の構成は [ADR-0015](../adr/0015-web-first-windows-local-server.md) を参照。
+
+
 前提：Claude Code 3 アカウント（A / B / C）。各アカウントはさらにサブエージェントで feature 内の層（domain / application / infrastructure / presentation）を並列に進めてよい。
 時刻は各日の作業開始からの経過時間（`D1 +0h` = Day 1 の開始）。
 

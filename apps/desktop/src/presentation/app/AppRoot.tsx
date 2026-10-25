@@ -14,6 +14,7 @@ import { ServicesProvider } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { useAutoFinishStore } from "@/presentation/shared/stores/autoFinishStore";
 import { loadPrefs } from "@/presentation/shared/stores/prefsStore";
+import { installAutosaveFlush, useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { TooltipProvider } from "@/presentation/shared/ui";
 import { AppFrame, HomeRoute } from "./AppFrame";
 import { DevEditorRoute } from "./routes/EditRoute";
@@ -51,6 +52,7 @@ const queryClient = new QueryClient({
 function Boot({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useHotkeyDispatcher();
+  useEffect(() => installAutosaveFlush(useProjectStore, document, window), []);
   useEffect(() => {
     void Promise.all([useConnectionStore.getState().init(), loadPrefs(), useAutoFinishStore.getState().load()])
       .catch((e) => console.error("[boot]", e))
@@ -64,7 +66,7 @@ export function AppRoot({ services }: { services: Services }) {
     // 起動時の自己診断（F15）：WebGL2 と fetch のストリーム（SSE）
     void services.diagnose().then((d) =>
       console.info("[self-check]", {
-        runtime: services.env.isTauri ? "tauri" : "browser",
+        mode: services.env.mode,
         backend: services.env.backendMode,
         ...d,
       }),

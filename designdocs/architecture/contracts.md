@@ -15,7 +15,7 @@
 | ベース URL | 接続プロファイルの URL（例：`http://127.0.0.1:8765`、`https://gpu.example.ts.net`）＋ `/v1` |
 | 認証 | `Authorization: Bearer <token>`。`GET /v1/health` だけ不要 |
 | Content-Type | JSON は `application/json`。アップロードの断片は `application/octet-stream` |
-| CORS | Tauri の WebView から直接呼ぶ場合に備え、`tauri://localhost` / `http://tauri.localhost` / `http://localhost:1420`（開発）を許可 |
+| CORS | ブラウザから直接呼ぶ。リモートは `VVLOG_ALLOWED_ORIGINS`（画面を開くページのオリジン）と開発の `http://localhost:1420`。ローカルアプリは自分自身と `VVLOG_ALLOWED_ORIGINS` だけ（ADR-0015、DEPLOY.md §5） |
 
 ## 2. API
 

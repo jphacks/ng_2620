@@ -1,0 +1,17 @@
+# Docker のビルド文脈から外すもの(重み・ジョブのデータ・node_modules・.git は入れない)
+.git
+**/node_modules
+apps
+packages
+docs
+designdocs
+fixtures
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.egg-info
+weights/*
+!weights/manifest.json
+!weights/fetch.py
+!weights/README.md
+services/gpu_server/data

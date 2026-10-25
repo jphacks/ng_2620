@@ -32,30 +32,63 @@ jobs:
         # error があれば失敗。warning は annotation として表示（eslint-formatter-gha）
         run: pnpm --filter @vvlog/desktop exec eslint . --format gha
 
-  rust:
-    name: Rust (rustfmt / clippy)
+  web:
+    name: 画面（型チェック・vitest・ビルド）
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v6 # 版は package.json の packageManager
+      - uses: actions/setup-node@v7
         with:
-          components: rustfmt, clippy
-      - uses: swatinem/rust-cache@v2
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 型チェック
+        run: pnpm typecheck
+      - name: vitest（実サーバーを起動する通しテストは venv が無いので skip。integration ジョブで走らせる）
+        run: pnpm test
+      - name: build（Pages に公開するものと同じ。相対パス）
+        run: pnpm build
+
+  server:
+    name: サーバー（pytest）
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
         with:
-          workspaces: apps/desktop/src-tauri
-      - name: Tauri のシステム依存
+          python-version: "3.11"
+      - name: ffmpeg（動画の検証に使う）
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: 環境 A
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
-      - name: rustfmt
-        working-directory: apps/desktop/src-tauri
-        run: cargo fmt --check
-      - name: frontendDist のダミー（tauri の build.rs が dist の存在を見る）
-        run: mkdir -p apps/desktop/dist
-      - name: clippy
-        working-directory: apps/desktop/src-tauri
-        # error（deny な lint・コンパイルエラー）は失敗。warning は annotation に変換して通す
+          python -m venv services/gpu_server/.venv
+          services/gpu_server/.venv/bin/pip install -q -e "services/gpu_server[dev]"
+      - name: gpu_server
+        working-directory: services/gpu_server
+        run: .venv/bin/python -m pytest -q
+      - name: mock_server
+        working-directory: services/mock_server
+        run: ../gpu_server/.venv/bin/python -m pytest -q
+
+  integration:
+    name: 画面 ⇄ ローカルサーバーの通しテスト（vitest）
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - name: 環境 A（実サーバーを起動するテストが使う）
         run: |
-          set -o pipefail
-          cargo clippy --all-targets --message-format short 2>&1 | tee clippy.log
-          awk -F': ' '/^[^ ]+:[0-9]+:[0-9]+: warning/ { split($1, p, ":"); msg = $0; sub(/^[^ ]+ warning: /, "", msg); printf "::warning file=apps/desktop/src-tauri/%s,line=%s::%s\n", p[1], p[2], msg }' clippy.log
+          python -m venv services/gpu_server/.venv
+          services/gpu_server/.venv/bin/pip install -q -e "services/gpu_server[dev]"
+      - name: vitest（localApi.integration.test.ts を含む）
+        run: pnpm test

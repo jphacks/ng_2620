@@ -4,10 +4,10 @@
 #   scripts/setup.sh              足りないものを確かめて入れる（ネットのスクリプトの実行やシステムへの導入は y/N で聞く）
 #   scripts/setup.sh --yes        確認を省いて入れる
 #   scripts/setup.sh --check      何も入れずに、ツールの有無と版を一覧にする（足りなければ終了コード 1）
-#   scripts/setup.sh --app-only   アプリ（Node / pnpm / Rust）だけ。Python・uv・ffmpeg・サーバーの venv を扱わない
+#   scripts/setup.sh --app-only   画面（Node / pnpm）だけ。Python・uv・ffmpeg・サーバーの venv を扱わない
 #
 # 入れるもの（SETUP.md「前提のツール」）：Node（.nvmrc の版。nvm か fnm で）、pnpm（package.json の packageManager の版）、
-# Rust stable（rustup）、Xcode Command Line Tools（macOS）、Python 3.11 以上（uv があれば uv が用意する）、ffmpeg、
+# Python 3.11 以上（uv があれば uv が用意する）、ffmpeg、
 # services/gpu_server/.venv（サーバーとモックの環境 A）、最後に pnpm install。
 # pipeline/ の環境 B（torch・CUDA）は GPU 機だけなので扱わない（services/gpu_server/README.md §2）。
 set -euo pipefail
@@ -45,7 +45,6 @@ esac
 # ---- 版の決まり（リポジトリのファイルから読む）
 NODE_WANT=$(tr -d '[:space:]' <.nvmrc)                                                  # 例 26
 PNPM_WANT=$(sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' package.json)       # 例 10.34.8
-RUST_MIN=1.80.0
 PYTHON_MIN=3.11.0 # services/gpu_server/pyproject.toml の requires-python
 FFMPEG_MIN=6.0.0
 SERVER_DIR=services/gpu_server
@@ -127,17 +126,8 @@ nvm_q() {
   set -eu
   return "$rc"
 }
-load_cargo() {
-  if [ -f "$HOME/.cargo/env" ]; then
-    # shellcheck disable=SC1091
-    . "$HOME/.cargo/env"
-  fi
-}
-
 node_version() { if has node; then ver "$(node --version)"; fi; }
 pnpm_version() { if has pnpm; then ver "$(pnpm --version 2>/dev/null)"; fi; }
-rustc_version() { if has rustc; then ver "$(rustc --version)"; fi; }
-cargo_version() { if has cargo; then ver "$(cargo --version)"; fi; }
 python_version() { if has python3; then ver "$(python3 --version 2>&1)"; fi; }
 ffmpeg_version() { if has ffmpeg; then ver "$(ffmpeg -version 2>/dev/null)"; fi; }
 
@@ -145,9 +135,8 @@ ffmpeg_version() { if has ffmpeg; then ver "$(ffmpeg -version 2>/dev/null)"; fi;
 # --check：一覧だけ
 # =====================================================================
 check_all() {
-  load_cargo
   printf 'vvlog の開発環境（%s、%s）\n\n' "$OS" "$ROOT"
-  printf '  %s\n' "アプリ（apps/desktop）"
+  printf '  %s\n' "画面（apps/desktop）"
 
   local v
   v=$(node_version)
@@ -184,29 +173,6 @@ check_all() {
     row WARN pnpm "$v（packageManager は $PNPM_WANT）" "pnpm 10 以上なら packageManager の版に切り替わるはず"
   else
     row NG pnpm "$v（packageManager は $PNPM_WANT）" "npm i -g pnpm@$PNPM_WANT"
-  fi
-
-  v=$(rustc_version)
-  if [ -z "$v" ]; then
-    row NG rustc "なし" "make setup（rustup で Rust stable を入れる）"
-  elif ver_ge "$v" "$RUST_MIN"; then
-    row OK rustc "$v"
-  else
-    row NG rustc "$v（$RUST_MIN 以上が要る）" "rustup update stable"
-  fi
-  v=$(cargo_version)
-  if [ -z "$v" ]; then
-    row NG cargo "なし" "pnpm tauri dev が failed to run 'cargo metadata' で止まる。make setup"
-  else
-    row OK cargo "$v"
-  fi
-
-  if [ "$OS" = Darwin ]; then
-    if xcode-select -p >/dev/null 2>&1; then
-      row OK "Xcode CLT" "$(xcode-select -p)"
-    else
-      row NG "Xcode CLT" "なし" "xcode-select --install"
-    fi
   fi
 
   if [ -d node_modules ] && [ -d apps/desktop/node_modules ]; then
@@ -264,7 +230,6 @@ check_all() {
 # インストール
 # =====================================================================
 NODE_SWITCHED=0
-RUST_INSTALLED=0
 
 setup_node() {
   step "Node $NODE_WANT（.nvmrc）"
@@ -306,52 +271,6 @@ setup_pnpm() {
   npm install -g "pnpm@$PNPM_WANT" >/dev/null
   hash -r
   note "$(pnpm_version)"
-}
-
-setup_xcode_clt() {
-  [ "$OS" = Darwin ] || return 0
-  step "Xcode Command Line Tools"
-  if xcode-select -p >/dev/null 2>&1; then
-    note "$(xcode-select -p)"
-    return 0
-  fi
-  if confirm "xcode-select --install を実行する（インストーラーの画面が開く）？"; then
-    xcode-select --install || true
-    die "Command Line Tools のインストーラーを開いた。終わったら make setup をもう一度。"
-  fi
-  die "Command Line Tools が要る（xcode-select --install）。"
-}
-
-setup_rust() {
-  step "Rust stable（$RUST_MIN 以上）"
-  load_cargo
-  local v
-  v=$(rustc_version)
-  if [ -n "$v" ] && ver_ge "$v" "$RUST_MIN" && has cargo; then
-    note "rustc $v / cargo $(cargo_version)"
-    return 0
-  fi
-  if has rustup; then
-    if confirm "rustup update stable を実行する（今は ${v:-なし}）？"; then
-      rustup update stable
-      rustup default stable >/dev/null
-    else
-      die "Rust $RUST_MIN 以上が要る（rustup update stable）。"
-    fi
-  else
-    note "rustup が無い。公式の手順（https://sh.rustup.rs）で入れる："
-    note "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    note "（~/.cargo と ~/.rustup に入り、シェルの設定ファイルに PATH が足される）"
-    if confirm "ネットからダウンロードしたスクリプトを実行して Rust を入れる？"; then
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    else
-      die "Rust が要る（pnpm tauri dev が failed to run 'cargo metadata' で止まる）。"
-    fi
-  fi
-  load_cargo
-  has cargo || die "cargo が見つからない（~/.cargo/bin）。新しいターミナルで make doctor を確かめる。"
-  RUST_INSTALLED=1
-  note "rustc $(rustc_version) / cargo $(cargo_version)"
 }
 
 UV_OK=0
@@ -415,10 +334,8 @@ setup_deps() {
 }
 
 install_all() {
-  setup_xcode_clt
   setup_node
   setup_pnpm
-  setup_rust
   if [ "$APP_ONLY" = 0 ]; then
     setup_uv
     setup_ffmpeg
@@ -432,9 +349,6 @@ install_all() {
   printf '\n次に：\n'
   if [ "$NODE_SWITCHED" = 1 ]; then
     printf '  - 今のシェルはまだ別の Node。リポジトリで nvm use（fnm なら fnm use）してから make dev\n'
-  fi
-  if [ "$RUST_INSTALLED" = 1 ]; then
-    printf '  - Rust を入れた。新しいターミナルを開く（または . "$HOME/.cargo/env"）。VS Code の中なら VS Code ごと起動し直す\n'
   fi
   printf '  - make mock（ターミナル 1）と make dev（ターミナル 2）。make help でほかのコマンド\n'
 }

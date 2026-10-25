@@ -21,6 +21,7 @@ import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { Badge, Button, Checkbox, cx, ErrorNotice, Spinner, TextInput } from "@/presentation/shared/ui";
 import { useCastDraftStore, useSyncDraft } from "./castStore";
+import { askNotifyPermission } from "@/presentation/shared/notifyPermission";
 
 const T = ja.cast;
 const isVrm = (p: string) => /\.vrm$/i.test(p);
@@ -82,6 +83,7 @@ export function CastStep({
   };
 
   const startRender = async () => {
+    askNotifyPermission();
     setSubmitting(true);
     try {
       accept(await uc.startRender.execute({ project, backend: currentBackend(), draft }));
