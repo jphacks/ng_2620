@@ -63,7 +63,12 @@ export function comboFromEvent(
   if (e.altKey) mods.push("alt");
   if (e.shiftKey) mods.push("shift");
   // ⌥ や ⇧ で文字が変わる配列でも数字は数字として扱う
-  let key = /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key.toLowerCase();
+  // ⌥ を押すと macOS は文字を変える（⌥N → ˜）ので、数字と同じく物理キーで見る。ブラウザが先に取る Ctrl/⌘+N の代わりの ⌘⌥N などに使う
+  let key = /^Digit\d$/.test(e.code)
+    ? e.code.slice(5)
+    : e.altKey && /^Key[A-Z]$/.test(e.code)
+      ? e.code.slice(3).toLowerCase()
+      : e.key.toLowerCase();
   key = KEY_ALIASES[key] ?? key;
   return [...mods, key].join("+");
 }

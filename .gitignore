@@ -8,6 +8,11 @@ dist/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 
+# E2E（Playwright）
+apps/desktop/e2e/.run/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+
 # Python
 __pycache__/
 *.pyc

@@ -19,6 +19,8 @@ export interface LocalInfo {
 type Query = Record<string, string | number | boolean | undefined>;
 
 interface RequestOpts {
+  /** ページが閉じられても送り切る（保存用。本体が 64KiB までのとき） */
+  keepalive?: boolean;
   query?: Query;
   json?: unknown;
   body?: BodyInit;
@@ -71,7 +73,13 @@ export class LocalApi {
     }
     let res: Response;
     try {
-      res = await this.fetchImpl(this.url(path, opts.query), { method, headers, body, signal: opts.signal });
+      res = await this.fetchImpl(this.url(path, opts.query), {
+        method,
+        headers,
+        body,
+        signal: opts.signal,
+        keepalive: opts.keepalive,
+      });
     } catch (e) {
       if (opts.signal?.aborted) throw e;
       throw new AppError("NETWORK", `ローカルサーバーに届きません: ${e instanceof Error ? e.message : String(e)}`);

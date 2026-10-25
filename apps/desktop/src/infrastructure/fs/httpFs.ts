@@ -25,6 +25,7 @@ export class HttpFileSystem implements FileSystem {
       query: { path, private: opts?.private ? true : undefined },
       body: text,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
+      keepalive: text.length < 30_000, // project.json など小さい保存は、タブを閉じても送り切る（64KiB の上限の内側）
     });
   }
   async readBytes(path: string) {

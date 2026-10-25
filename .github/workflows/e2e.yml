@@ -1,0 +1,57 @@
+# 画面の E2E（Playwright。Chromium と WebKit。#39、#28 の決定）。
+# GPU は使わない：モックサーバー（services/mock_server）が再生用のステージで答える。
+# フルモード（ローカルアプリサーバーが画面を配信）と制限モード（Pages 相当の静的配信 + 外部 GPU のモック）の両方を通す
+name: E2E
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "services/gpu_server/**"
+      - "services/mock_server/**"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (Chromium / WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版は package.json の packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: ffmpeg（動画の検証と素材づくり）
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - name: サーバーの環境 A
+        run: |
+          python -m venv services/gpu_server/.venv
+          services/gpu_server/.venv/bin/pip install -q -e services/gpu_server
+      - name: 画面のビルド
+        run: pnpm --filter @vvlog/desktop build
+      - name: ブラウザ（Chromium と WebKit）
+        run: pnpm --filter @vvlog/desktop exec playwright install --with-deps chromium webkit
+      - name: E2E
+        run: pnpm --filter @vvlog/desktop e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: apps/desktop/test-results
+          retention-days: 7

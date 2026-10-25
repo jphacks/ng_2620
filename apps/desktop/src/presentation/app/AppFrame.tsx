@@ -83,7 +83,8 @@ function GlobalCommands() {
   useCommand({ id: "app.open", keys: ["mod+o"], scope: "global", label: ja.commands.open, run: () => void browse() });
   useCommand({
     id: "app.new",
-    keys: ["mod+n"],
+    // ブラウザのタブでは Ctrl/⌘+N（新しいウィンドウ）をページが取れないので、⌘⌥N / Ctrl+Alt+N も使えるようにする
+    keys: ["mod+n", "mod+alt+n"],
     scope: "global",
     label: ja.commands.newProject,
     run: () => {

@@ -13,6 +13,7 @@ import type { Services } from "@/presentation/shared/services";
 import { ServicesProvider } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { loadPrefs } from "@/presentation/shared/stores/prefsStore";
+import { installAutosaveFlush, useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { TooltipProvider } from "@/presentation/shared/ui";
 import { AppFrame, HomeRoute } from "./AppFrame";
 import { DevEditorRoute } from "./routes/EditRoute";
@@ -50,6 +51,7 @@ const queryClient = new QueryClient({
 function Boot({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useHotkeyDispatcher();
+  useEffect(() => installAutosaveFlush(useProjectStore, document, window), []);
   useEffect(() => {
     void Promise.all([useConnectionStore.getState().init(), loadPrefs()])
       .catch((e) => console.error("[boot]", e))

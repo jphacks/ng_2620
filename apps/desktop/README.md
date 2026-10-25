@@ -38,6 +38,25 @@ VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # 
 フルモードのファイル選択は Windows のネイティブダイアログ（サーバー側、#46）、ドロップは `<appData>/imports/<id>/` へ分割転送してからサーバー上のパスで扱う（#47。受け付けない先には送らない／起動時に、プロジェクトから参照されていない 24 時間以上前の取り込みを掃除）。
 `pnpm test` には実サーバーを起動する通しテスト（`localApi.integration.test.ts`）が含まれる（`services/gpu_server/.venv` が無ければ skip）。
 
+### E2E（Playwright、#39）
+
+実ブラウザ（Chromium・WebKit）で、モックサーバー（GPU なし。`services/mock_server`、再生用のステージ）を相手に主要フローを通す。`e2e/` に 2 本：
+
+| spec | 画面の配信元 | 通すこと |
+|---|---|---|
+| `full-mode.spec.ts` | ローカルアプリサーバー（`mock_server --local`） | 起動 → 動画のドロップ（サーバーへ取り込み・ffprobe）→ 解析 → アバターのドロップ → キャスト → 描画 → エディタ → 書き出し（MP4 ができる）→ 開き直し → ショートカット |
+| `restricted-mode.spec.ts` | 静的配信（`/ng_2620/` の下。Pages 相当） | 案内バナー → 外部 GPU の登録・接続テスト（**CORS 拒否／届かない**の診断）→ IndexedDB に残る → zip の読み込み → 元の動画の選び直し → 送信先の確認 → 外部 GPU へ送って解析 → zip の書き出し |
+
+```sh
+pnpm --filter @vvlog/desktop build                                      # dist/（画面）
+pnpm --filter @vvlog/desktop exec playwright install chromium webkit    # 初回だけ（Linux は --with-deps）
+pnpm --filter @vvlog/desktop e2e                                        # 3 つのサーバーは playwright.config.ts が起動する
+pnpm --filter @vvlog/desktop e2e:chromium                               # Chromium だけ
+```
+前提：`services/gpu_server/.venv`（環境 A）と ffmpeg。`VVLOG_E2E_PYTHON` で Python を変えられる。CI は `.github/workflows/e2e.yml`。
+E2E は src を import しない（Node の型除去が src の TypeScript を読めないため）。画面の文言の写しは `e2e/strings.ts` で、ずれると `pnpm test`（`src/e2e-strings.test.ts`）が失敗する。
+Playwright 同梱の Chromium は H.264 を再生できない。動画の `<video>` プレビューは E2E の対象外。差分と手動確認の一覧は [designdocs/ux/browser-parity-checklist.md](../../designdocs/ux/browser-parity-checklist.md)。
+
 ### GitHub Pages への公開（#37）
 
 `.github/workflows/pages.yml` が `main` への push で `pnpm --filter @vvlog/desktop build` の `dist/` を Pages に公開する（初回はリポジトリの Settings > Pages で Source を **GitHub Actions** にする）。ビルドは**相対パス**（`base: "./"`）なので、ローカルサーバーの `/` でも Pages の `/<リポジトリ名>/` でも同じ `dist` が動く。ルーティングは `#` 付きなので 404.html のフォールバックは要らない。公開した画面はローカルサーバーが無いので制限モードで動く。
