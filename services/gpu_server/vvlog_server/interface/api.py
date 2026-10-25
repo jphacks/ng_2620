@@ -19,7 +19,9 @@ from ..domain.errors import VvlogError
 from . import schemas as S
 from ..adapters.local_fs import LocalFs, LocalRoots
 from ..adapters.local_media import LocalMedia
+from ..adapters.native_dialog import NativeDialog
 from .local import LocalGuard, mount_local, self_origins
+from .local_dialog import mount_local_dialog
 from .local_fs import mount_local_fs
 from .local_media import mount_local_media
 from .ranges import range_response
@@ -175,8 +177,10 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
 
     app.include_router(r)
     if st.local:  # after the /v1 routes: the SPA catch-all must not shadow them
-        roots = LocalRoots([*st.local_dirs.values(), *st.local_roots])
+        roots = LocalRoots([*st.local_dirs.values(), *st.local_roots], store=st.data_root / "local" / "grants.json")
         mount_local_fs(app, LocalFs(roots), auth, st.api_token)
+        app.state.native_dialog = NativeDialog()  # tests swap .backend
+        mount_local_dialog(app, app.state.native_dialog, roots, auth, st.port)
         mount_local_media(app, LocalMedia(st.ffprobe), auth)
         mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs)
     return app

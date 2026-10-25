@@ -16,6 +16,10 @@ HTTP_STATUS = {
     "PATH_NOT_ALLOWED": 403,
     "FS_CONFLICT": 409,
     "FS_FAILED": 500,
+    "DIALOG_LOCAL_ONLY": 403,     # /v1/local/dialog: only the app served by this server may open a dialog
+    "DIALOG_BUSY": 409,
+    "DIALOG_UNAVAILABLE": 501,
+    "DIALOG_FAILED": 500,
     "FFPROBE_UNAVAILABLE": 503,   # /v1/local/media/probe: the app falls back to the <video> element
     # job failures: reported through the job, not as an HTTP status
     "NO_PERSON_FOUND": 200,
