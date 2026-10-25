@@ -100,15 +100,17 @@ def _warp_sample(img, Minv, xs, ys):
 
 
 def _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint, out, dev, log, t0, pool,
-                   shadow, shadow_frac, fill=True, quantile=0.5):
+                   shadow, shadow_frac, fill=True, quantile=0.5, ring_check=False):
     """mosaic_sec's plates (module docstring): one background per window of L frames, warped into each frame.
     shadow: also find each frame's cast shadows (-> the 4th result, uint8 masks); fill=False: only find them.
     quantile: of the valid samples per pixel (0.5: the median, as the per-frame fill). Shadow detection uses a higher
     one: where the people stay, most samples of a pixel can be shadowed, and their median is a shadowed background.
+    ring_check: drop the candidates that do not match r around the region they would fill (_ring_reject).
     -> (plates, holes, stats, shadow masks or None)."""
     import torch
     rad = max(3, int(round(shadow_frac * H)))
     by_plate = by_inpaint = n_shadow = 0
+    n_samples = n_rejected = 0
     shadows = [np.zeros((H, W), np.uint8) for _ in range(n)] if shadow else None
     for a in range(0, n, L):
         b = min(n, a + L)
@@ -159,6 +161,13 @@ def _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring
             v = torch.cat([p_[0] for p_ in parts])
             oks = torch.cat([p_[1] for p_ in parts])
             del parts
+            if ring_check:
+                excl_r = ring.e[ring.slot(r)].cpu().numpy()
+                bad = _ring_reject(ring, img, slots, Mt, need, excl_r, ys, xs, dev)
+                if bad is not None:
+                    n_samples += int(oks.sum())
+                    n_rejected += int((oks & bad).sum())
+                    oks &= ~bad
             v[~oks] = 255
             v = v.sort(dim=0).values
             c = oks.sum(dim=0)
@@ -230,8 +239,12 @@ def _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring
     tot = max(by_plate + by_inpaint, 1)
     stats = {"hole_px": tot, "clean_plate_%": round(100 * by_plate / tot, 1),
              "inpaint_%": round(100 * by_inpaint / tot, 1), "shadow_px": n_shadow, "mosaic_frames": L}
+    if ring_check:
+        stats["ring_rejected_%"] = round(100 * n_rejected / max(n_samples, 1), 1)
     log(f"[removal] window backgrounds of {L} frames: hole pixels from other frames {stats['clean_plate_%']}%, "
-        f"inpainted {stats['inpaint_%']}%, shadow pixels replaced {n_shadow} (total {time.perf_counter() - t0:.0f} s)")
+        f"inpainted {stats['inpaint_%']}%, shadow pixels replaced {n_shadow}"
+        + (f", samples dropped by the ring check {stats['ring_rejected_%']}%" if ring_check else "")
+        + f" (total {time.perf_counter() - t0:.0f} s)")
     return out, holes, stats, shadows
 
 
@@ -365,6 +378,60 @@ class _Ring:
 
 STATIC_FRAC = 0.004   # static_bg: max corner motion of the chained homographies, as a fraction of the diagonal
 
+# ring_check: a homography aligns one plane; where the scene has depth, a candidate frame can show something nearer
+# (IMG_3386 seg09: the whiteboard beside a seated person, swept over the wall behind them by the camera's pan) at the
+# hole's pixels, valid by its exclusion mask, and the median of the few frames that uncover the hole pasted the
+# whiteboard's white there. The same misalignment shows just outside the hole: each candidate is compared with r on a
+# ring of RING_FRAC x H around the needed region (outside r's exclusion), its per-channel median offset removed
+# (exposure), and the absolute error spread into the region by normalised convolution (sigma RING_SIGMA_FRAC x H, at
+# 1 / RING_DOWN); a candidate is dropped where that local error exceeds RING_MAX. Pixels no candidate keeps are
+# inpainted.
+RING_FRAC = 0.04
+RING_SIGMA_FRAC = 0.06
+RING_DOWN = 8
+RING_MAX = 30.0
+
+
+def _ring_reject(ring, img, slots, Mt, need, excl_r, ys, xs, dev):
+    """-> (K, N) bool: candidate k is inconsistent with r around need pixel (ys, xs); None without a usable ring."""
+    import torch
+    import torch.nn.functional as F
+    H, W = need.shape
+    dist = cv2.distanceTransform(1 - need, cv2.DIST_L2, 3)
+    band = (dist > 0) & (dist <= max(2.0, RING_FRAC * H)) & (excl_r == 0)
+    band[1::2, :] = False   # every other pixel is plenty for a local mean
+    band[:, 1::2] = False
+    ry, rx = np.nonzero(band)
+    if len(ry) < 50:
+        return None
+    ryt, rxt = torch.from_numpy(ry).to(dev), torch.from_numpy(rx).to(dev)
+    parts = [ring.sample(slots[k:k + 16], Mt[k:k + 16], rxt.double(), ryt.double()) for k in range(0, len(slots), 16)]
+    v = torch.cat([p[0] for p in parts]).float()
+    ok = torch.cat([p[1] for p in parts])
+    d = v - img[ryt, rxt].float()[None]
+    d_nan = torch.where(ok[..., None], d, torch.full_like(d, float("nan")))
+    off = torch.nan_to_num(d_nan.nanmedian(dim=1).values)                 # (K, 3): exposure differences
+    e = (d - off[:, None]).abs().mean(-1) * ok                              # (K, Nr)
+    gh, gw = -(-H // RING_DOWN), -(-W // RING_DOWN)
+    idx = (ryt // RING_DOWN) * gw + rxt // RING_DOWN
+    K = len(slots)
+    E = torch.zeros((K, gh * gw), device=dev).index_add_(1, idx, e)
+    Wt = torch.zeros((K, gh * gw), device=dev).index_add_(1, idx, ok.float())
+    s = RING_SIGMA_FRAC * H / RING_DOWN
+    r_ = int(3 * s) + 1
+    g = torch.exp(-torch.arange(-r_, r_ + 1, device=dev, dtype=torch.float32) ** 2 / (2 * s * s))
+    g = g / g.sum()
+
+    def blur(x):
+        x = x.view(K, 1, gh, gw)
+        x = F.conv2d(F.pad(x, (r_, r_, 0, 0)), g.view(1, 1, 1, -1))
+        return F.conv2d(F.pad(x, (0, 0, r_, r_)), g.view(1, 1, -1, 1)).view(K, gh * gw)
+    Eb, Wb = blur(E), blur(Wt)
+    glob_ = E.sum(1, keepdim=True) / Wt.sum(1, keepdim=True).clamp(min=1)   # far from any ring sample
+    loc = torch.where(Wb > 1e-3, Eb / Wb.clamp(min=1e-6), glob_.expand_as(Eb))
+    q = (ys // RING_DOWN) * gw + xs // RING_DOWN
+    return loc[:, q] > RING_MAX
+
 
 def _telea(img, mask):
     return cv2.inpaint(img, mask, 5, cv2.INPAINT_TELEA)
@@ -372,7 +439,7 @@ def _telea(img, mask):
 
 def clean_plates_gpu(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15, span_sec=7.5, stride_sec=8 / 30,
                      log=print, workers=4, scratch=None, device="cuda", work_short=None, static_bg=False,
-                     inpaint=None, mosaic_sec=None, shadow=False, shadow_frac=0.15):
+                     inpaint=None, mosaic_sec=None, shadow=False, shadow_frac=0.15, ring_check=False):
     """removal.clean_plates (same arguments and results); `workers` CPU threads compute the homographies.
     work_short / static_bg / inpaint: see the module docstring (not byte-identical)."""
     import torch
@@ -476,7 +543,7 @@ def clean_plates_gpu(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15
             L = max(1, int(round(mosaic_sec * fps)))
             if not shadow:
                 return _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint, out,
-                                      dev, log, t0, pool, False, shadow_frac)[:3]
+                                      dev, log, t0, pool, False, shadow_frac, ring_check=ring_check)[:3]
             _, _, _, shadows = _mosaic_plates(frames, holes, n, H, W, L, cands_of, homography, pts, C, ring, inpaint,
                                               [None] * n, dev, lambda *a: None, t0, pool, True, shadow_frac,
                                               fill=False, quantile=0.8)
@@ -486,7 +553,7 @@ def clean_plates_gpu(frames, person_masks, fps=30.0, dilate=9, exclude_dilate=15
             del ring
             ring2 = _Ring(frames, excl2, min(n, 2 * span + 1), dev)
             res = _mosaic_plates(frames, holes2, n, H, W, L, cands_of, homography, pts, C, ring2, inpaint, out,
-                                 dev, log, t0, pool, False, shadow_frac)
+                                 dev, log, t0, pool, False, shadow_frac, ring_check=ring_check)
             res[2]["shadow_px"] = int(sum(int((sh > 0).sum()) for sh in shadows))
             return res[0], holes2, res[2]
 

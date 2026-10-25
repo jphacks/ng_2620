@@ -19,7 +19,7 @@ import time
 import cv2
 import numpy as np
 
-REPO = "C:/VScodeFiles/sam-body4d"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
 sys.path.insert(0, f"{REPO}/scripts/occlusion/fusion_v2")
 import fusion  # noqa: E402
 from gpu_stage import STRIDE_IN, STRIDE_V, STRIDE_OUT, DIL, grid_points  # noqa: E402

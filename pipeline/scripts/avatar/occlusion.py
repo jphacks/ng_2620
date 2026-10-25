@@ -99,6 +99,9 @@ def hide_frame(i, p, k, c, ev, byf, dec, masks, Zm, gnd, A, DA, P, people=False,
     return hide
 
 
+GROUND_ABOVE_FEET = 0.25   # m: a 'ground' plane this far above a target's soles is a table top or a shelf
+
+
 class AvatarHider:
     """Per-frame hide masks over the avatars (streaming form of avatar_hides: raw masks of frame i need only frame i;
     the TSMOOTH=2 majority needs the raw masks of i-1, i, i+1)."""
@@ -118,17 +121,86 @@ class AvatarHider:
         self.byf = {}
         for u in self.ev["units"]:
             self.byf.setdefault((u["i"], u["pid"]), []).append(u)
+        self._gnd = {}
 
-    def raw(self, i, alpha, depth):
-        """alpha / depth: {pid: (H,W)} of frame i (alpha 0..1, depth inf where empty) -> {pid: (hide, region)}."""
+    def _ground(self, i):
+        """Frame i's ground mask (or None) and its scene depth: independent of the avatars."""
         from evidence import ground_mask
-        P, c = self.P, self.c
+        c = self.c
         Zm = self.Zall[i].astype(np.float32)
         gnd = None
-        if P["GROUND"]:
+        if self.P["GROUND"]:
             fi = c["foc"][i][c["foc"][i] > 0]
             if len(fi):
                 gnd = ground_mask(Zm, float(fi[0]), c["L"][i])
+                if gnd is not None and gnd.any() and not self._below_feet(i, gnd, Zm, float(fi[0])):
+                    gnd = None
+        return gnd, Zm
+
+    def _below_feet(self, i, gnd, Zm, f):
+        """Whether the ground plane lies at the targets' soles, not above them. ground_mask takes the lowest
+        well-populated up-facing height; with little floor in view that is a table top (IMG_3386 seg05: a person
+        running behind a desk, the desk top 'ground' for 39 frames, so the desk hid nothing; ground pixels are never
+        hidden behind). The plane fitted to the mask is compared with each target's sole keypoints (MHR70 15-20,
+        camera coords) brought to the scene depth's units (mesh = s x scene): a plane more than GROUND_ABOVE_FEET m
+        above the median sole is not the ground."""
+        H, W = Zm.shape
+        ys, xs = np.nonzero(gnd)
+        if len(ys) < 50:
+            return True
+        k = np.linspace(0, len(ys) - 1, min(len(ys), 4000)).astype(int)
+        z = Zm[ys[k], xs[k]]
+        Pg = np.stack([(xs[k] + 0.5 - W / 2) * z / f, (ys[k] + 0.5 - H / 2) * z / f, z], 1)
+        ctr = Pg.mean(0)
+        n = np.linalg.svd(Pg - ctr, full_matrices=False)[2][-1]
+        if n[1] > 0:
+            n = -n                                    # up = camera -y
+        for kk, p in enumerate(self.pids):
+            s = self.ev["per"].get((i, p), {}).get("s", np.nan) if self.c["has"][i, kk] else np.nan
+            soles = np.asarray(self.c["KP"][i, kk][15:21], np.float64)
+            if not np.isfinite(s) or s <= 0 or not np.all(np.isfinite(soles)):
+                continue
+            if np.median((soles / s - ctr) @ n) < -GROUND_ABOVE_FEET:
+                return False
+        return True
+
+    def prefetch(self, frames):
+        """Compute the ground masks of these frames in order on a worker thread, ahead of raw() (12 ms per frame
+        at 480x270 that raw() would otherwise spend first; the same function on the same inputs)."""
+        from concurrent.futures import ThreadPoolExecutor
+        for k in ("L", "foc", "KP", "has", "D"):   # the lazy cache members, unpacked here and not by two threads at once
+            self.c[k]
+        pool = ThreadPoolExecutor(1)
+        for i in frames:
+            self._gnd[i] = pool.submit(self._ground, i)
+        pool.shutdown(wait=False)
+
+    def cover(self, i):
+        """Frame i's 'cover': every candidate segment that fusion v2 decided is in front of a target (any body part,
+        'o' or 'i' decision), minus the targets' own visible masks; pipeline resolution, bool (H, W). Whatever covers
+        a person - a held object, a table, another person passing in front - is the real scene in front of the avatar,
+        so the removal must not erase it either (removal holes are the dilated target masks)."""
+        from fusion import unpack
+        H, W = self.masks.shape[1:]
+        out = np.zeros((H, W), bool)
+        for p in self.pids:
+            for u in self.byf.get((i, p), []):
+                if u.get("person") is not None:
+                    continue
+                d = [self.dec.get((u["tr"], u["pid"], u["part"], m)) for m in ("o", "i")]
+                if any(x is not None and x[0] for x in d):
+                    out |= self.masks[u["ci"]]
+        if out.any():
+            for p in self.pids:
+                if (i, p) in self.ev["Vr"]:
+                    out &= ~unpack(self.ev["Vr"][(i, p)], H, W)
+        return out
+
+    def raw(self, i, alpha, depth):
+        """alpha / depth: {pid: (H,W)} of frame i (alpha 0..1, depth inf where empty) -> {pid: (hide, region)}."""
+        P, c = self.P, self.c
+        f = self._gnd.pop(i, None)
+        gnd, Zm = f.result() if f is not None else self._ground(i)
         out = {}
         for k, p in enumerate(self.pids):
             a = alpha.get(p)

@@ -21,7 +21,8 @@ import sys
 import cv2
 import numpy as np
 
-GT = "C:/VScodeFiles/sam-body4d/testdata/2026-10-11/occ_research/_gt/gt_audit"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
+GT = f"{REPO}/testdata/2026-10-11/occ_research/_gt/gt_audit"
 MIN_POS = 100
 # penn0363 pid 2 is the lifter's reflection in a wall mirror (GT tools/build_0363.py). The original scorer left it
 # out: with it excluded, pos / neg match its saved output (86 / 84592); with it, they do not (1028 / 99166).

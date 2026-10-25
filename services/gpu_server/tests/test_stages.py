@@ -110,6 +110,7 @@ def test_render(tmp_path, sample_video):
         assert cmd[cmd.index("--targets") + 1] == "2" and "--no_foot_lock" in cmd and "--no_spring" not in cmd
         assert cmd[cmd.index("--fusion_state") + 1].endswith(f"{aid}/occ/fusion_state.pkl")
         assert cmd[cmd.index("--vrm_map") + 1].startswith("2=") and cmd[cmd.index("--fps") + 1] == "30.0"
+        assert "--no_compare" in cmd and "--no_frames" not in cmd   # frames/ is the preview's source
         stages = [s["status"] for s in j["stages"]]
         assert stages == ["done", "done", "done"]
 
@@ -135,6 +136,7 @@ def test_export(tmp_path, sample_video):
         assert items == [{"personId": 1, "tracks": [3], "range": [5, 20], "mode": "front", "id": "ovr_01"}]
         cmd = [x for x, _ in FakePipelineRunner.calls if x[2].endswith("avatar_app.py") and "--overrides" in x][-1]
         assert "--hq" not in cmd                       # the sample is 360x640: its proxy is the full resolution
+        assert "--no_compare" in cmd and "--no_frames" in cmd   # only avatar_<job>.mp4 is used
         data = c.get(f"/v1/jobs/{e['jobId']}/artifacts/export_video", headers=AUTH).content
         out = tmp_path / "export.mp4"
         out.write_bytes(data)

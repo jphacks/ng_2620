@@ -5,8 +5,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
 
   1. occlusion   R3_fusion v2 on the meshes (scripts/occlusion/run_fusion_v2.py; cached in <out>/occlusion)
   2. retarget    every target's MHR skeleton -> the VRM (scripts/avatar/retarget_mhr.py): rotation transfer with a
-                 rest-pose correction, leg-length scale, hips placement (a person close to the camera: the head's
-                 scale and the neck's placement), 2-bone IK for wrists and soles,
+                 rest-pose correction, whole-height scale, placement at the hips-neck midpoint (a person close
+                 to the camera: the head's scale and the neck's placement), 2-bone IK for wrists and soles,
                  VRM spring bones (hair, skirt)
   3. removal     the targets' real bodies erased by a temporal clean plate (scripts/avatar/removal.py)
   4. render      unlit VRM, supersampled RGBA + depth per target (scripts/avatar/raster.py)
@@ -17,7 +17,8 @@ Input: the output directory of scripts/offline_app_lite.py (or offline_app.py) m
                  resolution so that intersecting avatars do not alias), each hidden where a real object is in front
                  of it; hidden pixels show the real frame (the occluder)
 Steps 2, 4-6 stream over the frames in one pass: a hide mask is smoothed over frames t-1..t+1, so frame t is
-composited once frame t+1 is rendered (two frames of render buffers in memory, every frame skinned and rendered once).
+composited once frame t+1 is rendered and its raw hide masks computed, which a worker thread does while frame t+2
+renders (three frames of render buffers in memory, every frame skinned and rendered once).
 
 usage (repo root):
   .venv/Scripts/python.exe scripts/avatar_app.py --pipeline_out <run>/pipeline_out --out <run>/avatar
@@ -29,6 +30,7 @@ usage (repo root):
 avatar the avatar is hidden. --fusion_state: the decisions of scripts/occlusion/run_occlusion_stage.py instead of
 running fusion v2 again. --export_layers: the editor's preview layers (scripts/avatar/layers_export.py).
 writes <out>/frames/<stem>.jpg, <out>/avatar_<name>.mp4, <out>/compare_<name>.mp4 (input | mesh | avatar), stats.json
+(--no_frames / --no_compare leave out the frames and the compare video: review aids, not product outputs)
 """
 import argparse
 import glob
@@ -64,6 +66,18 @@ def load_skeletons(pout, stems):
                 if np.all(np.isfinite(z["joint_rots"])) and np.all(np.isfinite(z["joint_coords"])):
                     sk[(pid, i)] = z
     return sk
+
+
+def refine_mask(img, m, thr=0.3, r=8, eps=1e-3):
+    """Pipeline-resolution mask m -> output-resolution mask with its edge on the frame's edges: the bilinear upscale
+    through a guided filter (He et al.; guide = the frame's grey, radius r output px), thresholded at thr."""
+    H, W = img.shape[:2]
+    p = cv2.resize(m.astype(np.float32), (W, H), interpolation=cv2.INTER_LINEAR)
+    I = cv2.cvtColor(np.asarray(img), cv2.COLOR_BGR2GRAY).astype(np.float32) / 255
+    box = lambda x: cv2.boxFilter(x, -1, (2 * r + 1, 2 * r + 1))
+    mI, mp = box(I), box(p)
+    A = (box(I * p) - mI * mp) / (box(I * I) - mI * mI + eps)
+    return box(A) * I + box(mp - A * mI) > thr
 
 
 def source_size(src):
@@ -149,12 +163,25 @@ def composite_gpu(base, layers, s):
             cols.append(col)
             als.append(al)
             deps.append(dep)
-        order = torch.argsort(-torch.stack(deps), dim=0, stable=True)      # farthest first
-        for k in range(len(layers)):
-            idx = order[k]
-            for p in range(len(layers)):
-                w = (als[p] * (idx == p))[..., None]
-                out = cols[p] * w + out * (1 - w)
+        # back to front: layer p's place in the farthest-first order of a stable argsort of -depth (the number of
+        # layers farther, or as far and listed before it); an argsort along a 2-long axis took 37 of 44 ms per frame
+        K = len(layers)
+        rank = []
+        for p in range(K):
+            r = torch.zeros((hU, wU), dtype=torch.int64, device=dev)
+            for q in range(K):
+                if q != p:
+                    r += (deps[q] > deps[p]) | ((deps[q] == deps[p]) & (q < p))
+            rank.append(r)
+        for k in range(K):
+            col, al = cols[0], als[0]
+            if K > 1:   # the layer at place k, per pixel (the other layers' blends were w = 0: out unchanged)
+                col, al = torch.zeros_like(cols[0]), torch.zeros_like(als[0])
+                for p in range(K):
+                    m = rank[p] == k
+                    col, al = torch.where(m[..., None], cols[p], col), torch.where(m, als[p], al)
+            w = al[..., None]
+            out = col * w + out * (1 - w)
         out = F.avg_pool2d(out.permute(2, 0, 1)[None], s)[0].permute(1, 2, 0)
         res = base.copy()
         res[uy0:uy1, ux0:ux1] = out.clamp(0, 255).to(torch.uint8).cpu().numpy()
@@ -292,8 +319,9 @@ def main(a):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
             from avatar.inpaint_lama import inpaint as lama
             extra = dict(work_short=480, inpaint=lama)
-            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5),
-                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True)}[mode])
+            rc = getattr(a, "ring_check", True)   # candidates misaligned around the hole dropped (removal_gpu)
+            extra.update({"v2": dict(static_bg=True), "mosaic": dict(mosaic_sec=0.5, ring_check=rc),
+                          "mosaic_shadow": dict(mosaic_sec=0.5, shadow=True, ring_check=rc)}[mode])
             a.gpu_removal = True
         elif getattr(a, "gpu_removal", False):
             from avatar.removal_gpu import clean_plates_gpu as clean_plates
@@ -303,14 +331,29 @@ def main(a):
         def _removal():
             t0 = time.perf_counter()
             pm = disk(f"{sdir}/person_masks.npy", (n, OH, OW), bool)
+            refine = getattr(a, "removal_refine", False) and sc != 1
             for i in range(n):
                 m = np.isin(run.mask(i), pids)
-                pm[i] = m if sc == 1 else cv2.resize(m.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
+                if refine:   # edge-aware upscale: the bilinear mask guided by the frame (refine_mask)
+                    pm[i] = refine_mask(frames[i], m)
+                else:
+                    pm[i] = m if sc == 1 else cv2.resize(m.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
             try:   # the dilations are in pipeline pixels: scaled with the masks
                 workers = getattr(a, "removal_workers", None) or (os.cpu_count() if getattr(a, "gpu_removal", False) else 4)
                 removal["out"] = clean_plates(frames, pm, fps=a.fps, workers=workers,
-                                              scratch=sdir, dilate=max(1, round(9 * sc)),
+                                              scratch=sdir, dilate=max(1, round(getattr(a, "removal_dilate", 9) * sc)),
                                               exclude_dilate=max(1, round(15 * sc)), **extra)
+                if getattr(a, "blend", True):   # the plate's colour level matched around each hole (plate_blend)
+                    from concurrent.futures import ThreadPoolExecutor as _TP
+                    from avatar import plate_blend
+                    pls, hls = removal["out"][0], removal["out"][1]
+
+                    def _blend(i):
+                        h = np.asarray(hls[i])
+                        if h.any():
+                            pls[i] = plate_blend.match(np.asarray(pls[i]), np.asarray(frames[i]), h)
+                    with _TP(4) as pool:
+                        list(pool.map(_blend, range(n)))
             except BaseException as e:   # re-raised below on the main thread
                 removal["err"] = e
             removal["s"] = time.perf_counter() - t0
@@ -359,23 +402,29 @@ def main(a):
         coords = [sk[(pid, i)]["joint_coords"] for i in range(n) if (pid, i) in sk]
         act = AvatarActor(models[vrm_of[pid]], rz, scale=1.0, fps=a.fps, spring=not a.no_spring)
         act.scale = act.rt.leg_scale(coords)
+        fi = [i for i in range(n) if (pid, i) in sk]
+
+        def crown_frames(idx):   # (rotations, joints, mesh) of these frames for crown_height; the unsmoothed skeleton
+            out = []
+            for i in idx:
+                z = np.load(f"{run.pout}/skeleton_4d_individual/{pid}/{stems[i]}.npz")
+                m = run.mesh(pid, i)
+                if m is not None:
+                    out.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
+            return out
+        if getattr(a, "fit", "height") == "height":   # sole -> crown instead of the legs (retarget_mhr.height_scale)
+            crown = act.rt.crown_height(crown_frames([fi[k] for k in np.linspace(0, len(fi) - 1, 8).astype(int)]))
+            if crown is not None:
+                act.scale = act.rt.height_scale(coords, crown)
         actors[pid] = act
         stats[f"scale_{pid}"] = round(act.scale, 4)
         print(f"[avatar] target {pid}: avatar scale {act.scale:.3f} (avatar height "
               f"{act.scale * act.rt.height_m:.2f} m), {len(coords)} frames", flush=True)
         # a person close to the camera: placement at the neck and the head's scale (retarget_mhr near_weights)
-        fi = [i for i in range(n) if (pid, i) in sk]
         w = near_weights([sk[(pid, i)]["joint_coords"][113, 2] + sk[(pid, i)]["cam_t"][2] for i in fi], a.fps)
         hs = None
         if w.max() > 0:
-            top = [fi[k] for k in np.argsort(-w, kind="stable")[:8]]
-            meas = []
-            for i in top:   # the unsmoothed skeleton: the mesh's frame
-                z = np.load(f"{run.pout}/skeleton_4d_individual/{pid}/{stems[i]}.npz")
-                m = run.mesh(pid, i)
-                if m is not None:
-                    meas.append((z["joint_rots"], z["joint_coords"] + z["cam_t"], m[0]))
-            hs = act.rt.head_scale(meas)
+            hs = act.rt.head_scale(crown_frames([fi[k] for k in np.argsort(-w, kind="stable")[:8]]))
         if hs is None:
             w = np.zeros(len(fi))
         near[pid] = (act.scale, hs, {i: float(x) for i, x in zip(fi, w) if x > 0})
@@ -420,14 +469,39 @@ def main(a):
             stats["face_read"] = len(fr["raw"])
             stats["face_confident"] = int(sum(r[1] > 0.5 for r in fr["raw"].values()))
 
-    hider = None
+    hider = hide_pool = None
     if fus is not None:
+        from concurrent.futures import ThreadPoolExecutor
         from avatar.occlusion import AvatarHider
         overrides = None
         if a.overrides:
             from avatar.occlusion import Overrides
             overrides = Overrides.load(a.overrides)
         hider = AvatarHider(fus, real=real_people, overrides=overrides)
+        hider.prefetch(range(n))
+        hide_pool = ThreadPoolExecutor(1)   # raw hide masks of frame i beside the rendering of frame i + 1
+    if not a.no_removal and getattr(a, "cover", True) and hider is not None:
+        # what covers a target (AvatarHider.cover: fusion's in-front segments) stays real: the removal hole is the
+        # dilated target mask, which also took held objects, the table in front and people passing in front
+        from concurrent.futures import ThreadPoolExecutor as _TP
+        t0 = time.perf_counter()
+        holes = removal["out"][1]
+
+        def restore_cover(i):
+            cv = hider.cover(i)
+            if not cv.any():
+                return 0
+            U = cv if sc == 1 else cv2.resize(cv.astype(np.uint8), (OW, OH), interpolation=cv2.INTER_NEAREST) > 0
+            R = U & np.asarray(holes[i])
+            if not R.any():
+                return 0
+            pl = np.asarray(plates[i]).copy()
+            pl[R] = frames[i][R]
+            plates[i] = pl
+            return int(R.sum())
+        with _TP(4) as pool:
+            stats["cover_px"] = int(sum(pool.map(restore_cover, range(n))))
+        stats["cover_s"] = round(time.perf_counter() - t0, 1)
     ik_err = {}
     head_px = {}   # avatar_heads.json: each avatar's head bone in output pixels (eval/face_video.py)
 
@@ -441,7 +515,7 @@ def main(a):
             raise SystemExit(f"GPU avatar path needs an integer --hq scale (got {sc:.3f}): use --cpu_avatar")
 
     def render_frame(i):
-        """-> {pid: (rgba ssaa, depth ssaa, native box, alpha native)}, raw hide masks of frame i (or None).
+        """-> {pid: (rgba ssaa, depth ssaa, native box, alpha native)}, a future of frame i's raw hide masks (or None).
         The supersampled buffers cover only the avatar's box (Actor.screen_box: its projected vertices), which is
         all that is read back from the GPU; outside it the avatar has no pixel."""
         buf, al, dp = {}, {}, {}
@@ -456,7 +530,8 @@ def main(a):
             wn = nw.get(i, 0.0)
             act.scale = (1 - wn) * s_leg + wn * s_head if wn > 0 else s_leg
             act.pose(z["joint_rots"], z["joint_coords"] + z["cam_t"], arm_ik=not a.no_ik, leg_ik=not a.no_ik,
-                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn)
+                     gpu=dev, expr=fmap[pid](e) if e is not None and pid in fmap else None, near=wn,
+                     anchor=getattr(a, "anchor", 0.5))
             for kk, v in act.ik_err.items():
                 ik_err.setdefault(kk.split("_")[1], []).append(v)
             hb = act.bone_cam("head")
@@ -497,18 +572,21 @@ def main(a):
                 d_full = d_full[::k, ::k]
             al[pid], dp[pid] = a_full.cpu().numpy(), d_full.contiguous().cpu().numpy()
             buf[pid] = (im, d, box, a_box.cpu().numpy())
-        return buf, (hider.raw(i, al, dp) if hider is not None else None)
+        return buf, (hide_pool.submit(hider.raw, i, al, dp) if hider is not None else None)
 
-    # 4-6. render, hide, composite: frame j is composited once frame j+1 has been rendered
+    # 4-6. render, hide, composite: frame j is composited once frame j+1 has been rendered and its raw hide masks
+    # computed (on hide_pool, while frame j+2 renders)
     fdir = os.path.join(a.out, "frames")
-    os.makedirs(fdir, exist_ok=True)
+    write_frames, write_compare = not getattr(a, "no_frames", False), not getattr(a, "no_compare", False)
+    if write_frames:
+        os.makedirs(fdir, exist_ok=True)
     SW, SH = OW * rz.ssaa, OH * rz.ssaa
     # both videos are encoded as the frames come (utils.Mp4Writer: images_to_mp4's per-frame steps), not collected
     from utils import Mp4Writer
     crf = a.crf if a.crf is not None else (12 if a.source else None)
     outs = Mp4Writer(os.path.join(a.out, f"avatar_{run.name}.mp4"), fps=a.fps, crf=crf)
-    comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf)
-    sinks = [Sink() for _ in range(3)]   # frame files, avatar mp4, compare mp4
+    comps = Mp4Writer(os.path.join(a.out, f"compare_{run.name}.mp4"), fps=a.fps, crf=crf) if write_compare else None
+    sinks = [Sink() if on else None for on in (write_frames, True, write_compare)]   # frame files, avatar / compare mp4
     layer_out = None
     if a.export_layers:
         if sc != 1:
@@ -527,12 +605,13 @@ def main(a):
     hidden_px = cov_px = 0
     t_render = t_hide = t_comp = t_gpu = 0.0
     bufs, raws, hides_j = {}, {}, {}
-    for i in range(n + 1):
+    raw = lambda k: raws[k].result() if raws.get(k) is not None else None
+    for i in range(n + 2):
         if i < n:
             t0 = time.perf_counter()
             bufs[i], raws[i] = render_frame(i)
             t_render += time.perf_counter() - t0
-        j = i - 1
+        j = i - 2
         if j < 0:
             continue
         t0 = time.perf_counter()
@@ -544,7 +623,7 @@ def main(a):
             cov_px += int((al_n > 0.02).sum())
             h = None
             if hider is not None:
-                h = hider.smooth(pid, raws.get(j - 1), raws[j], raws.get(j + 1))
+                h = hider.smooth(pid, raw(j - 1), raw(j), raw(j + 1))
                 h = np.clip(h, 0, 1).astype(np.float32)
                 if sc != 1:   # pipeline resolution -> output (the linear upscale also softens the hide edge)
                     h = cv2.resize(h, (OW, OH), interpolation=cv2.INTER_LINEAR)
@@ -561,21 +640,27 @@ def main(a):
         base[hide_any] = frames[j][hide_any]          # what hides the avatar is the real occluder
         out = composite_gpu(base, layers, ss)
         t_gpu += time.perf_counter() - t0
-        if a.source:
+        if not write_frames:
+            pass
+        elif a.source:
             sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.png"), out)
         else:
             sinks[0].put(cv2.imwrite, os.path.join(fdir, f"{stems[j]}.jpg"), out, [cv2.IMWRITE_JPEG_QUALITY, 95])
         sinks[1].put(lambda o: outs.append(cv2.cvtColor(o, cv2.COLOR_BGR2RGB)), out)
-        sinks[2].put(compare_row, j, out)
+        if write_compare:
+            sinks[2].put(compare_row, j, out)
         bufs.pop(j)
         raws.pop(j - 1, None)
         t_comp += time.perf_counter() - t0
         print(f"[avatar] frame {j + 1}/{n}", flush=True)
+    if hide_pool is not None:
+        hide_pool.shutdown()
     stats["render_s"] = round(t_setup + t_render, 1)
     stats["hide_s"] = round(t_hide, 1)
     t0 = time.perf_counter()
     for k in sinks:   # the writes / encodes still queued
-        k.close()
+        if k is not None:
+            k.close()
     if layer_out is not None:
         layer_out.close()
     stats["write_wait_s"] = round(time.perf_counter() - t0, 1)
@@ -590,7 +675,8 @@ def main(a):
           + ", ".join(f"{k.split('_')[1]} IK correction (median) {v} cm" for k, v in stats.items()
                       if k.startswith("ik_")), flush=True)
     outs.close()
-    comps.close()
+    if comps is not None:
+        comps.close()
     del frames, plates, removal, base, hider, fus, face   # every view of the scratch arrays, so the files can go
     for f in ("frames", "person_masks", "removal_holes", "removal_excl", "removal_grays", "removal_plates"):
         release(f"{sdir}/{f}.npy")
@@ -629,6 +715,10 @@ if __name__ == "__main__":
                          "camera and LaMa instead of Telea for the pixels no frame shows (scripts/avatar/removal_gpu.py, "
                          "inpaint_lama.py; implies --gpu_removal). mosaic: one background per 0.5 s window warped into "
                          "each frame; mosaic_shadow: also the targets' cast shadows (removal_gpu docstring)")
+    ap.add_argument("--removal_dilate", type=int, default=9,
+                    help="dilation [pipeline px, ellipse diameter] of the target masks into the removal holes")
+    ap.add_argument("--removal_refine", action="store_true",
+                    help="upscale the target masks to --hq along the frame's edges (refine_mask) instead of nearest")
     ap.add_argument("--gpu_removal", action="store_true",
                     help="fill the clean plates on the GPU (scripts/avatar/removal_gpu.py: the same plates, ~5x faster "
                          "at 1080x1920; shares the GPU with fusion v2)")
@@ -648,6 +738,22 @@ if __name__ == "__main__":
     ap.add_argument("--cpu_avatar", action="store_true",
                     help="skin, read back and reduce the avatars on the CPU (the reference path of the GPU one)")
     ap.add_argument("--no_removal", action="store_true")
+    ap.add_argument("--fit", choices=["legs", "height"], default="height",
+                    help="avatar scale from the leg length (hips and soles land on the person's) or from the whole height "
+                         "(sole .. crown; retarget_mhr.height_scale)")
+    ap.add_argument("--anchor", type=float, default=0.5,
+                    help="placement point: 0 = the hips on the person's hips .. 1 = the neck on the person's neck")
+    ap.add_argument("--no_cover", dest="cover", action="store_false",
+                    help="erase what covers a target too (default: fusion's in-front segments stay real in the removal)")
+    ap.add_argument("--no_blend", dest="blend", action="store_false",
+                    help="no colour matching of the plate to the frame around each removal hole (scripts/avatar/plate_blend.py)")
+    ap.add_argument("--no_ring_check", dest="ring_check", action="store_false",
+                    help="keep every candidate frame's pixels in the mosaic removal (default: a candidate that does not match "
+                         "the frame around the hole is not used there; removal_gpu._ring_reject)")
+    ap.add_argument("--no_compare", action="store_true",
+                    help="do not write compare_<name>.mp4 (input | mesh | avatar; a review aid, ~2 s of encoding)")
+    ap.add_argument("--no_frames", action="store_true",
+                    help="do not write <out>/frames/ (the avatar mp4 only)")
     ap.add_argument("--no_spring", action="store_true")
     ap.add_argument("--no_ik", action="store_true")
     ap.add_argument("--fusion_reference", action="store_true",

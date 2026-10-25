@@ -14,7 +14,7 @@ import time
 import numpy as np
 import torch
 
-REPO = "C:/VScodeFiles/sam-body4d"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
 sys.path.insert(0, REPO)
 from utils.skip_init import skip_random_init  # noqa: E402
 

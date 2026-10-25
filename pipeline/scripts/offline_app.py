@@ -228,11 +228,12 @@ class OfflineApp:
     def _save_frame(self, image_path, mask_output, id_current):
         """Mesh overlays, meshes, focal lengths and skeleton of one frame."""
         img = cv2.imread(image_path)
-        rend_img = visualize_sample_together(img, mask_output, self.sam3_3d_body_model.faces, id_current)
-        cv2.imwrite(
-            f"{self.OUTPUT_DIR}/rendered_frames/{os.path.basename(image_path)[:-4]}.jpg",
-            rend_img.astype(np.uint8),
-        )
+        if self.RUNTIME.get('overlays', True):   # rendered_frames/ (lite --no_overlay: off; a review aid)
+            rend_img = visualize_sample_together(img, mask_output, self.sam3_3d_body_model.faces, id_current)
+            cv2.imwrite(
+                f"{self.OUTPUT_DIR}/rendered_frames/{os.path.basename(image_path)[:-4]}.jpg",
+                rend_img.astype(np.uint8),
+            )
 
         # save rendered frames for individual person (RUNTIME['individual_overlays'] False: skipped; nothing in the
         # pipeline reads them, and their four views per person were ~45 ms of every frame's save)
@@ -520,7 +521,8 @@ class OfflineApp:
                 job.result()                 # re-raise any error from the saving thread
             save_pool.shutdown()
         out_4d_path = os.path.join(self.OUTPUT_DIR, f"4d_{time.time():.0f}.mp4")
-        jpg_folder_to_mp4(f"{self.OUTPUT_DIR}/rendered_frames", out_4d_path)
+        if self.RUNTIME.get('overlays', True):
+            jpg_folder_to_mp4(f"{self.OUTPUT_DIR}/rendered_frames", out_4d_path)
 
         return out_4d_path
 
