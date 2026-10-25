@@ -52,6 +52,8 @@ HF_TOKEN=hf_... <pipeline の python> weights/fetch.py --dest <ckpt> --write_con
 
 GitHub Pages などの HTTPS のページから、**自分で用意した** GPU サーバーを使うときの手順。運営側のホストは無く、動画は自分のサーバーにだけ送られる。
 
+Docker イメージ（`deploy/docker/`）とクラウド GPU（RunPod / Vast.ai / GCP L4）の手順は [designdocs/guides/byo-gpu-server.md](../../designdocs/guides/byo-gpu-server.md)。
+
 **守ること**
 - サーバーは常に `127.0.0.1` にだけ待ち受ける。**ポートを直接インターネットに開けない**。外から届くのは下のトンネル／リバースプロキシ（HTTPS）だけにする。
 - トークンを必ず設定する（上の表）。HTTPS でない URL に Pages から接続することはできない（mixed content）。
