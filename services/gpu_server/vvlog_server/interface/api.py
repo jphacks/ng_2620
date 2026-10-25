@@ -17,7 +17,9 @@ from ..application.deps import Deps
 from ..application.usecases import avatars, jobs, projects, uploads
 from ..domain.errors import VvlogError
 from . import schemas as S
+from ..adapters.local_fs import LocalFs, LocalRoots
 from .local import LocalGuard, mount_local, self_origins
+from .local_fs import mount_local_fs
 from .ranges import range_response
 
 HEARTBEAT_S = 15
@@ -171,7 +173,9 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
 
     app.include_router(r)
     if st.local:  # after the /v1 routes: the SPA catch-all must not shadow them
-        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir)
+        roots = LocalRoots([*st.local_dirs.values(), *st.local_roots])
+        mount_local_fs(app, LocalFs(roots), auth, st.api_token)
+        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs)
     return app
 
 

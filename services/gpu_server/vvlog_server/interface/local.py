@@ -92,13 +92,14 @@ def _same_origin(request: Request, port: int) -> bool:
     return request.headers.get("sec-fetch-site", "same-origin") in ("same-origin", "none")
 
 
-def mount_local(app: FastAPI, *, port: int, token: str, spa_dir: Path | None) -> None:
+def mount_local(app: FastAPI, *, port: int, token: str, spa_dir: Path | None, dirs: dict | None = None) -> None:
     @app.get("/v1/local/info", tags=["local"], include_in_schema=False)
     def local_info(request: Request):
         info = {"mode": "local", "version": __version__, "apiVersion": 1, "port": port,
                 "spa": bool(spa_dir and (spa_dir / "index.html").is_file())}
         if _same_origin(request, port):
             info["token"] = token
+            info["dirs"] = {k: str(v) for k, v in (dirs or {}).items()}  # home-dir paths: not for other origins
         return JSONResponse(info, headers={"Cache-Control": "no-store"})
 
     root = spa_dir.resolve() if spa_dir else None

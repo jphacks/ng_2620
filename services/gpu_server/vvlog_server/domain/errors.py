@@ -12,6 +12,10 @@ HTTP_STATUS = {
     "AVATAR_INVALID": 422,
     "DEPENDENCY_NOT_READY": 409,
     "NOT_IMPLEMENTED": 501,
+    # local app server file API (/v1/local/fs, #23)
+    "PATH_NOT_ALLOWED": 403,
+    "FS_CONFLICT": 409,
+    "FS_FAILED": 500,
     # job failures: reported through the job, not as an HTTP status
     "NO_PERSON_FOUND": 200,
     "GPU_OOM": 200,

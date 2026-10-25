@@ -8,6 +8,23 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 
 
+def _local_dirs(e) -> dict[str, Path]:
+    """Where the local app keeps projects, app data and config (Windows first; the others follow XDG-ish defaults)."""
+    home = Path(e.get("USERPROFILE") or e.get("HOME") or Path.home())
+    if os.name == "nt":
+        appdata = Path(e.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        config = Path(e.get("APPDATA") or home / "AppData" / "Roaming")
+        base = {"projects": home / "Videos" / "vvlog", "appData": appdata / "vvlog", "config": config / "vvlog"}
+    else:
+        base = {"projects": home / "Videos" / "vvlog", "appData": home / ".local" / "share" / "vvlog",
+                "config": home / ".config" / "vvlog"}
+    for key, var in (("projects", "VVLOG_LOCAL_PROJECTS_DIR"), ("appData", "VVLOG_LOCAL_APPDATA_DIR"),
+                     ("config", "VVLOG_LOCAL_CONFIG_DIR")):
+        if e.get(var):
+            base[key] = Path(e[var])
+    return {k: v.resolve() for k, v in base.items()}
+
+
 def _spa_dir(e) -> Path | None:
     given = e.get("VVLOG_SPA_DIR")
     if given:
@@ -35,6 +52,8 @@ class Settings:
     record_fixture: Path | None
     local: bool                   # local app server (ADR-0015): 127.0.0.1 only, serves the SPA, Host/Origin guard
     spa_dir: Path | None          # built SPA (apps/desktop/dist); local mode only
+    local_dirs: dict                  # local mode: {projects, appData, config} folders (each is an allowed root)
+    local_roots: tuple[Path, ...]     # local mode: further allowed roots (VVLOG_LOCAL_ROOTS, os.pathsep-separated)
     allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
@@ -59,6 +78,8 @@ class Settings:
             record_fixture=Path(rec).resolve() if rec else None,
             local=e.get("VVLOG_LOCAL", "").lower() in ("1", "true", "yes"),
             spa_dir=_spa_dir(e),
+            local_dirs=_local_dirs(e),
+            local_roots=tuple(Path(r).resolve() for r in e.get("VVLOG_LOCAL_ROOTS", "").split(os.pathsep) if r.strip()),
             allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
         s.update(over)

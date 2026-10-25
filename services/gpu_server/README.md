@@ -149,6 +149,14 @@ VVLOG_LOCAL=1 VVLOG_PORT=0 python -m vvlog_server      # PowerShell: $env:VVLOG_
 - `GET /v1/local/info`（認証なし）が `{"mode":"local",…}` を返す。画面はこれでフルモードを判定する。トークンは**同一オリジンの呼び出しにだけ**含まれ、Pages など別オリジンには含まれない。
 - `/v1/*` は従来どおり Bearer トークンが要る。
 
+### ローカル FS API（`/v1/local/fs`、#23）
+Tauri の `fs_*` コマンドの移植。ブラウザからプロジェクトフォルダを読み書きする。HTTP 経由なので、**許可ルートの外は `403 PATH_NOT_ALLOWED`**。
+
+- 許可ルート：プロジェクト（`~/Videos/vvlog`）・アプリデータ・設定の各フォルダ（`GET /v1/local/info` の `dirs`。`VVLOG_LOCAL_PROJECTS_DIR`／`_APPDATA_DIR`／`_CONFIG_DIR` で変更）と、`VVLOG_LOCAL_ROOTS`（OS のパス区切りで複数）。
+- パスは絶対パスだけ。`realpath` で `..`・シンボリックリンクを解いてから判定する。許可フォルダそのものの削除・上書きはできない。
+- `PUT /text`・`PUT /raw` は一時ファイル → fsync → rename の原子的書き込み（`raw` は本体をディスクへストリーム）。`GET /raw` は Range 対応（`<img>`／`<video>` 用に `?t=<トークン>` でも認証できる）。`POST /append?expectedSize=` は再開できるダウンロード用。
+- `POST /unzip` は zip-slip・絶対パス・シンボリックリンクの項目を、何も書く前に拒否する。
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |
