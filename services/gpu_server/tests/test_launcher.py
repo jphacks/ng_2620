@@ -193,3 +193,55 @@ def test_shutdown_does_not_exist_outside_local_mode(tmp_path):
     c, calls = make(tmp_path, local=False)
     assert c.post("/v1/local/shutdown", headers={**AUTH, "Origin": SELF}).status_code == 404
     assert calls == []
+
+
+# --- tray / manual URL -----------------------------------------------------------------------------------------------
+class FakeTray:
+    def __init__(self, url, on_quit, opener):
+        self.url, self.on_quit, self.opener, self.stopped = url, on_quit, opener, False
+
+    def stop(self):
+        self.stopped = True
+
+
+def test_tray_gets_the_url_quit_stops_the_launcher_and_a_failed_open_prints_the_url(tmp_path, caplog):
+    env, busy = launcher_env(tmp_path)
+    made = []
+
+    def factory(url, on_quit, opener):
+        made.append(FakeTray(url, on_quit, opener))
+        return made[0]
+
+    result = []
+    import threading
+    t = threading.Thread(target=lambda: result.append(
+        launcher.run(env=env, opener=lambda u: False, install_signals=False, tray_start=factory)))
+    caplog.set_level("INFO", logger="vvlog.launcher")
+    try:
+        t.start()
+        tray = wait_for(lambda: made and made[0])
+        assert launcher.health_ok(tray.url)
+        assert not tray.stopped
+        tray.on_quit()                                   # "終了" in the tray menu
+        t.join(30)
+        assert result == [0] and tray.stopped
+        assert not launcher.health_ok(tray.url)
+        assert any(tray.url in r.getMessage() and "入力" in r.getMessage() for r in caplog.records)
+    finally:
+        busy.close()
+
+
+def test_no_tray_flag_skips_the_tray(tmp_path):
+    env, busy = launcher_env(tmp_path)
+    called = []
+    import threading
+    t = threading.Thread(target=lambda: launcher.run(env=env, open_browser=False, install_signals=False, use_tray=False,
+                                                     tray_start=lambda *a: called.append(a)))
+    try:
+        t.start()
+        st = wait_for(lambda: (launcher.read_state(tmp_path / "state") or {}).get("url") and launcher.read_state(tmp_path / "state"))
+        assert called == []
+        os.kill(st["serverPid"], signal.SIGTERM if os.name != "nt" else signal.SIGBREAK)   # server gone -> launcher ends
+        t.join(30)
+    finally:
+        busy.close()

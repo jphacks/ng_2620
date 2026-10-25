@@ -7,6 +7,8 @@
     `VVLOG_LOCAL_READY <url>` line and opens it with the default browser
   * one instance per user: <state dir>/launcher.json holds pid / port / url. A second launch whose recorded instance
     is alive (pid exists AND /v1/health answers) only opens that URL. A stale file is removed.
+  * Windows: a tray icon shows it is running (tooltip = URL; open / copy URL / quit); --no-tray turns it off
+  * if the browser cannot be opened automatically, the URL is printed so it can be typed in by hand
   * stops on Ctrl+C / SIGTERM / console close, or when the page calls POST /v1/local/shutdown (the child exits);
     the child's whole process tree is stopped. A running job is left to become INTERRUPTED on the next start.
 
@@ -31,6 +33,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 from typing import Callable
+
+from . import tray as tray_mod
 
 DEFAULT_PORT = 8765
 READY_PREFIX = "VVLOG_LOCAL_READY "
@@ -227,7 +231,8 @@ def kill_tree(proc: subprocess.Popen) -> None:
 
 # --- main ------------------------------------------------------------------------------------------------------------
 def run(*, env: dict | None = None, opener: Callable[[str], object] = webbrowser.open, open_browser: bool = True,
-        ready_timeout: float = 60.0, install_signals: bool = True) -> int:
+        ready_timeout: float = 60.0, install_signals: bool = True, use_tray: bool = True,
+        tray_start: Callable = tray_mod.start) -> int:
     e = dict(os.environ if env is None else env)
     sdir, ldir = state_dir(e), log_dir(e)
     server_log = setup_logging(ldir)
@@ -242,6 +247,7 @@ def run(*, env: dict | None = None, opener: Callable[[str], object] = webbrowser
         remove_state(sdir)  # stale -> retry the claim
 
     proc: subprocess.Popen | None = None
+    tray = None
     stop = threading.Event()
     try:
         if install_signals:
@@ -283,14 +289,24 @@ def run(*, env: dict | None = None, opener: Callable[[str], object] = webbrowser
                 return 1
             time.sleep(0.2)
         write_state(sdir, {"pid": os.getpid(), "port": port, "url": url, "serverPid": proc.pid})
-        log.info("起動しました: %s（終了は Ctrl+C か画面の『アプリを終了』）", url)
+        log.info("起動しました: %s（終了は Ctrl+C か画面の『アプリを終了』、トレイの『終了』）", url)
+        if use_tray:
+            tray = tray_start(url, stop.set, opener)
         if open_browser:
-            opener(url)
+            try:
+                opened = opener(url)
+            except Exception as ex:  # noqa: BLE001
+                log.warning("ブラウザを開けませんでした: %s", ex)
+                opened = False
+            if opened is False:
+                log.warning("ブラウザを自動で開けませんでした。ブラウザのアドレス欄に %s を入力してください", url)
         while not stop.is_set() and proc.poll() is None:
             stop.wait(0.3)
         log.info("終了します")
         return 0
     finally:
+        if tray is not None:
+            tray.stop()
         if proc is not None:
             stop_server(proc)
         remove_state(sdir, os.getpid())
@@ -299,8 +315,9 @@ def run(*, env: dict | None = None, opener: Callable[[str], object] = webbrowser
 def main(argv: list[str] | None = None, *, opener: Callable[[str], object] = webbrowser.open) -> int:
     ap = argparse.ArgumentParser(prog="vvlog_server.launcher", description="vvlog ローカルアプリのランチャー")
     ap.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
+    ap.add_argument("--no-tray", action="store_true", help="トレイアイコンを出さない")
     args = ap.parse_args(argv)
-    return run(opener=opener, open_browser=not args.no_browser)
+    return run(opener=opener, open_browser=not args.no_browser, use_tray=not args.no_tray)
 
 
 if __name__ == "__main__":
