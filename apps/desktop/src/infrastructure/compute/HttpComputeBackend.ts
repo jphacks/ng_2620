@@ -141,8 +141,11 @@ export class HttpComputeBackend implements ComputeBackendPort {
   }
 
   async uploadChunk(uploadId: string, index: number, body: ChunkBody) {
-    const { tries = 3, backoffMs = 500, sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) } =
-      this.d.uploadRetry ?? {};
+    const {
+      tries = 3,
+      backoffMs = 500,
+      sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+    } = this.d.uploadRetry ?? {};
     for (let attempt = 1; ; attempt++) {
       try {
         return await this.uploadChunkOnce(uploadId, index, body);
