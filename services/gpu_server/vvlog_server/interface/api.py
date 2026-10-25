@@ -19,9 +19,11 @@ from ..domain.errors import VvlogError
 from . import schemas as S
 from ..adapters.local_fs import LocalFs, LocalRoots
 from ..adapters.local_media import LocalMedia
+from ..adapters.local_bootstrap import BootstrapManager
 from ..adapters.local_weights import WeightsManager
 from ..adapters.native_dialog import NativeDialog
 from .local import LocalGuard, mount_local, self_origins
+from .local_bootstrap import mount_local_bootstrap
 from .local_dialog import mount_local_dialog
 from .local_fs import mount_local_fs
 from .local_media import mount_local_media
@@ -186,6 +188,8 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
         mount_local_media(app, LocalMedia(st.ffprobe), auth)
         app.state.weights = WeightsManager(st.weights_manifest, st.ckpt_root, hf_base=st.weights_hf_base)
         mount_local_weights(app, app.state.weights, auth, st.port)
+        app.state.bootstrap = BootstrapManager(st.bootstrap_spec, st.env_b_dir, st.pipeline_root, uv=st.uv)
+        mount_local_bootstrap(app, app.state.bootstrap, auth, st.port)
         mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs, auth=auth)
     return app
 

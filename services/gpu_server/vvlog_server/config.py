@@ -36,6 +36,20 @@ def _local_dirs(e) -> dict[str, Path]:
     return {k: v.resolve() for k, v in base.items()}
 
 
+def find_uv(bin_dir: Path | None = None, configured: str | None = None) -> str | None:
+    """uv (bootstrap, #32): VVLOG_UV, then the installer's bin dir, then PATH."""
+    if configured:
+        return configured if Path(configured).is_file() else None
+    name = "uv.exe" if os.name == "nt" else "uv"
+    if bin_dir and (bin_dir / name).is_file():
+        return str(bin_dir / name)
+    return shutil.which("uv")
+
+
+def env_b_python(env_dir: Path) -> Path:
+    return env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
 def _spa_dir(e) -> Path | None:
     given = e.get("VVLOG_SPA_DIR")
     if given:
@@ -71,6 +85,9 @@ class Settings:
     ffprobe: str | None           # local mode: VVLOG_FFPROBE, else <VVLOG_BIN_DIR>/ffprobe, else PATH
     weights_manifest: Path        # weights/manifest.json (the installer ships a copy; VVLOG_WEIGHTS_MANIFEST)
     weights_hf_base: str         # where weights are fetched from (tests point it at a fake server)
+    bootstrap_spec: Path          # services/gpu_server/bootstrap-spec.json: how the first-run setup builds environment B (#32)
+    uv: str | None                # local mode: VVLOG_UV, else <VVLOG_BIN_DIR>/uv, else PATH
+    env_b_dir: Path               # where the bootstrap puts environment B (VVLOG_ENV_B_DIR; default <appData>/envs/pipeline)
     allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
@@ -103,9 +120,16 @@ class Settings:
             ffprobe=find_ffprobe(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_FFPROBE")),
             weights_manifest=Path(e.get("VVLOG_WEIGHTS_MANIFEST") or REPO / "weights" / "manifest.json").resolve(),
             weights_hf_base=e.get("VVLOG_WEIGHTS_HF_BASE", "https://huggingface.co"),
+            bootstrap_spec=Path(e.get("VVLOG_BOOTSTRAP_SPEC") or REPO / "services" / "gpu_server" / "bootstrap-spec.json").resolve(),
+            uv=find_uv(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_UV")),
+            env_b_dir=Path(e["VVLOG_ENV_B_DIR"]).resolve() if e.get("VVLOG_ENV_B_DIR") else Path("."),
             allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
         if not e.get("VVLOG_CKPT_ROOT") and s["local"]:  # local app: weights live in the app-data folder, not next to the cwd
             s["ckpt_root"] = s["local_dirs"]["appData"] / "weights"
+        if not e.get("VVLOG_ENV_B_DIR"):
+            s["env_b_dir"] = (s["local_dirs"]["appData"] if s["local"] else s["data_root"]) / "envs" / "pipeline"
+        if not e.get("VVLOG_PYTHON") and s["local"]:  # local app: the pipeline runs in the environment the bootstrap builds
+            s["python"] = str(env_b_python(s["env_b_dir"]))
         s.update(over)
         return cls(**s)

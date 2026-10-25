@@ -198,6 +198,16 @@ irm -Method Post -Headers @{Authorization="Bearer $t"} -ContentType 'application
 - 失敗は `job.error.code`：`HF_TOKEN_REQUIRED`（トークン無しで 401/403）・`HF_TOKEN_INVALID`（401）・`HF_ACCESS_DENIED`（403＝ライセンス未承諾。`detail.url` に同意ページ）・`WEIGHTS_DISK_FULL`・`WEIGHTS_NETWORK`・`WEIGHTS_CHECKSUM_MISMATCH` ほか。
 - 対象外：`hf_cache`（Depth Anything V2。transformers が HF キャッシュから読む）は引き続き `weights/fetch.py`。
 
+### 初回セットアップ API（`/v1/local/bootstrap`、#32）
+
+ローカルアプリが uv で環境 B（§2 の手順の自動版）を作る。置き場は `VVLOG_ENV_B_DIR`（既定 `<appData>/envs/pipeline`）。`VVLOG_PYTHON` を指定しなければ、ローカルアプリのパイプラインはここの Python を使う。
+
+- `GET /v1/local/bootstrap` → `ready`・GPU（`nvidia-smi`）とその判定（`judgement.verdict` = supported / unsupported / unknown、`reasons`、`warnings`）・手順ごとの完了・実行中ジョブ（ログ末尾つき）
+- `POST /v1/local/bootstrap/start {"force"?}`（202）／`cancel`／`GET .../events`（SSE: `progress`、終わりに `done`）。開始・キャンセルは同一オリジンの画面から。実行中は `409 BOOTSTRAP_BUSY`、uv が無ければ `503 BOOTSTRAP_UV_MISSING`、GPU 非対応なら `409 BOOTSTRAP_UNSUPPORTED`（画面は制限モードか外部 GPU（BYO）へ案内する）
+- 手順は detect → venv → torch → detectron2 → deps → verify。終わった手順は `<env>/.vvlog-bootstrap.json` に記録され、失敗・中断のあとの start は続きから進む（`bootstrap-spec.json` が変わったら最初から確かめ直す）
+- 版の決まりは `services/gpu_server/bootstrap-spec.json`（`VVLOG_BOOTSTRAP_SPEC`）。**`provisional: true` の値は #30（実機検証）で確定するまでの暫定**。`detectron2.wheelUrl` は #51 の成果物ができるまで空で、その手順は `BOOTSTRAP_NO_WHEEL` で止まる
+- uv は `VVLOG_UV` → `VVLOG_BIN_DIR/uv(.exe)` → PATH の順に探す。`MoGe`・`utils3d` は git の URL なので、いまは git が要る（『ドライバのみ』を満たすには zip URL への置き換えが要る。#30 の結果を見て決める）
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |

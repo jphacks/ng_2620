@@ -34,6 +34,14 @@ HTTP_STATUS = {
     "WEIGHTS_CHECKSUM_MISMATCH": 409,
     "WEIGHTS_IO_ERROR": 500,
     "WEIGHTS_FAILED": 500,
+    # first-run bootstrap (/v1/local/bootstrap, #32). Most of these appear as the job's `error.code`
+    "BOOTSTRAP_BUSY": 409,
+    "BOOTSTRAP_UNSUPPORTED": 409,   # no usable NVIDIA GPU/driver: the app points to restricted mode or a BYO GPU server
+    "BOOTSTRAP_UV_MISSING": 503,
+    "BOOTSTRAP_COMMAND_FAILED": 500,
+    "BOOTSTRAP_NO_WHEEL": 500,
+    "BOOTSTRAP_DISK_FULL": 507,
+    "BOOTSTRAP_INTERNAL": 500,
     # job failures: reported through the job, not as an HTTP status
     "NO_PERSON_FOUND": 200,
     "GPU_OOM": 200,
