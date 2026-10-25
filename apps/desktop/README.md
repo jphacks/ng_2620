@@ -38,7 +38,7 @@ pnpm --filter @vvlog/desktop build                                   # dist/
 VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # → http://localhost:1420/
 ```
 
-ファイル選択（#46）とドロップ取り込み（#47）は準備中なので、フルモードでは動画を開く操作がまだできない。
+フルモードのファイル選択は Windows のネイティブダイアログ（サーバー側、#46）、ドロップは `<appData>/imports/<id>/` へ分割転送してからサーバー上のパスで扱う（#47。受け付けない先には送らない／起動時に、プロジェクトから参照されていない 24 時間以上前の取り込みを掃除）。
 `pnpm test` には実サーバーを起動する通しテスト（`localApi.integration.test.ts`）が含まれる（`services/gpu_server/.venv` が無ければ skip）。
 
 ### この PC の GPU サーバーを使う（Windows）

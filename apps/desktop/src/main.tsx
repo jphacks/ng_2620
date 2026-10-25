@@ -14,9 +14,11 @@ if (import.meta.env.DEV && import.meta.env.VITE_START_ROUTE && !sessionStorage.g
 
 // どの動作モードか（ローカルサーバーが居るか）を先に確かめてから組み立てる
 void detectRuntime().then((runtime) => {
+  const services = createServices(runtime);
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <AppRoot services={createServices(runtime)} />
+      <AppRoot services={services} />
     </StrictMode>,
   );
+  void services.maintenance?.().catch((e) => console.warn("[maintenance]", e));
 });

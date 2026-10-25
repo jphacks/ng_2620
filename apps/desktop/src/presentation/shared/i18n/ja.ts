@@ -21,6 +21,13 @@ export function formatSeconds(sec: number): string {
 export const ja = {
   app: { name: "vvlog" },
   workspace: { import: "取り込み", edit: "編集", export: "書き出し" },
+  dropUpload: {
+    uploading: (name: string) => `${name} を取り込み中`,
+    done: (name: string) => `${name} を取り込みました`,
+    failed: (name: string) => `${name} を取り込めませんでした`,
+    canceled: (name: string) => `${name} の取り込みを中止しました`,
+    cancel: "中止",
+  },
   common: {
     cancel: "キャンセル",
     close: "閉じる",

@@ -79,10 +79,3 @@ export const browserNotifier: NotifierPort = {
     if (Notification.permission === "granted") new Notification(title, { body });
   },
 };
-
-/** フルモードの暫定：ドロップ取り込み（#47）ができるまで何も受けない */
-export const pendingFileDrop: FileDropPort = {
-  subscribe() {
-    return () => {};
-  },
-};

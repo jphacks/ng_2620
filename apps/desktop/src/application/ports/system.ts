@@ -23,8 +23,28 @@ export interface ShellPort {
 /** ウィンドウへのファイルのドラッグ＆ドロップ。座標は CSS ピクセル（ビューポート基準） */
 export type FileDropEvent =
   | { type: "over"; x: number; y: number; paths: string[] }
-  | { type: "drop"; x: number; y: number; paths: string[] }
+  | {
+      type: "drop";
+      x: number;
+      y: number;
+      /** 受け付けるかの判定に使う（拡張子など）。prepare があるときは、まだ存在しない取り込み先のパス */
+      paths: string[];
+      /** ブラウザのフルモード：File をサーバーへ取り込む。受け付けた先だけが呼び、できたパスを返す（受け付けない先では呼ばない＝無駄に送らない） */
+      prepare?: () => Promise<string[]>;
+    }
   | { type: "leave" };
+
+/** ブラウザのフルモードで、ドロップされた File をサーバーへ取り込んでいる様子（進捗表示用） */
+export interface DropUploadEvent {
+  id: string;
+  name: string;
+  state: "uploading" | "done" | "error" | "canceled";
+  sent: number;
+  total: number;
+  error?: string;
+  /** uploading の間だけ：転送をやめる */
+  cancel?: () => void;
+}
 
 export interface FileDropPort {
   subscribe(listener: (ev: FileDropEvent) => void): () => void;
