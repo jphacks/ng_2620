@@ -27,6 +27,20 @@ pnpm build       # 型チェック + vite build（dist/）
 
 開発ビルドでは、接続プロファイルに「開発用モック」と「開発用シミュレーター（`memory://sim`）」が自動で入る（設定 > 接続で切り替えられる）。
 
+### フルモード（ローカルアプリサーバー）で試す（ADR-0015）
+
+画面がローカルサーバーから配信されているとき、起動時に `GET /v1/local/info` で**フルモード**を判定し、ファイル・ハッシュ・ffprobe をサーバー越しにする（Tauri 版の `invoke` は使わない）。判定できなければ制限モード（メモリ上のファイル）。
+
+```sh
+pnpm --filter @vvlog/desktop build                                   # dist/
+(cd services/gpu_server && VVLOG_LOCAL=1 VVLOG_PORT=8765 .venv/bin/python -m vvlog_server)   # → http://127.0.0.1:8765/ をブラウザで開く
+# 画面を `pnpm dev` で編集しながら試す：Vite がサーバーへ /v1 を中継する（Host を書き換え Origin を外す）
+VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # → http://localhost:1420/
+```
+
+ファイル選択（#46）とドロップ取り込み（#47）は準備中なので、フルモードでは動画を開く操作がまだできない。
+`pnpm test` には実サーバーを起動する通しテスト（`localApi.integration.test.ts`）が含まれる（`services/gpu_server/.venv` が無ければ skip）。
+
 ### この PC の GPU サーバーを使う（Windows）
 
 設定 > 接続 >「この PC の GPU サーバー」で、`services/gpu_server` のフォルダと推論用の Python（`VVLOG_PYTHON`）を選んで［起動］。

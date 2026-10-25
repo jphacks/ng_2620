@@ -17,6 +17,11 @@ export const API_ERROR_CODES = [
   "INTERRUPTED",
   "CANCELED",
   "NOT_IMPLEMENTED",
+  // ローカルアプリサーバー（/v1/local/*、ADR-0015）
+  "PATH_NOT_ALLOWED", // 許可されたフォルダの外
+  "FS_CONFLICT",
+  "FS_FAILED",
+  "FFPROBE_UNAVAILABLE",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

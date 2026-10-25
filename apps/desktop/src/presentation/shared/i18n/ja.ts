@@ -507,6 +507,22 @@ export const ja = {
       body: () => "依存するジョブ（解析・描画）の状態を確認してください。",
     },
     NOT_IMPLEMENTED: { title: "今後対応します", body: () => "この機能はまだ使えません。" },
+    PATH_NOT_ALLOWED: {
+      title: "この場所は使えません",
+      body: () => "アプリが許可しているフォルダの外です。プロジェクトの保存先を確認してください。",
+    },
+    FS_CONFLICT: {
+      title: "ファイルを書き込めません",
+      body: (d: { message?: string }) => d.message || "同じ名前のものが既にあります。",
+    },
+    FS_FAILED: {
+      title: "ファイルを操作できません",
+      body: (d: { message?: string }) => d.message || "ディスクの空き容量や権限を確認してください。",
+    },
+    FFPROBE_UNAVAILABLE: {
+      title: "動画の詳細を調べられません",
+      body: () => "ffprobe が見つかりません。ブラウザで読める範囲の情報で続けます。",
+    },
     API_VERSION_MISMATCH: { title: "API 版が合いません", body: () => "サーバーとアプリの版を揃えてください。" },
     PROJECT_TOO_NEW: { title: "新しい版のアプリで作られています", body: () => "アプリを更新してから開いてください。" },
     PROJECT_INVALID: { title: "プロジェクトを開けません", body: () => "project.json が壊れているか、形式が違います。" },
