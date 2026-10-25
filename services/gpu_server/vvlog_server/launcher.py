@@ -184,9 +184,21 @@ def setup_logging(ldir: Path) -> logging.Logger:
 
 
 # --- child process ---------------------------------------------------------------------------------------------------
-def spawn_server(port: int, env: dict, cwd: Path | None = None) -> subprocess.Popen:
+def server_env(port: int, env: dict) -> dict:
+    """The child's environment. VVLOG_BIN_DIR goes first on PATH: the server and the pipeline call `ffmpeg` / `ffprobe`
+    by name, and a plain Windows machine has them only in the installer's bin dir."""
     child_env = dict(env)
     child_env.update(VVLOG_LOCAL="1", VVLOG_PORT=str(port), PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+    bin_dir = env.get("VVLOG_BIN_DIR")
+    if bin_dir:
+        key = next((k for k in child_env if k.upper() == "PATH"), "PATH")  # a plain dict keeps Windows' "Path" spelling
+        rest = child_env.get(key, "")
+        child_env[key] = bin_dir + (os.pathsep + rest if rest else "")
+    return child_env
+
+
+def spawn_server(port: int, env: dict, cwd: Path | None = None) -> subprocess.Popen:
+    child_env = server_env(port, env)
     kw: dict = {}
     if os.name == "nt":
         kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW

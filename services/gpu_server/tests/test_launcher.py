@@ -56,6 +56,27 @@ def test_state_and_log_dirs_follow_env(tmp_path):
     assert launcher.log_dir({"VVLOG_STATE_DIR": str(tmp_path), "VVLOG_LOG_DIR": str(tmp_path / "x")}) == tmp_path / "x"
 
 
+# --- child environment -----------------------------------------------------------------------------------------------
+def test_bin_dir_goes_first_on_the_childs_path(tmp_path):
+    """The installer's ffmpeg / ffprobe live only in bin\\; the server calls them by name (a plain PC has none on PATH)."""
+    env = launcher.server_env(8765, {"VVLOG_BIN_DIR": str(tmp_path), "Path": "C:\\Windows"})
+    assert env["Path"] == str(tmp_path) + os.pathsep + "C:\\Windows" and "PATH" not in env
+    assert launcher.server_env(8765, {"VVLOG_BIN_DIR": str(tmp_path)})["PATH"] == str(tmp_path)
+    assert launcher.server_env(8765, {"PATH": "/usr/bin"})["PATH"] == "/usr/bin"
+    assert launcher.server_env(8765, {})["VVLOG_LOCAL"] == "1"
+
+
+def test_server_spawned_by_the_launcher_finds_the_bundled_ffprobe(tmp_path):
+    name = "ffprobe.exe" if os.name == "nt" else "ffprobe"
+    (tmp_path / name).write_bytes(b"")
+    if os.name != "nt":
+        (tmp_path / name).chmod(0o755)
+    env = launcher.server_env(8765, {"VVLOG_BIN_DIR": str(tmp_path), "PATH": ""})
+    out = subprocess.run([sys.executable, "-c", "import shutil; print(shutil.which('ffprobe'))"], env={**os.environ, **env},
+                         capture_output=True, text=True, check=True).stdout.strip()
+    assert out and os.path.dirname(out) == str(tmp_path)
+
+
 # --- port ------------------------------------------------------------------------------------------------------------
 def test_preferred_port_is_used_when_free():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); free = s.getsockname()[1]; s.close()
