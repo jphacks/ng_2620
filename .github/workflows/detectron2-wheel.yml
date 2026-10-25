@@ -39,6 +39,8 @@ jobs:
         with:
           python-version: ${{ inputs.python || '3.12' }}
       - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          vsversion: "2022" # runner の既定の VS は新しすぎて CUDA 12.8 の nvcc が受け付けない(host_config.h)
       - name: CUDA Toolkit(nvcc とヘッダだけ。ドライバ・GPU は不要)
         shell: pwsh
         run: |
