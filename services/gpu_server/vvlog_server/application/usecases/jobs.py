@@ -76,6 +76,11 @@ def _dep(d: Deps, project_id: str, job_id: str | None, job_type: str) -> Job:
 
 def submit_job(d: Deps, project_id: str, job_type: str, params: dict) -> dict:
     project = d.projects.get(project_id)
+    limit = d.settings.max_queued_jobs
+    waiting = len(d.queue.items()) + (1 if d.worker.current else 0)
+    if limit and waiting >= limit:
+        raise VvlogError("QUEUE_FULL", f"待ちのジョブが上限（{limit} 件）に達しています。しばらくしてから送ってください",
+                         {"limit": limit, "waiting": waiting})
     job = Job.create(project_id, job_type, _validate(d, project, job_type, params))
     d.jobs.save(job)
     d.queue.enqueue(job.jobId)

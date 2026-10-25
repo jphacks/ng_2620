@@ -59,6 +59,9 @@ class Settings:
     hmr_stride: int
     max_duration_sec: float
     max_long_side: int
+    max_upload_bytes: int         # one source upload (public servers: set it to what you accept)
+    max_queued_jobs: int          # queued + running; more are refused with QUEUE_FULL
+    artifact_ttl_hours: float     # 0 = keep forever; else finished projects / stale uploads older than this are purged
     backend: str                  # "pipeline" (real) | "replay" (mock server)
     record_fixture: Path | None
     local: bool                   # local app server (ADR-0015): 127.0.0.1 only, serves the SPA, Host/Origin guard
@@ -86,6 +89,9 @@ class Settings:
             hmr_stride=int(e.get("VVLOG_HMR_STRIDE", "3")),
             max_duration_sec=float(e.get("VVLOG_MAX_DURATION_SEC", "30")),
             max_long_side=int(e.get("VVLOG_MAX_LONG_SIDE", "1920")),
+            max_upload_bytes=int(e.get("VVLOG_MAX_UPLOAD_BYTES", str(4 * 1024 ** 3))),
+            max_queued_jobs=int(e.get("VVLOG_MAX_QUEUED_JOBS", "16")),
+            artifact_ttl_hours=float(e.get("VVLOG_ARTIFACT_TTL_HOURS", "0")),
             backend=e.get("VVLOG_BACKEND", "pipeline"),
             record_fixture=Path(rec).resolve() if rec else None,
             local=e.get("VVLOG_LOCAL", "").lower() in ("1", "true", "yes"),

@@ -12,6 +12,7 @@ HTTP_STATUS = {
     "AVATAR_INVALID": 422,
     "DEPENDENCY_NOT_READY": 409,
     "NOT_IMPLEMENTED": 501,
+    "QUEUE_FULL": 429,            # VVLOG_MAX_QUEUED_JOBS reached
     # local app server file API (/v1/local/fs, #23)
     "PATH_NOT_ALLOWED": 403,
     "FS_CONFLICT": 409,

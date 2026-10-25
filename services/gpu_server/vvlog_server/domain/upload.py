@@ -24,11 +24,12 @@ class Upload:
     mediaId: str | None = None
 
     @classmethod
-    def create(cls, project_id: str, kind: str, filename: str, size: int, sha256: str) -> "Upload":
+    def create(cls, project_id: str, kind: str, filename: str, size: int, sha256: str,
+               limit: int = MAX_SOURCE_BYTES) -> "Upload":
         if kind != "source":
             raise VvlogError("VALIDATION_FAILED", "kind は source のみです", {"kind": kind})
-        if size <= 0 or size > MAX_SOURCE_BYTES:
-            raise VvlogError("MEDIA_TOO_LARGE", "ファイルが大きすぎます", {"size": size, "limit": MAX_SOURCE_BYTES})
+        if size <= 0 or size > limit:
+            raise VvlogError("MEDIA_TOO_LARGE", "ファイルが大きすぎます", {"size": size, "limit": limit})
         if len(sha256) != 64:
             raise VvlogError("VALIDATION_FAILED", "sha256 は 16 進 64 桁です", {"sha256": sha256})
         return cls(uploadId=new_id("upl"), projectId=project_id, kind=kind, filename=filename, size=size,

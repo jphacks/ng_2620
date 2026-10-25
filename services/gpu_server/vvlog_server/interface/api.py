@@ -38,9 +38,9 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
     app.state.deps = deps
     st = deps.settings
     # local app server: only itself and the configured Pages origin may call it (Tauri origins are gone, ADR-0015)
-    origins = [*self_origins(st.port), *st.allowed_origins] if st.local else CORS_ORIGINS
+    origins = [*self_origins(st.port), *st.allowed_origins] if st.local else [*CORS_ORIGINS, *st.allowed_origins]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"],
-                       expose_headers=["Content-Range", "Accept-Ranges"])
+                       expose_headers=["Content-Range", "Accept-Ranges"], max_age=600)
     if st.local:  # added last = outermost: a rejected request never reaches CORS or a route
         app.add_middleware(LocalGuard, port=st.port, allowed_origins=st.allowed_origins)
 
