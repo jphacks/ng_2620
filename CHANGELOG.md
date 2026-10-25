@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/jphacks/ng_2620/compare/vvlog-v0.2.0...vvlog-v0.2.1) (2026-10-25)
+
+
+### Miscellaneous Chores
+
+* release 0.2.1
+
 ## [0.2.0](https://github.com/jphacks/ng_2620/compare/vvlog-v0.1.1...vvlog-v0.2.0) (2026-10-25)
 
 
