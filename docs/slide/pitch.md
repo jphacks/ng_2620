@@ -34,11 +34,7 @@ JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 ## VTuber といえば、リアルタイム配信
 
-<div class="card">
-
-（ここに任意の VTuber の画像を入れる）
-
-</div>
+![h:460](images/vtuber_zatsudan.png)
 
 <!--
 （2 ページ目）アバターがゲーム実況などリアルタイム配信してるイメージが強いかもですが、
@@ -46,18 +42,35 @@ JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 ---
 
+<!-- _class: cols -->
+
+<style scoped>
+section.cols > div { grid-template-columns: 1.6fr 1fr; align-items: start; }
+p.src { margin-top: 0.3em; font-size: 13px; line-height: 1.4; color: var(--vt-green-700); }
+</style>
+
 ## スタジオでも、家でも、動ける
 
 <div>
-<div class="card">
+<div>
 
-（ここにスタジオライブ・トラッキング配信の画像を入れる：ホロライブのライブ、raku など）
+![h:300](images/hololive_3rd_live_k-arena.jpg)
+
+**スタジオで**ライブ映像を収録し、会場で上演
+
+<p class="src">出典：カバー株式会社「hololive 3rd Generation Live #きゅるるん大作戦 のオフィシャルレポート公開！@Kアリーナ横浜」PR TIMES（2026-01-20）写真／Takashi Konuma</p>
+
+</div>
+<div>
+
+![h:300](images/hiromeiro_fulltracking.jpg)
+
+家で**動きながら配信**も
+
+<p class="src">出典：クシナダ機巧株式会社「カメラ一台でフルトラッキングをお気軽に。配信者向け3Dアバター操演システム「HIROMEIRO」を正式リリース」PR TIMES（2026-09-24）</p>
 
 </div>
 </div>
-
-- トラッキング技術で、**スタジオでライブ映像を収録**
-- 家で**動きながら配信**も、最近できるようになった
 
 <!--
 （3 ページ目）実はトラッキング技術を使ってスタジオでライブ映像を収録したり、家で動きながら配信が最近できるようになってるよ
@@ -67,8 +80,9 @@ JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 ## でも、外に出ると難しい
 
-- 外での配信・ロケには、**高度な編集技術**が要る
+- 外での配信・ロケには、**高度な撮影・編集技術**が要る
 - アバターが*リアルに動いている*ような動画は、作るのが大変
+- 既存AIサービスは*処理が遅すぎる* & *物体の前後を検知できない*
 
 <!--
 （4 ページ目）でも、外で配信、ロケをするとなったら高度な編集技術が必要で、アバターがリアルに動いているような動画を作るのは難しい
@@ -78,7 +92,7 @@ JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 <!-- _class: accent -->
 
-## それは、もったいない
+## それは もったいない！！！
 
 - VTuber の 3D ライブには、お金を払って会場まで行くファンがいる
 - ファンは、アバターが**まるで現実にいるように感じられる**ことに価値を感じている
@@ -129,42 +143,97 @@ JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 ---
 
-<!-- _class: cols -->
+<style scoped>
+div.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-top: 8px; }
+div.flow > div { text-align: center; }
+div.flow img { height: 300px; border-radius: 10px; }
+div.flow p { margin: 0.25em 0 0; font-size: 21px; line-height: 1.35; }
+div.flow p.model { font-size: 15px; color: var(--vt-green-700); }
+</style>
 
-## 使った技術：動画 1 本から、自動で
+## モデルの中身
 
+<div class="flow">
 <div>
-<div class="card">
 
-### 1. 人を追いかける
-映っている人を見つけて、動画の最後まで追跡
+![](images/flow_1_frame.jpg)
 
-### 2. 動きと前後を見る
-体の 3D の動きと、手前にある物との前後関係を推定
+**① 人を見つけて追う**
+
+<p class="model">ViTDet（検出）・SAM 3（追跡）</p>
 
 </div>
-<div class="card yellow">
+<div>
 
-### 3. 合成する
-人を消して背景を埋め、同じ動きのアバターを描いて合成
+![](images/flow_2_mesh.jpg)
 
-### 全部を高速化
-モデルの最適化で、待ち時間を大きく短縮
+**② 体の 3D の動き**
+
+<p class="model">SAM 3D Body</p>
+
+</div>
+<div>
+
+![](images/flow_3_occlusion.jpg)
+
+**③ 前後の判定**
+
+<p class="model">黄＝手前・青＝奥<br>SAM 3（物の切り出し）・MoGe-2（奥行き）＋独自の判定</p>
+
+</div>
+<div>
+
+![](images/flow_4_composite.jpg)
+
+**④ アバターを合成**
+
+<p class="model">LaMa（人を消した背景の補完）・MediaPipe（表情）・VRM の描画</p>
 
 </div>
 </div>
 
 <!--
-（8 ページ目）実現のために使った技術はこれで、モデルの最適化を同時に頑張ったよ。
-（専門じゃなくてもわかるように：トラッキングして、人の動きと遮蔽を見て、合成する。それを高速化した）
+（8 ページ目）実現のために使った技術はこれです。
+動画の中の人を見つけて最後まで追いかけ、体の 3D の動きを推定し、手前にある物と奥にある物を見分けてから、人を消して同じ動きのアバターを合成しています。
+-->
+
+---
+
+## 速く・安く・高性能で生成
+
+<style scoped>
+p.src { margin-top: 0.8em; font-size: 14px; line-height: 1.5; color: var(--vt-green-700); }
+table { font-size: 22px; }
+th, td { padding: 0.35em 0.8em; }
+</style>
+
+| | 処理時間（4 秒の動画） | 料金 | 前後関係 |
+|---|---|---|:---:|
+| Flow Studio（AI サービス） | 約 38 分 | 合計 15 秒まで無料 | × |
+| 生成 AI | 約 2 分 | 4 秒で 1 $程度 | ○ |
+| 公開モデルの組み合わせ | 2 分 27 秒 | 無料（ローカル） | △ |
+| **VirtualTwin** | **1 分 22 秒** | **無料（ローカル）** | **○** |
+
+<p class="src">公開モデルの組み合わせ・VirtualTwin：3DPW downtown_bar_00 の 120 フレーム（4 秒）、RTX 5060 Ti、出力 1080x1920。<br>追跡から書き出しまでの通しの時間（モデルの読み込みを含む）</p>
+
+<!--
+（8 ページ目の続き）そして、モデルの最適化を同時に頑張りました。
+競合の Flow Studio は 4 秒の動画に 38 分かかり、手前の物との前後関係も見分けられません。
+私たちは、公開モデルを組み合わせた版から最適化を重ねて、同じ 4 秒の動画を約 1 分 20 秒で、前後関係まで正しく仕上げます。
+
+数字の出どころ（vlog_JPHack2026 の image_analytics、scripts/eval/e2e.py の計測）：
+- 高速化前 146.8 秒：9d1d7a9 のコミットメッセージ（その直前の状態での downtown_bar の E2E）
+- 最適化後 82.2 秒：b9301a8 のコミットメッセージ、reports/compare/README.md
 -->
 
 ---
 
 ## これから
 
-- 物を持っていても、置き換えられるようにしたい
-- 編集しやすい形で出力したい
+- 精度向上
+  - 物を持っていても、置き換えられるようにしたい
+  - 人間の除去を確実に行えるようにしたい
+- 補正・編集しやすい形で出力したい
 - *顔は見せたくないけどロケ動画を作りたい*人にも届けたい
 
 <!--
