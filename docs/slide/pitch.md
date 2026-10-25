@@ -228,6 +228,49 @@ th, td { padding: 0.35em 0.8em; }
 
 ---
 
+<!-- _class: cols -->
+
+<style scoped>
+section.cols > div { grid-template-columns: auto auto 1fr; gap: 28px; align-items: start; }
+section.cols img { height: 380px; border-radius: 10px; }
+section.cols > div > div:nth-child(-n+2) { text-align: center; }
+section.cols p { margin: 0; }
+section.cols p.cap { margin-top: 0.3em; font-size: 20px; text-align: center !important; }
+</style>
+
+## 自動の判定が外れても、その場で直せる
+
+<div>
+<div>
+
+![](images/correction_front.jpg)
+
+<p class="cap">バッグを「前」に：足が隠れる</p>
+
+</div>
+<div>
+
+![](images/correction_behind.jpg)
+
+<p class="cap">バッグを「後ろ」に：足が出る</p>
+
+</div>
+<div>
+
+- 編集画面で物をクリックして、「前」「後ろ」を選ぶだけ
+- 合成はアプリ側でやり直すので、**その場で反映**
+- サーバーで推論し直さない
+
+</div>
+</div>
+
+<!--
+（ベンチマークの次）自動の判定が外れることもあります。そのときは編集画面で物をクリックして、前か後ろかを選ぶだけ。
+左がバッグを「前」にしたとき、右が「後ろ」にしたときです。推論をやり直さずに、その場で直せます。
+-->
+
+---
+
 ## これから
 
 - 精度向上
