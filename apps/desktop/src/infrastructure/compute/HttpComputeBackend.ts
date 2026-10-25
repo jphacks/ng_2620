@@ -72,6 +72,8 @@ export class HttpComputeBackend implements ComputeBackendPort {
       profileId: string | null;
       getToken: () => Promise<string | null>;
       transport: HttpTransport;
+      /** 断片の送信が通信エラーで失敗したときの再試行（PUT は断片番号ごとに冪等）。既定は 3 回・0.5 秒から倍々 */
+      uploadRetry?: { tries?: number; backoffMs?: number; sleep?: (ms: number) => Promise<void> };
     },
   ) {
     this.base = `${d.baseUrl.replace(/\/+$/, "")}/v1`;
@@ -139,6 +141,19 @@ export class HttpComputeBackend implements ComputeBackendPort {
   }
 
   async uploadChunk(uploadId: string, index: number, body: ChunkBody) {
+    const { tries = 3, backoffMs = 500, sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) } =
+      this.d.uploadRetry ?? {};
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.uploadChunkOnce(uploadId, index, body);
+      } catch (e) {
+        if (!isAppError(e, "NETWORK") || attempt >= tries) throw e;
+        await sleep(backoffMs * 2 ** (attempt - 1));
+      }
+    }
+  }
+
+  private async uploadChunkOnce(uploadId: string, index: number, body: ChunkBody) {
     const path = `/uploads/${encodeURIComponent(uploadId)}/chunks/${index}`;
     const contentType = { "Content-Type": "application/octet-stream" };
     if (body instanceof Uint8Array) {

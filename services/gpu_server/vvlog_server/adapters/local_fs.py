@@ -165,6 +165,13 @@ class LocalFs:
                 f.write(data)
             return size + len(data)
 
+    def rename(self, src: str, dest: str) -> None:
+        """Atomic move within the allowed roots; replaces an existing file (finishing a .part download)."""
+        s, d = self.roots.resolve(src, forbid_root=True), self.roots.resolve(dest, forbid_root=True)
+        with os_errors(src):
+            d.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(s, d)
+
     def copy_file(self, src: str, dest: str) -> None:
         s, d = self.roots.resolve(src), self.roots.resolve(dest, forbid_root=True)
         with os_errors(src):

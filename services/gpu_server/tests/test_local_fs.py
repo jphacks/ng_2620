@@ -137,6 +137,26 @@ def test_append_with_expected_size_makes_resume_safe(world):
     assert open(f, "rb").read() == b"abcdef"
 
 
+def test_rename_finishes_a_part_file_and_replaces_the_target(world):
+    part, dest = p(world, "projects", "x", "a.zip.part"), p(world, "projects", "x", "a.zip")
+    world.post(f"{FS}/append", params={"path": part}, content=b"new")
+    put_text(world, dest, "old")
+    assert world.post(f"{FS}/rename", json={"src": part, "dest": dest}).status_code == 204
+    assert open(dest, "rb").read() == b"new" and not os.path.exists(part)
+    assert world.post(f"{FS}/rename", json={"src": part, "dest": dest}).status_code == 404
+    # creates the destination folder, like copy
+    assert world.post(f"{FS}/rename", json={"src": dest, "dest": p(world, "projects", "y", "z", "b.zip")}).status_code == 204
+
+
+def test_rename_cannot_cross_the_roots_or_move_a_root(world):
+    a = p(world, "projects", "a.txt")
+    put_text(world, a, "hi")
+    assert world.post(f"{FS}/rename", json={"src": a, "dest": p(world, "outside", "a.txt")}).status_code == 403
+    assert world.post(f"{FS}/rename", json={"src": p(world, *OUTSIDE), "dest": p(world, "projects", "s.txt")}).status_code == 403
+    assert world.post(f"{FS}/rename", json={"src": p(world, "projects"), "dest": p(world, "extra", "p")}).status_code == 403
+    assert open(a).read() == "hi" and open(p(world, *OUTSIDE)).read() == "top secret"
+
+
 def test_copy_mkdir_list_remove(world):
     a = p(world, "projects", "a.txt")
     put_text(world, a, "hi")

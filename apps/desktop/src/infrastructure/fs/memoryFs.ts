@@ -70,6 +70,19 @@ export class MemoryFs implements FileSystem {
   async writeBytes(path: string, bytes: Uint8Array) {
     this.setBlob(path, new Blob([bytes]));
   }
+  async appendBytes(path: string, bytes: Uint8Array, expectedSize?: number) {
+    const cur = this.files.get(norm(path))?.blob;
+    const size = cur?.size ?? 0;
+    if (expectedSize !== undefined && size !== expectedSize) {
+      throw new Error(`ファイルの大きさが想定と違います: ${path}（${size} ≠ ${expectedSize}）`);
+    }
+    this.setBlob(path, new Blob(cur ? [cur, bytes] : [bytes]));
+    return size + bytes.length;
+  }
+  async rename(src: string, dest: string) {
+    this.setBlob(dest, this.get(src).blob);
+    await this.remove(src);
+  }
   async copyFile(src: string, dest: string) {
     this.setBlob(dest, this.get(src).blob);
   }

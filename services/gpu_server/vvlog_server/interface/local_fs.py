@@ -6,6 +6,7 @@
   GET  /raw?path=               -> bytes, Range-capable  PUT /raw?path=             (atomic, streamed to disk)
                                    (`t=<token>` is accepted here so <img>/<video> can load it without headers)
   POST /append?path=&expectedSize=   append a chunk (resumable downloads, #25)
+  POST /rename {src, dest}      atomic move; replaces dest (finishes a .part download)
   GET  /list?path=              -> [names]               POST /copy /mkdir /remove /trash /unzip  (JSON bodies)
 """
 from __future__ import annotations
@@ -91,6 +92,11 @@ def mount_local_fs(app: FastAPI, fs: LocalFs, auth: Callable, token: str) -> Non
     @r.post("/copy", status_code=204)
     def copy(body: CopyBody):
         fs.copy_file(body.src, body.dest)
+        return Response(status_code=204)
+
+    @r.post("/rename", status_code=204)
+    def rename(body: CopyBody):
+        fs.rename(body.src, body.dest)
         return Response(status_code=204)
 
     @r.post("/mkdir", status_code=204)
