@@ -18,8 +18,10 @@ from ..application.usecases import avatars, jobs, projects, uploads
 from ..domain.errors import VvlogError
 from . import schemas as S
 from ..adapters.local_fs import LocalFs, LocalRoots
+from ..adapters.local_media import LocalMedia
 from .local import LocalGuard, mount_local, self_origins
 from .local_fs import mount_local_fs
+from .local_media import mount_local_media
 from .ranges import range_response
 
 HEARTBEAT_S = 15
@@ -175,6 +177,7 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
     if st.local:  # after the /v1 routes: the SPA catch-all must not shadow them
         roots = LocalRoots([*st.local_dirs.values(), *st.local_roots])
         mount_local_fs(app, LocalFs(roots), auth, st.api_token)
+        mount_local_media(app, LocalMedia(st.ffprobe), auth)
         mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs)
     return app
 

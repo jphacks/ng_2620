@@ -157,6 +157,12 @@ Tauri の `fs_*` コマンドの移植。ブラウザからプロジェクトフ
 - `PUT /text`・`PUT /raw` は一時ファイル → fsync → rename の原子的書き込み（`raw` は本体をディスクへストリーム）。`GET /raw` は Range 対応（`<img>`／`<video>` 用に `?t=<トークン>` でも認証できる）。`POST /append?expectedSize=` は再開できるダウンロード用。
 - `POST /unzip` は zip-slip・絶対パス・シンボリックリンクの項目を、何も書く前に拒否する。
 
+### ローカル media／hash API（`/v1/local/media/probe`・`/v1/local/hash/sha256`、#24）
+Tauri の `media_probe`・`hash_sha256` の移植。ユーザーが選んだ動画（許可ルートの外にあることが多い）を扱うので、**絶対パスの実在する通常ファイル**だけを受け付け、返すのは長さ・解像度・sha256 などの導出値だけ（中身は返さない）。
+
+- `POST /media/probe {"path"}` → `{durationSec, width, height, rotation, codec, fps, hasAudio, sizeBytes}`。ffprobe は `VVLOG_FFPROBE` → `VVLOG_BIN_DIR/ffprobe(.exe)`（同梱）→ PATH の順に探す。見つからなければ `503 FFPROBE_UNAVAILABLE`（画面は `<video>` で代用する）。映像トラックが無い・読めない場合は `422 MEDIA_UNSUPPORTED`。
+- `POST /hash/sha256 {"path"}` → `{"sha256"}`。`Accept: text/event-stream` を付けると `progress`（`{"ratio"}`、1% ごと）→ `done`（`{"sha256"}`）をストリームする。同じファイル（パス・サイズ・更新時刻）は計算結果を再利用する。
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |

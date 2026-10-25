@@ -16,6 +16,7 @@ HTTP_STATUS = {
     "PATH_NOT_ALLOWED": 403,
     "FS_CONFLICT": 409,
     "FS_FAILED": 500,
+    "FFPROBE_UNAVAILABLE": 503,   # /v1/local/media/probe: the app falls back to the <video> element
     # job failures: reported through the job, not as an HTTP status
     "NO_PERSON_FOUND": 200,
     "GPU_OOM": 200,

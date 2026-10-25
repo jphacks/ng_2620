@@ -2,10 +2,21 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+
+
+def find_ffprobe(bin_dir: Path | None = None, configured: str | None = None) -> str | None:
+    """Bundled copy (next to the server / in the installer's bin dir) first, then PATH — the order the Tauri app used."""
+    if configured:
+        return configured if Path(configured).is_file() else None
+    name = "ffprobe.exe" if os.name == "nt" else "ffprobe"
+    if bin_dir and (bin_dir / name).is_file():
+        return str(bin_dir / name)
+    return shutil.which("ffprobe")
 
 
 def _local_dirs(e) -> dict[str, Path]:
@@ -54,6 +65,7 @@ class Settings:
     spa_dir: Path | None          # built SPA (apps/desktop/dist); local mode only
     local_dirs: dict                  # local mode: {projects, appData, config} folders (each is an allowed root)
     local_roots: tuple[Path, ...]     # local mode: further allowed roots (VVLOG_LOCAL_ROOTS, os.pathsep-separated)
+    ffprobe: str | None           # local mode: VVLOG_FFPROBE, else <VVLOG_BIN_DIR>/ffprobe, else PATH
     allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
@@ -80,6 +92,7 @@ class Settings:
             spa_dir=_spa_dir(e),
             local_dirs=_local_dirs(e),
             local_roots=tuple(Path(r).resolve() for r in e.get("VVLOG_LOCAL_ROOTS", "").split(os.pathsep) if r.strip()),
+            ffprobe=find_ffprobe(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_FFPROBE")),
             allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
         s.update(over)
