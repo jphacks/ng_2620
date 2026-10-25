@@ -38,7 +38,7 @@ export function HomeScreen({
   onOpenConnection(): void;
   onBrowse(): void;
 }) {
-  const { openSample } = useServices();
+  const { openSample, uc } = useServices();
   const np = useNewProject(onCreated);
   const recent = useRecentProjects();
   const drop = useDropZone({ accept: np.accept, onDrop: ([p]) => p && void np.fromPath(p) });
@@ -53,6 +53,17 @@ export function HomeScreen({
     }
     try {
       onOpenProject((await openSample()).path);
+    } catch (e) {
+      const t = errorText(e);
+      toast({ kind: "error", title: t.title, body: t.body });
+    }
+  };
+
+  // 制限モード：フォルダを開く代わりに zip を読み込む
+  const onImportZip = async () => {
+    try {
+      const r = await uc.importProjectZip?.execute();
+      if (r) onOpenProject(r.path);
     } catch (e) {
       const t = errorText(e);
       toast({ kind: "error", title: t.title, body: t.body });
@@ -98,8 +109,8 @@ export function HomeScreen({
             <Button icon={<Sparkles size={14} />} onClick={() => void onSample()}>
               {T.openSample}
             </Button>
-            <Button icon={<FolderOpen size={14} />} onClick={onBrowse}>
-              {T.openProject}
+            <Button icon={<FolderOpen size={14} />} onClick={uc.importProjectZip ? () => void onImportZip() : onBrowse}>
+              {uc.importProjectZip ? T.openZip : T.openProject}
             </Button>
           </div>
           <ConnectionLine onOpenConnection={onOpenConnection} />
@@ -174,6 +185,16 @@ function RecentRow({ entry, onOpen }: { entry: RecentEntry; onOpen(): void }) {
     setConfirm(true);
   };
 
+  const saveZip = async () => {
+    try {
+      const file = await uc.exportProjectZip?.execute({ path: entry.path, name: entry.name });
+      if (file) toast({ kind: "success", title: T.zipSaved(file) });
+    } catch (e) {
+      const t = errorText(e);
+      toast({ kind: "error", title: t.title, body: t.body });
+    }
+  };
+
   const phase = T.phase[entry.phase];
   const status = entry.overridesCount > 0 ? `${phase}・${T.overrides(entry.overridesCount)}` : phase;
 
@@ -182,7 +203,9 @@ function RecentRow({ entry, onOpen }: { entry: RecentEntry; onOpen(): void }) {
       <ContextMenu
         items={[
           { label: ja.common.open, onSelect: onOpen },
-          { label: T.revealProject, onSelect: () => void platform.shell.reveal(entry.path) },
+          ...(uc.exportProjectZip
+            ? [{ label: T.saveZip, onSelect: () => void saveZip() }]
+            : [{ label: T.revealProject, onSelect: () => void platform.shell.reveal(entry.path) }]),
           { label: T.moveToTrash, danger: true, onSelect: () => askDelete(false) },
           { label: T.deleteServerToo, danger: true, disabled: entry.isSample, onSelect: () => askDelete(true) },
         ]}

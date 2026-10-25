@@ -46,6 +46,9 @@ export interface Services {
     listRecent: UC.ListRecentProjects;
     loadOverrides: UC.LoadOverrides;
     deleteProject: UC.DeleteProject;
+    /** 制限モードだけ：zip の書き出し・読み込み（#27） */
+    exportProjectZip?: UC.ExportProjectZip;
+    importProjectZip?: UC.ImportProjectZip;
     clearCache: (project: Project) => Promise<void>;
     probeMedia: UC.ProbeMedia;
     importMedia: UC.ImportMedia;

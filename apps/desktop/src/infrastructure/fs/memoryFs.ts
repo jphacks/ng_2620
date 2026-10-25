@@ -7,11 +7,11 @@ import { joinPath } from "./path";
 
 export const MEM_ROOT = "/mem";
 
-const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+export const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
 
 export class MemoryFs implements FileSystem {
-  private files = new Map<string, { blob: Blob; mtimeMs: number }>();
-  private dirs = new Set<string>();
+  protected files = new Map<string, { blob: Blob; mtimeMs: number }>();
+  protected dirs = new Set<string>();
   private urls = new Map<string, string>();
 
   /** ドロップ・選択されたファイルを登録してパスを返す（中身はコピーしない） */
@@ -21,7 +21,7 @@ export class MemoryFs implements FileSystem {
     return path;
   }
 
-  private setBlob(path: string, blob: Blob) {
+  protected setBlob(path: string, blob: Blob) {
     const p = norm(path);
     this.revoke(p);
     this.files.set(p, { blob, mtimeMs: Date.now() });

@@ -1,5 +1,6 @@
 // ブラウザ版の OS 機能（Tauri なしの開発用）。選んだ・落としたファイルは MemoryFs に登録してパスで扱う
 
+import type { FileExchangePort } from "@/application/ports/archive";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
 import type { FileSystem } from "../fs/FileSystem";
 import { createWebNotifier } from "./webNotifier";
@@ -74,3 +75,35 @@ export function browserFileDrop(fs: MemoryFs): FileDropPort {
 }
 
 export const browserNotifier: NotifierPort = createWebNotifier();
+
+/** 制限モード：ファイルのダウンロードと選択（zip の保存・読み込み用） */
+export const browserFileExchange: FileExchangePort = {
+  async download(filename, bytes, mime = "application/octet-stream") {
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mime }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
+  pickFile({ accept }) {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = accept.join(",");
+      input.onchange = async () => {
+        const f = input.files?.[0];
+        if (!f) return resolve(null);
+        try {
+          resolve({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+        } catch (e) {
+          reject(e);
+        }
+      };
+      input.oncancel = () => resolve(null);
+      input.click();
+    });
+  },
+};

@@ -41,6 +41,14 @@ VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # 
 フルモードのファイル選択は Windows のネイティブダイアログ（サーバー側、#46）、ドロップは `<appData>/imports/<id>/` へ分割転送してからサーバー上のパスで扱う（#47。受け付けない先には送らない／起動時に、プロジェクトから参照されていない 24 時間以上前の取り込みを掃除）。
 `pnpm test` には実サーバーを起動する通しテスト（`localApi.integration.test.ts`）が含まれる（`services/gpu_server/.venv` が無ければ skip）。
 
+### 制限モード（Pages 単体、#27）
+
+ローカルサーバーが見つからないとき（GitHub Pages など）は**制限モード**になる。保存先はブラウザの IndexedDB（`vvlog-fs`）で、プロジェクト・キャッシュ・アバター・設定が残る。ドロップ／選択した端末の動画ファイルだけは、ブラウザを閉じると消える（`File` への参照のため。解析済みなら以後は不要）。
+
+- **Safari は一定期間操作が無いと IndexedDB を消すことがある**（ITP）。起動時に永続化（`navigator.storage.persist()`）を頼むが保証はない。大事なプロジェクトは、ホームの最近のプロジェクトの右クリック >［zip で保存］で書き出し、［zip を読み込む…］で戻す（`cache/` は入れない。サーバーから取り直せる）。
+- 画面上部に案内バナー（閉じられる）。File System Access API は Safari 非対応のため使わない。
+- 外部 GPU への接続は、設定 > 接続で URL とトークンを登録する（#44 で導線を整える）。
+
 ### この PC の GPU サーバーを使う（Windows）
 
 設定 > 接続 >「この PC の GPU サーバー」で、`services/gpu_server` のフォルダと推論用の Python（`VVLOG_PYTHON`）を選んで［起動］。

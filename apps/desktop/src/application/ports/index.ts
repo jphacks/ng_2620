@@ -1,3 +1,4 @@
+export type * from "./archive";
 export type * from "./avatar";
 export type * from "./cache";
 export type * from "./compute";

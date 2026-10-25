@@ -16,6 +16,7 @@ import type { FileSystem } from "@/infrastructure/fs/FileSystem";
 import { BrowserEditorMedia } from "@/infrastructure/editor/editorMedia";
 import { LocalFiles } from "@/infrastructure/fs/LocalFiles";
 import { MEM_ROOT, MemoryFs } from "@/infrastructure/fs/memoryFs";
+import { RoutingFs } from "@/infrastructure/fs/routingFs";
 import { joinPath } from "@/infrastructure/fs/path";
 import { HttpFileSystem } from "@/infrastructure/fs/httpFs";
 import { tauriFs } from "@/infrastructure/fs/tauriFs";
@@ -24,6 +25,7 @@ import { HttpMediaProbe, TauriMediaProbe, VideoElementMediaProbe } from "@/infra
 import type { Runtime } from "@/infrastructure/platform";
 import { isTauri } from "@/infrastructure/platform";
 import { LocalApi } from "@/infrastructure/local/localApi";
+import { FsProjectArchive } from "@/infrastructure/project/FsProjectArchive";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
 import {
   FileSecretStore,
@@ -34,7 +36,13 @@ import {
 import { HttpDialog } from "@/infrastructure/system/httpDialog";
 import { serverFileDrop, sweepImports } from "@/infrastructure/system/serverDrop";
 import { useDropUploadStore } from "@/presentation/shared/stores/dropUploadStore";
-import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
+import {
+  browserDialog,
+  browserFileDrop,
+  browserFileExchange,
+  browserNotifier,
+  browserShell,
+} from "@/infrastructure/system/browserSystem";
 import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
 import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
 import { tauriDialog, tauriFileDrop, tauriNotifier, tauriShell } from "@/infrastructure/system/tauriSystem";
@@ -52,8 +60,13 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
   const api = local ? new LocalApi(local) : null;
   const diskBacked = inTauri || !!api; // 実ディスクに置く（設定・シークレットもファイル）
   const isDev = import.meta.env.DEV;
+  // restricted：ドロップ・選択した端末のファイルは memFs（File への参照。閉じると消える）、それ以外は IndexedDB（storage があれば）
   const memFs = diskBacked ? null : new MemoryFs();
-  const fs: FileSystem = memFs ?? (api ? new HttpFileSystem(api) : tauriFs);
+  const fs: FileSystem = memFs
+    ? new RoutingFs(runtime.storage ?? new MemoryFs(), memFs, (p) => p.startsWith(`${MEM_ROOT}/drops/`))
+    : api
+      ? new HttpFileSystem(api)
+      : tauriFs;
 
   const dirs = local
     ? {
@@ -84,6 +97,7 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
     appDataDir: dirs.appData,
   });
   const files = new LocalFiles(fs);
+  const archive = new FsProjectArchive(fs);
   const hasher = api ? new HttpFileHasher(api) : inTauri ? new TauriFileHasher() : new WebCryptoFileHasher(fs);
   const probe = api ? new HttpMediaProbe(api, fs) : inTauri ? new TauriMediaProbe(fs) : new VideoElementMediaProbe(fs);
   const cache = new FsLayerCache(fs, hasher);
@@ -159,6 +173,12 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
       listRecent: new UC.ListRecentProjects({ projects }),
       loadOverrides: new UC.LoadOverrides({ projects }),
       deleteProject: new UC.DeleteProject({ projects }),
+      ...(memFs
+        ? {
+            exportProjectZip: new UC.ExportProjectZip({ archive, exchange: browserFileExchange }),
+            importProjectZip: new UC.ImportProjectZip({ archive, exchange: browserFileExchange, projects }),
+          }
+        : {}),
       clearCache: (project) => projects.clearCache(project),
       probeMedia: new UC.ProbeMedia({ probe }),
       importMedia: new UC.ImportMedia({ files, hasher, clock }),
