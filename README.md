@@ -23,41 +23,30 @@
 
 VTuber といえば、ゲーム実況や雑談などのリアルタイム配信のイメージが強い。
 
-近年は、スタジオでモーションキャプチャをして 3D ライブを行い、大きな会場に観客を集めたり（[カバー, 2026](https://prtimes.jp/main/html/rd/p/000001216.000030268.html)）、家でカメラ 1 台で全身を動かしながら配信したり（[クシナダ機巧, 2026](https://prtimes.jp/main/html/rd/p/000000003.000171099.html)）できるようになった。
+近年は、スタジオのモーションキャプチャによる 3D ライブや、家でカメラ 1 台の全身トラッキング配信もできるようになった。事務所も、アバターが**そこにいるように感じられること**を重視した演出に力を入れている。
 
-事務所も、アバターが**そこにいるように感じられること**を重視している。
-カバー株式会社は CEDEC 2025 で「今そこにいる！ホロライブのリアル会場ライブやARライブの実在性を高める照明演出」と題して登壇し、ライブでは「リアルアーティストと遜色のない実在感をステージ上で体現しなくてはなりません」としている（[CEDEC 2025](https://cedec.cesa.or.jp/2025/timetable/detail/s67af0e836ed0b/)）。
-2026 年 9 月には、ライブで実現してきた「リアルな光の描写や質感の表現」を自宅の配信にも取り入れられる配信アプリ「hololive raku」を発表した（[カバー, 2026](https://prtimes.jp/main/html/rd/p/000001264.000030268.html)）。
-にじさんじフェスでは、ライバーが普段持ち歩いている物や配信で使った物を並べる私物展示が、恒例の企画になっている（[にじさんじフェス2026](https://fes.nijisanji.jp/2026/exhibition/)）。
-
-外に出る vlog（散歩動画）を撮る VTuber もいる。見せ方は人によって分かれ、Live2D の画面に散歩用の自撮り風アニメーションやイラストを添える、モバイルのモーションキャプチャ（mocopi）で収録した動きを 3D モデルに反映する、パペットやイラストを使う、といった工夫が紹介されている（[MoguLive, 2026](https://www.moguravr.com/vtuber-vlog-strategy/)）。
-3D アバターでの外ロケは、以前は現地で映像を撮り、その映像をもとにモーションキャプチャをして、最後に合成する「かなりの重労働」だった（[リアルサウンド, 2023](https://realsound.jp/tech/2023/04/post-1300365.html)）。
-いまも、実写にアバターを合成するには専用の撮影機材が要ったり、合成の専門技術を持つクリエイターに頼んだりする必要があり、ハードルが高い（[MoguLive, 2026](https://www.moguravr.com/?p=347062)）。
+一方で、外に出る vlog やロケ動画で、アバターが実写の中で動く形を作るハードルは今も高い。現地で撮った映像に、モーションキャプチャと合成の専門技術を重ねる必要があるからだ。
 
 ### 既存の方法の限界
 
-- **映像編集ソフト・3D ソフトでの合成**：実写の中に 3D キャラクターを立たせるには、映像からカメラの動きを推定して 3D シーンに合わせ（[Blender: Motion Tracking](https://docs.blender.org/manual/en/latest/movie_clip/tracking/introduction.html)）、影を実写に落とすための面を置いて合成する（[Blender: Shadow Catcher](https://docs.blender.org/manual/en/latest/render/cycles/object_settings/object_data.html)）。
-  人の手前にある物との**前後関係**を表すには、物を切り抜くロトスコープが要る。AI で自動追従する After Effects のロトブラシ 2 も、縁がずれればコマ単位で直す必要があり、完全ではないと評されている（[No Film School, 2020](https://nofilmschool.com/new-ai-powered-rotobrush-2-after-effects)）。
-  撮影済みの映像から本人を消すなら、消す対象を切り抜いて指定し、背景を埋める処理も加わる（[Engadget, 2019](https://www.engadget.com/2019-04-03-adobe-after-effects-content-fill-eraser.html)）。
-  プロの制作では、モーションキャプチャを先に収録し、ロケでカメラトラッキングと AR を同時に回して実写と合成している（[CGWORLD, 2025](https://cgworld.jp/regular/321-VFX-ShirakamiFubuki.html)）。
-- **モバイルのモーションキャプチャ・AR 撮影アプリ**：mocopi は体に 6 つのセンサーを着けて全身の動きを取り（[ソニー](https://www.sony.jp/mocopi/)）、スマートフォンの背面カメラの映像を背景にアバターを合成して撮れる（[ソニー, 2023](https://www.sony.jp/mocopi/info/20230406.html)）。
-  VCamカメラは、LiDAR を積んだ端末なら物の後ろにアバターを隠して撮れる（[MoguLive, 2026](https://www.moguravr.com/?p=377964)）。
-  ただし、確認した範囲ではどれも撮影と同時に合成する方式で、センサーの装着や専用アプリでの撮影が前提になる。撮り終えた普通の動画に、本人の動きのまま後から合成する機能の記述はない。
-- **既存の AI の動画サービス**：Autodesk Flow Studio は、撮影済みの映像の人を CG キャラクターに自動で置き換えられる。ただし公式の制約一覧に、人の手前にある物は切り抜かれず、物との接触にも対応していないとある（[Flow Studio: Platform Limitations](https://help.wonderdynamics.com/working-with-wonder-studio-getting-started/platform-limitations/)）。
-  私たちの計測では、4 秒の動画に約 38 分かかった。
+詳しい内容と出典は[付録](#付録-既存の方法と出典)。
+
+- **映像編集ソフト・3D ソフトでの合成**：映像からカメラの動きを推定して 3D シーンに合わせ、手前の物の切り抜きや影まで整える必要があり、専門の技術と時間が要る。
+- **モバイルのモーションキャプチャ・AR 撮影アプリ**：撮影と同時に合成する方式で、センサーの装着や専用アプリでの撮影が前提。撮り終えた普通の動画から作るものではない。
+- **既存の AI の動画サービス**：撮影済みの映像の人を自動で置き換えられるが、手前の物は切り抜かれず、4 秒の動画に約 38 分かかった。
 - **動画生成 AI**：映像を作り直すため費用がかかり（4 秒で約 1 ＄）、イベントや配信の規約によっては生成 AI 自体が使えない場合がある。
 - **公開モデルの組み合わせ**：人の追跡や 3D 姿勢推定の研究モデルを組み合わせれば作れるが、3D 推定だけで GPU メモリを 16GB 使い、手元の GPU（12GB 級）では動かない。処理にも時間がかかる。
 
 つまり、**「本人の動きそのまま」「手前の物との前後関係」「手元で速く、無料で」を同時に満たし、編集が得意でない VTuber でも使える手段**がない。
 
-### 解決の方向性
+## 解決の方向性
 
 - 映像を生成するのではなく、**人の追跡と 3D 姿勢推定（トラッキング）**で本人の動きを読み取り、そのまま VRM アバターに移すモデルを実現する。生成 AI に依存しない。
 - 動画を入れてアバターを選べば、あとは自動で仕上がるようにし、撮影から完成までを 1 つのアプリで完結させる。
   - 推論が部分的に失敗しても、ワンタップで手前にある物と奥にある物を修正できるようにして、簡単に直せるようにする。
 - 研究モデルの処理の形そのものを見直し、手元の GPU で、公開モデルを使うだけよりも低コストで実行できるようにする。
 
-## 製品説明
+# 製品説明
 
 https://github.com/user-attachments/assets/533117e1-965b-4a22-8f6f-0287970d9dfd
 
@@ -90,10 +79,7 @@ https://github.com/user-attachments/assets/533117e1-965b-4a22-8f6f-0287970d9dfd
 | 公開モデルの組み合わせ（高速化前） |  2 分 27 秒 | 無料（ローカル） | △ |
 | **VirtualTwin（最適化後）** | **1 分 22 秒** | **無料（ローカル）** | **○** |
 
-公開モデルの組み合わせと VirtualTwin は、3DPW（von Marcard et al., ECCV 2018）の downtown_bar_00 の 120 フレーム（4 秒）を RTX 5060 Ti で処理し、出力 1080x1920、
-追跡から書き出しまでの通しの時間（モデルの読み込みを含む）。
-VirtualTwin は動画生成 AI を使わず、追跡・3D 推定・前後判定などの解析モデルだけで完結する（人を消した背景の穴埋めは、周りのフレームと LaMa による補完）。
-そのため、ハッカソンやイベント、配信先の規定で生成 AI が使えない場面でも使える。
+VirtualTwin は動画生成 AI を使わず、追跡・3D 推定・前後判定の解析モデルだけで完結するので、規定で生成 AI が使えない場面でも使える。計測の条件は[付録](#付録-既存の方法と出典)。
 
 下は、手元の GPU 機（RTX 5060 Ti）で、2 秒のサンプル動画（480x854）を取り込んでから、解析・描画を経てエディタで再生するまでを、早送りせずに録画したもの。
 
@@ -240,6 +226,39 @@ https://github.com/user-attachments/assets/e8549836-48a8-487c-8e17-4c37e804d527
 
 コードは MIT（[LICENSE](LICENSE)）。モデルの重みは SAM License（SAM 3・SAM 3D Body）、MIT、Apache-2.0 などで、ViTDet の重みのライセンスは公式の記載がなく未確定。
 モデル・ライブラリ・データごとの詳細は [docs/LICENSES.md](docs/LICENSES.md)。
+
+
+## 付録 既存の方法と出典
+
+### 実在感の演出
+- スタジオの 3D ライブ（[カバー, 2026](https://prtimes.jp/main/html/rd/p/000001216.000030268.html)）、カメラ 1 台の全身トラッキング配信（[クシナダ機巧, 2026](https://prtimes.jp/main/html/rd/p/000000003.000171099.html)）
+- カバー株式会社は CEDEC 2025 で「今そこにいる！ホロライブのリアル会場ライブやARライブの実在性を高める照明演出」と題して登壇し、ライブでは「リアルアーティストと遜色のない実在感をステージ上で体現しなくてはなりません」としている（[CEDEC 2025](https://cedec.cesa.or.jp/2025/timetable/detail/s67af0e836ed0b/)）
+- 2026 年 9 月、ライブで実現してきた「リアルな光の描写や質感の表現」を自宅の配信に取り入れられる配信アプリ「hololive raku」を発表（[カバー, 2026](https://prtimes.jp/main/html/rd/p/000001264.000030268.html)）
+- にじさんじフェスでは、ライバーが持ち歩いている物や配信で使った物を並べる私物展示が恒例の企画（[にじさんじフェス2026](https://fes.nijisanji.jp/2026/exhibition/)）
+
+### VTuber の vlog・外ロケ
+- 散歩 vlog の見せ方は、Live2D の画面に自撮り風アニメーションやイラストを添える、mocopi で収録した動きを 3D モデルに反映する、パペットやイラストを使う、など（[MoguLive, 2026](https://www.moguravr.com/vtuber-vlog-strategy/)）
+- 3D アバターの外ロケは、以前は現地で撮影し、その映像をもとにモーションキャプチャをして合成する「かなりの重労働」だった（[リアルサウンド, 2023](https://realsound.jp/tech/2023/04/post-1300365.html)）
+- 実写へのアバター合成は、専用の撮影機材や合成の専門技術が要りハードルが高い（[MoguLive, 2026](https://www.moguravr.com/?p=347062)）
+
+### 映像編集ソフト・3D ソフトでの合成
+- カメラの動きを映像から推定し、3D シーンに合わせる（[Blender: Motion Tracking](https://docs.blender.org/manual/en/latest/movie_clip/tracking/introduction.html)）。影は、影だけを受ける面を置いて実写に落とす（[Blender: Shadow Catcher](https://docs.blender.org/manual/en/latest/render/cycles/object_settings/object_data.html)）
+- 手前の物はロトスコープで切り抜く。AI で自動追従する After Effects のロトブラシ 2 も、縁がずれればコマ単位で直す必要がある（[No Film School, 2020](https://nofilmschool.com/new-ai-powered-rotobrush-2-after-effects)）
+- 映像から本人を消すには、消す対象を切り抜いて指定し、背景を埋める（[Engadget, 2019](https://www.engadget.com/2019-04-03-adobe-after-effects-content-fill-eraser.html)）
+- プロの制作例：モーションキャプチャを先に収録し、ロケでカメラトラッキングと AR を同時に回して実写と合成（[CGWORLD, 2025](https://cgworld.jp/regular/321-VFX-ShirakamiFubuki.html)）
+
+### モバイルのモーションキャプチャ・AR 撮影アプリ
+- mocopi は体に 6 つのセンサーを着けて全身の動きを取り（[ソニー](https://www.sony.jp/mocopi/)）、スマートフォンの背面カメラの映像を背景にアバターを合成して撮れる（[ソニー, 2023](https://www.sony.jp/mocopi/info/20230406.html)）
+- VCamカメラは、LiDAR を積んだ端末なら物の後ろにアバターを隠して撮れる（[MoguLive, 2026](https://www.moguravr.com/?p=377964)）
+- 確認した範囲では、どれも撮影と同時に合成する方式で、撮り終えた動画に後から合成する機能の記述はない
+
+### AI の動画サービス
+- Autodesk Flow Studio は撮影済みの映像の人を CG キャラクターに自動で置き換えるが、公式の制約一覧に、人の手前にある物は切り抜かれず、物との接触にも対応していないとある（[Flow Studio: Platform Limitations](https://help.wonderdynamics.com/working-with-wonder-studio-getting-started/platform-limitations/)）
+- 処理時間（約 38 分）は私たちの計測
+
+### 比較表の計測条件
+- 公開モデルの組み合わせと VirtualTwin は、3DPW（von Marcard et al., ECCV 2018）の downtown_bar_00 の 120 フレーム（4 秒）を RTX 5060 Ti で処理し、出力 1080x1920。追跡から書き出しまでの通しの時間（モデルの読み込みを含む）
+- 人を消した背景の穴埋めは、周りのフレームと LaMa による補完
 
 ---
 
