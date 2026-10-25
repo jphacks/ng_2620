@@ -1,10 +1,15 @@
-# vvlog（virtual vlog）
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="designdocs/brand/color-dark/svg/virtualtwin-logo-horizontal-dark.svg">
+    <img src="designdocs/brand/color/svg/virtualtwin-logo-horizontal.svg" alt="VirtualTwin（バーチャルツイン）" width="480">
+  </picture>
+</h1>
 
 実写動画に映る人物を、**本人の動きのまま VRM アバターに置き換える**ツール。
 動画から人物の追跡・3D メッシュ復元・遮蔽（人物の前後関係）の判定・人物除去・VRM 描画・合成までを GPU サーバーで自動化し、
 画面（デスクトップアプリ）から取り込み・キャスト（人物へのアバター割り当て）・編集・書き出しを行う。
 
-JPHACKS 2026 のチーム ng_2620 の作品。ブランド名は VirtualTwin（ロゴは [designdocs/brand](designdocs/brand/README.md)）。
+JPHACKS 2026 のチーム ng_2620 の作品（ロゴとブランドのガイドラインは [designdocs/brand](designdocs/brand/README.md)）。
 
 > **このリポジトリには技術スタックが 2 パターンある**（下の「[技術スタックの 2 つの系統](#技術スタックの-2-つの系統)」）。
 > `develop` / `main` は **Tauri 版**（現行）。`refactor/web-first-windows-local-server` は **Tauri を捨ててブラウザ UI + Windows ローカルサーバーにする作り直し**で、
