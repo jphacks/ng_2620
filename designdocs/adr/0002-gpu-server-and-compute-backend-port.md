@@ -2,6 +2,7 @@
 
 - 状態：採択
 - 日付：2026-10-24
+- 補足：[ADR-0015](0015-web-first-windows-local-server.md) により、Windows ではアプリの子プロセス起動ではなくランチャーがローカルサーバーを起動する。`ComputeBackendPort` の構成は変わらない。
 
 ## 文脈
 - パイプライン（SAM3、SAM-3D-Body、fusion v2、VRM 描画）は CUDA 前提で、VRAM 数 GB を使う。Mac では動かない。
