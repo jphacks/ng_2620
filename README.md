@@ -62,9 +62,9 @@ VTuber の 3D ライブには、お金を払って会場まで足を運ぶファ
 | | 処理時間（4 秒の動画） | 料金 | 前後関係 |
 |---|---|---|:---:|
 | Flow Studio（AI サービス） | 約 38 分 | 合計 15 秒まで無料 | × |
-| 生成 AI | — | 高額 | — |
-| 公開モデルの組み合わせ（高速化前） | 約 2 分 27 秒 | 無料（ローカル） | ○ |
-| **VirtualTwin（最適化後）** | **約 1 分 22 秒** | **無料（ローカル）** | **○** |
+| 生成 AI | 約 2 分 | 約 1 ＄ | ○ |
+| 公開モデルの組み合わせ（高速化前） |  2 分 27 秒 | 無料（ローカル） | △ |
+| **VirtualTwin（最適化後）** | **1 分 22 秒** | **無料（ローカル）** | **○** |
 
 公開モデルの組み合わせと VirtualTwin は、3DPW の downtown_bar_00 の 120 フレーム（4 秒）を RTX 5060 Ti で処理し、出力 1080x1920、
 追跡から書き出しまでの通しの時間（モデルの読み込みを含む）。
@@ -183,8 +183,10 @@ GitHub Actions は `ci.yml`（prettier / eslint / rustfmt / clippy）、`release
 | アバターの描画と隠しマスクの計算を並行に走らせる | アバターの段：49.1 → 42.8 秒（出力はバイト単位で一致） |
 
 #### ハッカソンで開発した独自機能・技術
-上流の SAM-Body4D（MIT）と、実験用リポジトリの改善（[pipeline/UPSTREAM.md](pipeline/UPSTREAM.md)）が土台。このリポジトリで加えたもの：
+土台は上流の SAM-Body4D（MIT）。ハッカソンの期間中に開発したもの：
 
+- 推論パイプラインの高速化と画質の改善：実験用リポジトリで試し、効果を確かめたものだけを `pipeline/` に取り込んだ（取り込みの記録は [pipeline/UPSTREAM.md](pipeline/UPSTREAM.md)、主な工夫と効果は上の「[注力したこと](#注力したこと速くしかも前後関係まで)」）。
+  あわせて、人物除去（背景の補完）、表情、アバターの大きさと配置、前後判定の改善も行った
 - 推論のサービス化：遮蔽判定の保存と遮蔽物ユニット（[pipeline/scripts/occlusion/](pipeline/scripts/occlusion)）、ターゲット指定・VRM 割り当て・手修正の適用・編集用レイヤーの書き出し（[avatar_app.py](pipeline/scripts/avatar_app.py)、[occlusion.py](pipeline/scripts/avatar/occlusion.py)、[layers_export.py](pipeline/scripts/avatar/layers_export.py)）
 - GPU サーバー：ジョブキュー、分割アップロード（8MB、再開可）、成果物の Range 配信、SSE による段階的な進捗（[services/gpu_server/vvlog_server/](services/gpu_server/vvlog_server)）
 - モックサーバー：実機なしで同じ API を再生（[services/mock_server/](services/mock_server)）
