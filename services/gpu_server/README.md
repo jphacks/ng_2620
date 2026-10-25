@@ -127,6 +127,28 @@ curl -H "Authorization: Bearer $VVLOG_API_TOKEN" http://127.0.0.1:8765/v1/capabi
 .venv/bin/python scripts/smoke_e2e.py --token $VVLOG_API_TOKEN --video <動画.mp4> --vrm <アバター.vrm>
 ```
 
+## ローカルアプリサーバーとして起動する（ADR-0015）
+
+Windows 版のアプリ本体。画面（SPA）も配信し、ブラウザで `http://127.0.0.1:<ポート>/` を開いて使う。
+
+```sh
+# 先に画面をビルドする: pnpm --filter @vvlog/desktop build（apps/desktop/dist）
+VVLOG_LOCAL=1 VVLOG_PORT=0 python -m vvlog_server      # PowerShell: $env:VVLOG_LOCAL=1; $env:VVLOG_PORT=0
+# → VVLOG_LOCAL_READY http://127.0.0.1:51234/   （この行の URL をランチャーがブラウザで開く）
+```
+
+| 環境変数 | 既定 | 意味 |
+|---|---|---|
+| `VVLOG_LOCAL` | 無し | `1` でローカルアプリサーバーにする |
+| `VVLOG_PORT` | `8765` | `0` で空きポートを自動選定 |
+| `VVLOG_API_TOKEN` | 起動ごとに自動生成 | 指定すればそれを使う |
+| `VVLOG_SPA_DIR` | `apps/desktop/dist` | 配信する画面のビルド成果物 |
+| `VVLOG_ALLOWED_ORIGINS` | 空 | 自分以外に許可するオリジン（カンマ区切り。GitHub Pages のオリジンなど） |
+
+- `127.0.0.1` にだけバインドする（外部には出ない）。`Host` が `127.0.0.1`／`localhost`／`[::1]`＋実ポート以外、`Origin` が自分と `VVLOG_ALLOWED_ORIGINS` 以外のリクエストは `403`（DNS リバインディング・クロスサイト対策）。
+- `GET /v1/local/info`（認証なし）が `{"mode":"local",…}` を返す。画面はこれでフルモードを判定する。トークンは**同一オリジンの呼び出しにだけ**含まれ、Pages など別オリジンには含まれない。
+- `/v1/*` は従来どおり Bearer トークンが要る。
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |

@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
+import secrets
 
 from .adapters.events import JsonlEventBus
 from .adapters.fixture_recorder import FixtureRecorder
@@ -19,6 +21,7 @@ from .application.stages.planner import planner_for
 from .application.worker import Worker
 from .config import Settings
 from .interface.api import build_app
+from .interface.local import bind_local_socket
 
 
 def create_app(settings: Settings | None = None, runner_factory=None, planner=None):
@@ -51,6 +54,14 @@ def main() -> None:
     import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     s = Settings.from_env()
+    if s.local:
+        # local app server: free port if VVLOG_PORT=0, a fresh token per launch unless one is given
+        sock = bind_local_socket(s.port)
+        s = dataclasses.replace(s, port=sock.getsockname()[1], api_token=s.api_token or secrets.token_hex(24))
+        server = uvicorn.Server(uvicorn.Config(create_app(s), log_level="info"))
+        print(f"VVLOG_LOCAL_READY http://127.0.0.1:{s.port}/", flush=True)  # the launcher (#31) opens this URL
+        server.run(sockets=[sock])
+        return
     if not s.api_token:
         raise SystemExit("VVLOG_API_TOKEN を設定してください")
     uvicorn.run(create_app(s), host="127.0.0.1", port=s.port, log_level="info")

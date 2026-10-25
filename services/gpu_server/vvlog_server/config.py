@@ -8,6 +8,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 
 
+def _spa_dir(e) -> Path | None:
+    given = e.get("VVLOG_SPA_DIR")
+    if given:
+        return Path(given).resolve()
+    built = REPO / "apps" / "desktop" / "dist"
+    return built if (built / "index.html").is_file() else None
+
+
 @dataclass(frozen=True)
 class Settings:
     api_token: str
@@ -25,6 +33,9 @@ class Settings:
     max_long_side: int
     backend: str                  # "pipeline" (real) | "replay" (mock server)
     record_fixture: Path | None
+    local: bool                   # local app server (ADR-0015): 127.0.0.1 only, serves the SPA, Host/Origin guard
+    spa_dir: Path | None          # built SPA (apps/desktop/dist); local mode only
+    allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
     def from_env(cls, env: dict | None = None, **over) -> "Settings":
@@ -46,6 +57,9 @@ class Settings:
             max_long_side=int(e.get("VVLOG_MAX_LONG_SIDE", "1920")),
             backend=e.get("VVLOG_BACKEND", "pipeline"),
             record_fixture=Path(rec).resolve() if rec else None,
+            local=e.get("VVLOG_LOCAL", "").lower() in ("1", "true", "yes"),
+            spa_dir=_spa_dir(e),
+            allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
         s.update(over)
         return cls(**s)

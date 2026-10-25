@@ -17,6 +17,7 @@ from ..application.deps import Deps
 from ..application.usecases import avatars, jobs, projects, uploads
 from ..domain.errors import VvlogError
 from . import schemas as S
+from .local import LocalGuard, mount_local, self_origins
 from .ranges import range_response
 
 HEARTBEAT_S = 15
@@ -29,8 +30,13 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
     app = FastAPI(title="vvlog GPU server", version=__version__, lifespan=lifespan,
                   description="designdocs/architecture/contracts.md")
     app.state.deps = deps
-    app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
+    st = deps.settings
+    # local app server: only itself and the configured Pages origin may call it (Tauri origins are gone, ADR-0015)
+    origins = [*self_origins(st.port), *st.allowed_origins] if st.local else CORS_ORIGINS
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"],
                        expose_headers=["Content-Range", "Accept-Ranges"])
+    if st.local:  # added last = outermost: a rejected request never reaches CORS or a route
+        app.add_middleware(LocalGuard, port=st.port, allowed_origins=st.allowed_origins)
 
     @app.exception_handler(VvlogError)
     async def _vvlog_error(_req, e: VvlogError):
@@ -164,6 +170,8 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
         raise VvlogError("NOT_IMPLEMENTED", "ユーザー管理はスコープ外です（ADR-0010）")
 
     app.include_router(r)
+    if st.local:  # after the /v1 routes: the SPA catch-all must not shadow them
+        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir)
     return app
 
 
