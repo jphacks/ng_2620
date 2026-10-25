@@ -61,6 +61,7 @@ export interface Services {
     clearCache: (project: Project) => Promise<void>;
     probeMedia: UC.ProbeMedia;
     importMedia: UC.ImportMedia;
+    relinkSource: UC.RelinkSource;
     listProfiles: UC.ListProfiles;
     saveProfile: UC.SaveProfile;
     deleteProfile: UC.DeleteProfile;

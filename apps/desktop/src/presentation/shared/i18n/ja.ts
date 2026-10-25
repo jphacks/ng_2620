@@ -148,6 +148,11 @@ export const ja = {
     resumeBody: "途中まで送った部分は再利用し、残りだけを送ります。",
     resume: "アップロードを再開",
     previewUnavailable: "この動画はプレビューで再生できません（解析はできます）",
+    sourceMissingTitle: "元の動画が見つかりません",
+    sourceMissingBody:
+      "別の PC やブラウザで作られたプロジェクトです。解析を始めるには、同じ動画を選び直してください（解析済みのときは、そのまま編集できます）。",
+    relink: "動画を選び直す",
+    relinked: "動画を結びつけ直しました",
   },
   upload: {
     label: "アップロード",

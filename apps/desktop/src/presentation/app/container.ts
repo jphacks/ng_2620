@@ -170,6 +170,7 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
       clearCache: (project) => projects.clearCache(project),
       probeMedia: new UC.ProbeMedia({ probe }),
       importMedia: new UC.ImportMedia({ files, hasher, clock }),
+      relinkSource: new UC.RelinkSource({ files, hasher }),
       listProfiles: new UC.ListProfiles({ settings }),
       saveProfile: new UC.SaveProfile({ settings, secrets }),
       deleteProfile: new UC.DeleteProfile({ settings, secrets }),

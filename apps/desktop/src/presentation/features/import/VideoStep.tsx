@@ -1,13 +1,16 @@
 // S2-1 動画（F02）：プレビュー（元ファイルを再生）、長さ・解像度・fps・音声、送信先の接続名、[解析を始める]
 
 import { Play } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { hasUploadConsent } from "@/domain/connection";
 import { fileNameOf } from "@/domain/validation";
 import { ja } from "@/presentation/shared/i18n/ja";
+import { errorText } from "@/presentation/shared/errors";
 import { useServices } from "@/presentation/shared/services";
 import { activeProfile, useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
+import { toast } from "@/presentation/shared/stores/toastStore";
 import { Button, ConfirmDialog, ErrorNotice, Spinner } from "@/presentation/shared/ui";
 import { useImportStore } from "./importStore";
 
@@ -22,7 +25,7 @@ export function VideoStep({
   onStarted(): void;
   onOpenConnection(): void;
 }) {
-  const { platform } = useServices();
+  const { platform, uc } = useServices();
   const project = useProjectStore((s) => s.current?.project);
   const profile = useConnectionStore(activeProfile);
   const status = useConnectionStore((s) => s.state.status);
@@ -33,10 +36,40 @@ export function VideoStep({
   const consent = useConnectionStore((s) => s.consent);
   const [videoError, setVideoError] = useState(false);
   const [askConsent, setAskConsent] = useState(false);
+  const [relinking, setRelinking] = useState(false);
+  const update = useProjectStore((s) => s.update);
+  // 別の PC・ブラウザで作られたプロジェクトは、元の動画が無い。まだ送っていなければ選び直してもらう
+  const sourcePath = project?.source.path;
+  const sourceExists = useQuery({
+    queryKey: ["source-exists", project?.id, sourcePath],
+    queryFn: () => platform.files.exists(sourcePath!),
+    enabled: !!sourcePath,
+  });
   if (!project) return null;
   const src = project.source;
   const resumable = !!project.compute.upload && !project.compute.mediaId;
-  const canStart = !!profile && status === "connected" && !running;
+  const canStart =
+    !!profile && status === "connected" && !running && !(sourceExists.data === false && !project.compute.mediaId);
+
+  const relink = async () => {
+    setRelinking(true);
+    try {
+      const [path] = await platform.dialog.pickFiles({
+        filters: [{ name: "動画", extensions: ["mp4", "mov"] }],
+        multiple: false,
+      });
+      if (!path) return;
+      update(await uc.relinkSource.execute({ project, path }));
+      setVideoError(false);
+      await sourceExists.refetch();
+      toast({ kind: "success", title: T.relinked });
+    } catch (e) {
+      const t = errorText(e);
+      toast({ kind: "error", title: t.title, body: t.body });
+    } finally {
+      setRelinking(false);
+    }
+  };
 
   const go = () => {
     void start();
@@ -100,6 +133,13 @@ export function VideoStep({
           <ErrorNotice tone="warning" title={T.noConnection}>
             <Button size="sm" onClick={onOpenConnection}>
               {ja.home.setupConnection}
+            </Button>
+          </ErrorNotice>
+        )}
+        {sourceExists.data === false && !project.compute.mediaId && (
+          <ErrorNotice tone="warning" title={T.sourceMissingTitle} body={T.sourceMissingBody}>
+            <Button size="sm" onClick={() => void relink()} disabled={relinking}>
+              {T.relink}
             </Button>
           </ErrorNotice>
         )}

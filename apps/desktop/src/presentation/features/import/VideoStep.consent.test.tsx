@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // 外部サーバーへ初めて動画を送るときは確認を挟み、確認した後は挟まない（#44、#35 BYO）
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ComputeProfile } from "@/domain/connection";
@@ -60,11 +61,16 @@ function setup(profile: ComputeProfile, consents: Record<string, string>) {
     consents,
     consent,
   } as never);
-  const services = { platform: { files: { toUrl: () => "blob:x" } } } as unknown as Services;
+  const services = {
+    platform: { files: { toUrl: () => "blob:x", exists: async () => true } },
+    uc: {},
+  } as unknown as Services;
   render(
-    <ServicesProvider services={services}>
-      <VideoStep onCancel={() => {}} onStarted={onStarted} onOpenConnection={() => {}} />
-    </ServicesProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <ServicesProvider services={services}>
+        <VideoStep onCancel={() => {}} onStarted={onStarted} onOpenConnection={() => {}} />
+      </ServicesProvider>
+    </QueryClientProvider>,
   );
   return { start, onStarted, consent };
 }

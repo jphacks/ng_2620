@@ -3,12 +3,15 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { OpenProject } from "@/application/usecases/project";
 import { AppError } from "@/domain/errors";
+import { FsProjectArchive } from "../project/FsProjectArchive";
+import { FsProjectRepository } from "../project/FsProjectRepository";
 import { fetchTransport } from "../compute/fetchTransport";
 import { HttpFileSystem } from "../fs/httpFs";
 import { HttpDialog } from "../system/httpDialog";
@@ -224,6 +227,27 @@ describe.skipIf(!python)("ローカルアプリサーバー（実サーバー）
     );
     expect(removed).toBe(2); // g1 と、空になった g2
     expect(await fs.exists(join(importsDir, "g3", "keep.mp4"))).toBe(true);
+  });
+
+  it("既存プロジェクト（フィクスチャ）をローカルサーバー越しにそのまま開ける／zip に書き出して戻せる（#52）", async () => {
+    const fixture = fileURLToPath(new URL("../../../../../fixtures/synth/synth.vvlog", import.meta.url));
+    const dir = join(projects, "synth.vvlog");
+    cpSync(fixture, dir, { recursive: true });
+    const repo = new FsProjectRepository(fs, {
+      projectsDir: async () => projects,
+      appDataDir: async () => join(tmp, "appdata"),
+    });
+    const opened = await new OpenProject({ projects: repo }).execute(dir);
+    expect(opened.project.name).toBe("合成フィクスチャ v0");
+    expect(opened.project.persons).toHaveLength(2);
+    expect(await fs.exists(repo.resolve(opened.project.id, opened.project.persons[0]!.thumb!))).toBe(true);
+
+    const archive = new FsProjectArchive(fs);
+    const zip = await archive.pack(dir);
+    const restored = join(projects, "restored.vvlog");
+    await archive.unpack(zip, restored);
+    expect(await fs.readText(join(restored, "project.json"))).toBe(await fs.readText(join(dir, "project.json")));
+    expect(await fs.exists(join(restored, "cache"))).toBe(false);
   });
 
   it("ネイティブダイアログ：Windows 以外では DIALOG_UNAVAILABLE、別 Origin は DIALOG_LOCAL_ONLY", async () => {
