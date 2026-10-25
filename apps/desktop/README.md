@@ -1,4 +1,4 @@
-# apps/desktop — vvlog デスクトップアプリ（Tauri 2 + React + TS）
+# apps/desktop — vvlog の画面（React + TS。ブラウザで動く）
 
 レーン A（デスクトップ・ワークフロー）の実装。F15 アプリ枠 / F01 プロジェクト / F02 取り込み / F03 接続 / F05 ジョブ（UI）/ F06 キャスト / F07 アバターライブラリ / F11 書き出し（UI）。
 設計は [designdocs/architecture/overview.md](../../designdocs/architecture/overview.md) と [parallel-plan.md](../../designdocs/architecture/parallel-plan.md)。
@@ -26,7 +26,7 @@ pnpm build       # 型チェック + vite build（dist/）
 
 ### フルモード（ローカルアプリサーバー）で試す（ADR-0015）
 
-画面がローカルサーバーから配信されているとき、起動時に `GET /v1/local/info` で**フルモード**を判定し、ファイル・ハッシュ・ffprobe をサーバー越しにする（Tauri 版の `invoke` は使わない）。判定できなければ制限モード（メモリ上のファイル）。
+画面がローカルサーバーから配信されているとき、起動時に `GET /v1/local/info` で**フルモード**を判定し、ファイル・ハッシュ・ffprobe をサーバー越しにする（以前の Tauri 版の `invoke` は廃止した）。判定できなければ制限モード（メモリ上のファイル）。
 
 ```sh
 pnpm --filter @vvlog/desktop build                                   # dist/
@@ -85,15 +85,16 @@ src/
     usecases/      1 クラス 1 ユースケース（execute）。プロジェクトへの変更は ProjectMutation を返し、ストアが最新の状態に適用する
   infrastructure/
     compute/       HttpComputeBackend、sse.ts（Last-Event-ID 再開・バックオフ・heartbeat 監視）、Offline、InMemory（シミュレーター）
-    project/       FsProjectRepository（= TauriProjectRepository）、InMemoryProjectRepository
-    cache/         FsLayerCache（= TauriLayerCache：ダウンロード → sha256 照合 → zip 展開）
+    project/       FsProjectRepository、FsProjectArchive（zip）、InMemoryProjectRepository
+    cache/         FsLayerCache（ダウンロード → sha256 照合 → zip 展開）
     avatar/        FsAvatarLibrary、vrmMeta.ts（VRM 0.x / 1.0 のメタ情報・必須ボーン・サムネイル）
-    settings/ media/ system/ fs/   Tauri 版とブラウザ版
+    settings/ media/ system/ fs/ local/   フルモード（ローカルサーバー越し）と制限モード（IndexedDB／メモリ）
   presentation/
     app/           container.ts（DI）、ルーティング、タイトルバー・ステータスバー、ウィザード、エディタ枠
     shared/        UI 部品、tokens.css、i18n/ja.ts、ストア（project / jobs / connection）、CommandRegistry
     features/      home / import / connection / jobs / cast / avatar-library / export / settings
-src-tauri/         Rust（fs / media(ffprobe) / hash / net / server（この PC の GPU サーバー））。capabilities/default.json
+assets/icons/     アイコン（.ico / .icns / PNG。ランチャー・インストーラーが使う）
+e2e/              Playwright の E2E
 ```
 
 依存規則は ESLint（`import/no-restricted-paths`）で強制している：domain は外部ライブラリを使わない、presentation から infrastructure を直接 import しない（`container.ts` だけ例外）、feature 同士で import しない。
@@ -118,9 +119,6 @@ feature をまたぐ画面（取り込みウィザード、設定）は `present
 
 ## 未対応・確認していないこと
 
-- Rust 側は Windows（stable、MSVC）で `cargo check` / `cargo clippy` / `cargo build` / `cargo test` が通ることを確かめた。macOS ではまだビルドしていない。
-- `pnpm tauri dev` が `failed to run 'cargo metadata' command ... No such file or directory (os error 2)`（`program not found`）で止まるときは、Rust が無いか `cargo` が PATH に無い。`make doctor` で確かめ、無ければ `make setup`。Rust を入れた後はターミナル（VS Code なら VS Code ごと）を起動し直す。
 - ffprobe のサイドカーは同梱していない。実行ファイルの隣か PATH の `ffprobe` を使い、無ければ `<video>` で長さと寸法だけを読む（コーデック・音声はサーバーの ingest に任せる）。
-- macOS の `.icns` は未作成。`pnpm tauri icon src-tauri/icons/icon.png` で作れる。
 - キーチェーン保存（P1）、HTTP 許可範囲の絞り込み（P1）。
 - この PC の GPU サーバーは macOS では試していない（停止は子プロセスだけで、推論のサブプロセスまでは止めない）。
