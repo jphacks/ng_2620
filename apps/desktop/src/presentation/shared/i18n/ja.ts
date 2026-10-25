@@ -519,6 +519,22 @@ export const ja = {
       title: "ファイルを操作できません",
       body: (d: { message?: string }) => d.message || "ディスクの空き容量や権限を確認してください。",
     },
+    DIALOG_LOCAL_ONLY: {
+      title: "この操作はローカルアプリだけです",
+      body: () => "ファイルやフォルダの選択は、この PC のローカルアプリに接続しているときだけ使えます。",
+    },
+    DIALOG_BUSY: {
+      title: "ダイアログが開いています",
+      body: () => "開いているダイアログを閉じてからやり直してください。",
+    },
+    DIALOG_UNAVAILABLE: {
+      title: "ここでは選択ダイアログを開けません",
+      body: () => "ネイティブのダイアログは Windows 版のローカルアプリでだけ使えます。",
+    },
+    DIALOG_FAILED: {
+      title: "ダイアログを開けません",
+      body: (d: { message?: string }) => d.message || "もう一度試してください。",
+    },
     FFPROBE_UNAVAILABLE: {
       title: "動画の詳細を調べられません",
       body: () => "ffprobe が見つかりません。ブラウザで読める範囲の情報で続けます。",

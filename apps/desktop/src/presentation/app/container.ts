@@ -31,12 +31,12 @@ import {
   LocalStorageSecretStore,
   LocalStorageSettings,
 } from "@/infrastructure/settings/settingsStores";
+import { HttpDialog } from "@/infrastructure/system/httpDialog";
 import {
   browserDialog,
   browserFileDrop,
   browserNotifier,
   browserShell,
-  pendingDialog,
   pendingFileDrop,
 } from "@/infrastructure/system/browserSystem";
 import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
@@ -117,8 +117,8 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
     env: { isTauri: inTauri, mode: runtime.mode, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
     platform: {
       files,
-      // full のダイアログとドロップは、サーバー側のネイティブダイアログ（#46）とドロップ取り込み（#47）ができるまで未対応
-      dialog: memFs ? browserDialog(memFs) : api ? pendingDialog : tauriDialog,
+      // full：ネイティブダイアログはサーバー側（#46）。ドロップ取り込み（#47）ができるまで、ドロップは未対応
+      dialog: memFs ? browserDialog(memFs) : api ? new HttpDialog(api) : tauriDialog,
       shell: memFs || api ? browserShell(fs) : tauriShell,
       drops: memFs ? browserFileDrop(memFs) : api ? pendingFileDrop : tauriFileDrop,
       notifier: inTauri ? tauriNotifier : browserNotifier,

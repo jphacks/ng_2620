@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppError } from "@/domain/errors";
 import { fetchTransport } from "../compute/fetchTransport";
 import { HttpFileSystem } from "../fs/httpFs";
+import { HttpDialog } from "../system/httpDialog";
 import { HttpFileHasher } from "../media/hashers";
 import { fetchLocalInfo, LocalApi, type LocalInfo } from "./localApi";
 
@@ -181,6 +182,26 @@ describe.skipIf(!python)("ローカルアプリサーバー（実サーバー）
     expect(ratios).toEqual([...ratios].sort((a, b) => a - b));
     expect(await hasher.sha256(f)).toBe(want);
     await expect(hasher.sha256(join(tmp, "no.mp4"))).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("ネイティブダイアログ：Windows 以外では DIALOG_UNAVAILABLE、別 Origin は DIALOG_LOCAL_ONLY", async () => {
+    if (process.platform !== "win32") {
+      await expect(new HttpDialog(api).pickFiles({})).rejects.toMatchObject({
+        code: "DIALOG_UNAVAILABLE",
+        status: 501,
+      });
+    }
+    const res = await fetch(`${base}/v1/local/dialog/open-files`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${info.token}`,
+        "Content-Type": "application/json",
+        "Sec-Fetch-Site": "cross-site",
+      },
+      body: "{}",
+    });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("DIALOG_LOCAL_ONLY");
   });
 
   it("media/probe：ffprobe があれば動画の情報、無ければ 503（画面は <video> で代用）", async () => {

@@ -163,6 +163,22 @@ Tauri の `media_probe`・`hash_sha256` の移植。ユーザーが選んだ動�
 - `POST /media/probe {"path"}` → `{durationSec, width, height, rotation, codec, fps, hasAudio, sizeBytes}`。ffprobe は `VVLOG_FFPROBE` → `VVLOG_BIN_DIR/ffprobe(.exe)`（同梱）→ PATH の順に探す。見つからなければ `503 FFPROBE_UNAVAILABLE`（画面は `<video>` で代用する）。映像トラックが無い・読めない場合は `422 MEDIA_UNSUPPORTED`。
 - `POST /hash/sha256 {"path"}` → `{"sha256"}`。`Accept: text/event-stream` を付けると `progress`（`{"ratio"}`、1% ごと）→ `done`（`{"sha256"}`）をストリームする。同じファイル（パス・サイズ・更新時刻）は計算結果を再利用する。
 
+### ネイティブダイアログ API（`/v1/local/dialog/{open-files|open-dir|save}`、#46）
+ブラウザは実パスを渡せないので、サーバーが**この PC の画面に** Windows のダイアログを出して実パスを返す（#28 の決定）。Windows のみ実装（PowerShell + System.Windows.Forms。見えない最前面ウィンドウを親にして、ブラウザの背面に隠れないようにする）。他の OS は `501 DIALOG_UNAVAILABLE`。
+
+- 本体は `{filters:[{name,extensions}], multiple, defaultPath, title}`。結果は `{paths:[…]}`（open-files）／`{path|null}`（open-dir・save）。キャンセルとタイムアウト（10 分）は空の結果で、エラーにしない。
+- 同時に開けるのは 1 つ（`409 DIALOG_BUSY`）。ローカルアプリ自身（同一オリジン）からだけ開ける。Pages など別オリジンは、トークンを持っていても `403 DIALOG_LOCAL_ONLY`。
+- **選んだものは `/v1/local/fs` の許可対象になる**（フォルダ＝ルート、ファイル＝そのファイルだけ）。許可を広げる唯一の経路で、再起動後も `VVLOG_DATA_ROOT/local/grants.json` から復元する（このファイルは許可ルートの外なので、ブラウザからは書き換えられない）。
+- 引数は環境変数 `VVLOG_DIALOG_ARGS`（JSON）で渡し、スクリプトの文字列には入れない。
+
+Windows での手動確認（PowerShell）：
+```powershell
+$env:VVLOG_LOCAL=1; $env:VVLOG_PORT=8765; python -m vvlog_server          # 別のシェルで:
+$t = (irm http://127.0.0.1:8765/v1/local/info).token
+irm -Method Post -Headers @{Authorization="Bearer $t"} -ContentType 'application/json' `
+  -Body '{"filters":[{"name":"動画","extensions":["mp4","mov"]}]}' http://127.0.0.1:8765/v1/local/dialog/open-files
+```
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |
