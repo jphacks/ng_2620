@@ -412,6 +412,8 @@ export const ja = {
     layerKeys: { avatar: "", units: "U", hide: "H", mask: "" },
     play: "再生",
     pause: "停止",
+    prevFrame: "前のフレーム",
+    nextFrame: "次のフレーム",
     fit: "フィット",
     tracks: { video: "映像", persons: "人物", unit: "選択中の物", overrides: "手修正" },
     noSelection: "ビューアで物をクリックすると、その物と人物の前後を直せます",
