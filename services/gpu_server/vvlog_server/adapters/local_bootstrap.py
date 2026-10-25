@@ -259,7 +259,8 @@ class BootstrapManager:
         if not d.get("wheelUrl"):
             raise StepFailed("BOOTSTRAP_NO_WHEEL", "detectron2 の配布 wheel がまだ設定されていません(#51)",
                              "bootstrap-spec.json の detectron2.wheelUrl が決まるまで、この手順は完了できません")
-        self._cmd(self._pip("install", "--no-deps", d["wheelUrl"]))
+        url = d["wheelUrl"] + (f"#sha256={d['sha256']}" if d.get("sha256") else "")  # pip が取得物のハッシュを検証する
+        self._cmd(self._pip("install", "--no-deps", url))
 
     def _s_deps(self, spec: dict) -> None:
         self._cmd(self._pip("install", *spec["packages"]))

@@ -3,7 +3,10 @@
   "provisional": true,
   "python": "3.12",
   "torch": { "index": "cu128", "packages": ["torch==2.8.0", "torchvision==0.23.0"] },
-  "detectron2": { "wheelUrl": null, "sha256": null },
+  "detectron2": {
+    "wheelUrl": "https://github.com/jphacks/ng_2620/releases/download/detectron2-wheel-test-cp312-torch2.8-cu128/detectron2-0.6-cp312-cp312-win_amd64.whl",
+    "sha256": "755c3b39ec06c31e4270ae2634b48fdce613a7bf78b6b913757ca35df16fa13c"
+  },
   "packages": [
     "setuptools", "wheel",
     "opencv-python~=4.12.0.88", "einops~=0.8.1", "pycocotools~=2.0.10", "roma~=1.5.4", "omegaconf~=2.3.0", "pytorch_lightning",
