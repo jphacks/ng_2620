@@ -32,13 +32,9 @@ import {
   LocalStorageSettings,
 } from "@/infrastructure/settings/settingsStores";
 import { HttpDialog } from "@/infrastructure/system/httpDialog";
-import {
-  browserDialog,
-  browserFileDrop,
-  browserNotifier,
-  browserShell,
-  pendingFileDrop,
-} from "@/infrastructure/system/browserSystem";
+import { serverFileDrop, sweepImports } from "@/infrastructure/system/serverDrop";
+import { useDropUploadStore } from "@/presentation/shared/stores/dropUploadStore";
+import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
 import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
 import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
 import { tauriDialog, tauriFileDrop, tauriNotifier, tauriShell } from "@/infrastructure/system/tauriSystem";
@@ -109,6 +105,7 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
       : undefined,
   });
 
+  const importsDir = async () => joinPath(await dirs.appData(), "imports");
   const clock = systemClock;
   const submit = new UC.SubmitJob();
   const localServer = inTauri ? tauriLocalServer : browserLocalServer;
@@ -117,13 +114,40 @@ export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : 
     env: { isTauri: inTauri, mode: runtime.mode, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
     platform: {
       files,
-      // full：ネイティブダイアログはサーバー側（#46）。ドロップ取り込み（#47）ができるまで、ドロップは未対応
+      // full：ネイティブダイアログはサーバー側（#46）、ドロップはサーバーの取り込みフォルダへ転送（#47）
       dialog: memFs ? browserDialog(memFs) : api ? new HttpDialog(api) : tauriDialog,
       shell: memFs || api ? browserShell(fs) : tauriShell,
-      drops: memFs ? browserFileDrop(memFs) : api ? pendingFileDrop : tauriFileDrop,
+      drops: memFs
+        ? browserFileDrop(memFs)
+        : api
+          ? serverFileDrop({
+              fs,
+              importsDir,
+              newId: () => randomIds.newId("imp"),
+              onUpload: (ev) => useDropUploadStore.getState().update(ev),
+            })
+          : tauriFileDrop,
       notifier: inTauri ? tauriNotifier : browserNotifier,
       clock,
     },
+    maintenance: api
+      ? async () => {
+          // 取り込みフォルダの掃除：最近のプロジェクトが元の動画として使っているものは残す
+          const referenced: string[] = [];
+          for (const r of await projects.listRecent()) {
+            try {
+              const raw = JSON.parse(await fs.readText(joinPath(r.path, "project.json"))) as {
+                source?: { path?: string };
+              };
+              if (raw.source?.path) referenced.push(raw.source.path);
+            } catch {
+              // 読めないプロジェクトは参照なしとして扱わず、安全側に倒す（掃除しすぎない）
+              referenced.push(r.path);
+            }
+          }
+          await sweepImports(fs, await importsDir(), referenced);
+        }
+      : undefined,
     compute,
     paths: projects,
     settings,

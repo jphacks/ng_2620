@@ -12,6 +12,7 @@ import { AppError } from "@/domain/errors";
 import { fetchTransport } from "../compute/fetchTransport";
 import { HttpFileSystem } from "../fs/httpFs";
 import { HttpDialog } from "../system/httpDialog";
+import { sweepImports, uploadFileToServer } from "../system/serverDrop";
 import { HttpFileHasher } from "../media/hashers";
 import { fetchLocalInfo, LocalApi, type LocalInfo } from "./localApi";
 
@@ -182,6 +183,47 @@ describe.skipIf(!python)("ローカルアプリサーバー（実サーバー）
     expect(ratios).toEqual([...ratios].sort((a, b) => a - b));
     expect(await hasher.sha256(f)).toBe(want);
     await expect(hasher.sha256(join(tmp, "no.mp4"))).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("ドロップ取り込み：File を分割してサーバーの取り込みフォルダへ（中身が一致・.part が残らない・掃除）", async () => {
+    const data = randomBytes(20 * 1024 * 1024 + 17);
+    const dest = join(tmp, "appdata", "imports", "g1", "動画 clip.mp4");
+    const seen: number[] = [];
+    await uploadFileToServer(new Blob([data]), dest, fs as Required<HttpFileSystem>, {
+      onProgress: (s) => seen.push(s),
+    });
+    expect(Buffer.from(await fs.readBytes(dest)).equals(data)).toBe(true);
+    expect(seen).toEqual([8 * 1024 * 1024, 16 * 1024 * 1024, data.length]); // 8MiB ずつ
+    expect(await fs.listDir(join(tmp, "appdata", "imports", "g1"))).toEqual(["動画 clip.mp4"]);
+    // 中止：サーバーに .part も dest も残らない
+    const ctl = new AbortController();
+    await expect(
+      uploadFileToServer(
+        new Blob([data]),
+        join(tmp, "appdata", "imports", "g2", "x.mp4"),
+        fs as Required<HttpFileSystem>,
+        {
+          signal: ctl.signal,
+          onProgress: () => ctl.abort(),
+        },
+      ),
+    ).rejects.toThrow();
+    expect(await fs.listDir(join(tmp, "appdata", "imports", "g2"))).toEqual([]);
+    // 掃除：参照されていない取り込みだけが消える
+    const importsDir = join(tmp, "appdata", "imports");
+    await uploadFileToServer(
+      new Blob([data.subarray(0, 10)]),
+      join(importsDir, "g3", "keep.mp4"),
+      fs as Required<HttpFileSystem>,
+    );
+    const removed = await sweepImports(
+      fs,
+      importsDir,
+      [join(importsDir, "g3", "keep.mp4")],
+      Date.now() + 3 * 86_400_000,
+    );
+    expect(removed).toBe(2); // g1 と、空になった g2
+    expect(await fs.exists(join(importsDir, "g3", "keep.mp4"))).toBe(true);
   });
 
   it("ネイティブダイアログ：Windows 以外では DIALOG_UNAVAILABLE、別 Origin は DIALOG_LOCAL_ONLY", async () => {
