@@ -1,0 +1,93 @@
+# detectron2 の Windows 用ビルド済み wheel をビルドする(#51)。CUDA Toolkit(nvcc)はジョブ内で導入する。GPU は要らない(コンパイルのみ)。
+# 利用者の PC では再ビルドしない: 出来た wheel を Release に置き、初回セットアップ(#32)が bootstrap-spec.json の wheelUrl から取る。
+# wheel は Python・torch・CUDA・arch の組み合わせごとに別物。torch 版を上げたら bootstrap-spec.json と合わせて再ビルドする。
+# 値は #30 の実機検証で確定するまで暫定(入力で変えられる)。
+name: detectron2 wheel (Windows)
+
+on:
+  push:
+    branches: [ci/release-test] # 試し(workflow_dispatch は既定ブランチに置くまで使えない)。入力は下の || の既定値になる
+  workflow_dispatch:
+    inputs:
+      python:
+        default: "3.12"
+      torch:
+        description: torch の版(bootstrap-spec.json と同じにする)
+        default: "2.8.0"
+      cuda:
+        description: CUDA の版(torch の cu 表記と合わせる。12.8 = cu128)
+        default: "12.8.0"
+      arch:
+        description: TORCH_CUDA_ARCH_LIST
+        default: "8.0;8.6;8.9;12.0"
+      release_tag:
+        description: 空でなければ、この Release(なければ作る)に wheel を添付する
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022 # windows-latest の VS は新しすぎて CUDA 12.8 の nvcc が受け付けない(host_config.h)。VS 2022 のイメージを使う
+    timeout-minutes: 180
+    env:
+      DETECTRON2_REF: a1ce2f9
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python || '3.12' }}
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: CUDA Toolkit(nvcc とヘッダだけ。ドライバ・GPU は不要)
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.cuda || '12.8.0' }}"; $short = ($v -split "\.")[0..1] -join "."
+          $url = "https://developer.download.nvidia.com/compute/cuda/$v/network_installers/cuda_${v}_windows_network.exe"
+          Invoke-WebRequest $url -OutFile cuda.exe
+          $pk = "nvcc", "cudart", "cublas_dev", "cusparse_dev", "cusolver_dev", "curand_dev", "cufft_dev", "thrust", "visual_studio_integration" | ForEach-Object { "${_}_$short" }
+          Start-Process .\cuda.exe -ArgumentList (@("-s") + $pk) -Wait
+          $root = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v$short"
+          "CUDA_HOME=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "$root\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & "$root\bin\nvcc.exe" --version
+      - name: torch(CUDA 版)
+        shell: pwsh
+        run: |
+          $cu = "cu" + ((("${{ inputs.cuda || '12.8.0' }}" -split "\.")[0..1]) -join "")
+          python -m pip install --upgrade pip setuptools wheel ninja
+          python -m pip install "torch==${{ inputs.torch || '2.8.0' }}" torchvision --index-url "https://download.pytorch.org/whl/$cu"
+          python -c "import torch; print(torch.__version__, torch.version.cuda)"
+      - name: detectron2 を wheel にする
+        shell: pwsh
+        env:
+          TORCH_CUDA_ARCH_LIST: ${{ inputs.arch || '8.0;8.6;8.9;12.0' }}
+          FORCE_CUDA: "1"
+          DISTUTILS_USE_SDK: "1"
+          MAX_JOBS: "4"
+        run: |
+          git clone https://github.com/facebookresearch/detectron2.git d2
+          git -C d2 checkout $env:DETECTRON2_REF
+          python -m pip wheel --no-build-isolation --no-deps ./d2 -w wheelhouse
+          Get-FileHash wheelhouse\*.whl -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Tee-Object wheelhouse\SHA256SUMS
+      - name: wheel が import できる(CUDA 拡張の読み込みまで。GPU が無いので実行はしない)
+        shell: pwsh
+        run: |
+          python -m pip install --no-deps (Get-ChildItem wheelhouse\*.whl).FullName
+          # detectron2 は import 時に fvcore を読む(--no-deps なので実行時依存を入れておく)
+          python -m pip install fvcore
+          python -c "import detectron2, detectron2._C; print('ok', detectron2.__version__)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: detectron2-wheel
+          path: wheelhouse/*
+          if-no-files-found: error
+      - name: Release に添付
+        if: inputs.release_tag != '' && inputs.release_tag != null
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.release_tag }}" 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create "${{ inputs.release_tag }}" --title "${{ inputs.release_tag }}" --notes "detectron2 wheel (Windows)。#51" --prerelease }
+          gh release upload "${{ inputs.release_tag }}" wheelhouse\* --clobber

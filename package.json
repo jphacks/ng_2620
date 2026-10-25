@@ -8,7 +8,10 @@
   "scripts": {
     "prepare": "lefthook install",
     "dev": "pnpm --filter @vvlog/desktop dev",
-    "tauri": "pnpm --filter @vvlog/desktop tauri",
+    "dev:web": "pnpm --filter @vvlog/desktop dev",
+    "dev:web:app": "node scripts/dev-web-app.mjs",
+    "dev:web:app:fresh": "node scripts/dev-web-app.mjs --fresh",
+    "dev:web:app:dist": "node scripts/dev-web-app.mjs --dist",
     "build": "pnpm --filter @vvlog/desktop build",
     "test": "pnpm --filter @vvlog/desktop test",
     "lint": "pnpm --filter @vvlog/desktop lint",
@@ -16,9 +19,7 @@
     "mock": "sh services/mock_server/run.sh --port 8766",
     "mock:win": "powershell -ExecutionPolicy Bypass -File services/mock_server/run.ps1 --port 8766",
     "format": "prettier --write apps/desktop",
-    "format:check": "prettier --check apps/desktop",
-    "lint:rust": "cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets",
-    "format:rust": "cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml"
+    "format:check": "prettier --check apps/desktop"
   },
   "devDependencies": {
     "lefthook": "^2.2.2",

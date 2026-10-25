@@ -10,7 +10,7 @@ PNPM ?= pnpm
 ARGS ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help setup doctor install dev web web-memory mock test lint typecheck build check clean clean-rust
+.PHONY: help setup doctor install dev web web-memory mock test lint typecheck build check clean
 
 help: ## このヘルプ
 	@printf 'vvlog の開発用コマンド（make <ターゲット>）\n\n'
@@ -26,8 +26,8 @@ doctor: ## 何も入れずに、ツールの有無と版を一覧にする（足
 install: ## pnpm install（ロックファイルどおり）
 	$(PNPM) install --frozen-lockfile
 
-dev: ## デスクトップアプリを起動（pnpm tauri dev。Rust が要る）
-	$(PNPM) tauri dev
+dev: ## 画面を開発サーバーで起動（pnpm dev、http://localhost:1420）。web と同じ
+	$(PNPM) dev
 
 web: ## ブラウザで画面だけ（pnpm dev、http://localhost:1420）
 	$(PNPM) dev
@@ -55,5 +55,3 @@ check: typecheck lint test ## typecheck・lint・test をまとめて
 clean: ## node_modules と apps/desktop/dist を消す（次は make install）
 	rm -rf node_modules apps/desktop/node_modules apps/desktop/dist
 
-clean-rust: ## Rust のビルド結果（apps/desktop/src-tauri/target）を消す。次の make dev は時間がかかる
-	rm -rf apps/desktop/src-tauri/target

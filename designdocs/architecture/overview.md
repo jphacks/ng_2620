@@ -1,5 +1,8 @@
 # アーキテクチャ概要
 
+> **注（ADR-0015、2026-10-25）**：下の図とディレクトリ構成は Tauri 時代のものです。現在は **Tauri を廃止し、ブラウザの画面 ＋ Windows のローカルアプリサーバー（Python/FastAPI）** です。`src-tauri`（Rust）は無く、`Tauri*` のアダプタは `Http*`（フルモード）／`Persistent*`・`Memory*`（制限モード）に置き換わりました。対応は [tauri-migration.md](tauri-migration.md)、モード別の機能は [../features/mode-matrix.md](../features/mode-matrix.md)。層の考え方（domain / application / infrastructure / presentation、ポートとアダプタ）は変わりません。
+
+
 関連 ADR：[0001](../adr/0001-desktop-framework-tauri.md) / [0002](../adr/0002-gpu-server-and-compute-backend-port.md) / [0003](../adr/0003-clean-architecture-and-contract-first.md) / [0005](../adr/0005-preview-composite-client-export-server.md) / [0014](../adr/0014-server-stack.md)
 
 ## 1. システム構成

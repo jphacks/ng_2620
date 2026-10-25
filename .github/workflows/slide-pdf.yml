@@ -23,10 +23,10 @@ permissions:
 jobs:
   pdf:
     name: Marp で PDF にする
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - name: 日本語フォント（Google Fonts が読めなかったときの代わり）

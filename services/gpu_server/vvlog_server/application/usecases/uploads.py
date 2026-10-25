@@ -12,7 +12,7 @@ from ..deps import Deps
 
 def start_upload(d: Deps, project_id: str, kind: str, filename: str, size: int, sha256: str) -> dict:
     d.projects.get(project_id)
-    u = Upload.create(project_id, kind, filename, size, sha256)
+    u = Upload.create(project_id, kind, filename, size, sha256, limit=d.settings.max_upload_bytes)
     d.uploads.save(u)
     return {"uploadId": u.uploadId, "chunkSize": u.chunkSize}
 

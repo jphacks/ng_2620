@@ -1,6 +1,6 @@
 # ADR-0001 デスクトップ基盤は Tauri 2 + React + TypeScript
 
-- 状態：採択
+- 状態：置換済み（[ADR-0015](0015-web-first-windows-local-server.md)）
 - 日付：2026-10-24
 
 ## 文脈

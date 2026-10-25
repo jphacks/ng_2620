@@ -4,15 +4,28 @@ import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { ComputeBackendFactory } from "@/application/ports/compute";
 import type { EditorMediaPort } from "@/application/ports/editor";
-import type { LocalServerStatus } from "@/application/ports/localServer";
 import type { LocalFilePort } from "@/application/ports/media";
 import type { ProjectRepositoryPort } from "@/application/ports/project";
 import type { SettingsPort } from "@/application/ports/settings";
-import type { ClockPort, DialogPort, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
+import type {
+  ClockPort,
+  DialogPort,
+  AppQuitPort,
+  FileDropPort,
+  LocalAppPort,
+  NotifierPort,
+  ShellPort,
+} from "@/application/ports/system";
+import type { BootstrapPort } from "@/application/ports/bootstrap";
+import type { WeightsPort } from "@/application/ports/weights";
 import type * as UC from "@/application/usecases";
+import type { ComputeProfile } from "@/domain/connection";
 import type { Project } from "@/domain/project";
 
 export type BackendMode = "mock" | "http" | "memory";
+
+/** full：ローカルアプリサーバーが画面を配信している／restricted：Pages 単体（features/mode-matrix.md） */
+export type RuntimeMode = "full" | "restricted";
 
 export interface Diagnostics {
   webgl2: boolean;
@@ -20,15 +33,25 @@ export interface Diagnostics {
 }
 
 export interface Services {
-  env: { isTauri: boolean; isDev: boolean; backendMode: BackendMode; version: string };
+  env: { mode: RuntimeMode; isDev: boolean; backendMode: BackendMode; version: string };
   platform: {
     files: LocalFilePort;
     dialog: DialogPort;
     shell: ShellPort;
     drops: FileDropPort;
     notifier: NotifierPort;
+    /** 制限モードを https（Pages）で開いているときだけ：ローカルアプリの探索と案内 */
+    localApp?: LocalAppPort;
+    /** フルモードだけ：アプリ（ローカルサーバー）を終了する */
+    appQuit?: AppQuitPort;
     clock: ClockPort;
+    /** フルモードだけ：重み（約 7GB）の取得（#33） */
+    weights?: WeightsPort;
+    /** フルモードだけ：解析環境（Python / torch など）の初回セットアップ（#32） */
+    bootstrap?: BootstrapPort;
   };
+  /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */
+  maintenance?: () => Promise<void>;
   compute: ComputeBackendFactory;
   /** プロジェクト内のパスの解決だけ（読み書きはユースケース経由） */
   paths: Pick<ProjectRepositoryPort, "resolve" | "cacheDir" | "pathOf" | "exportsDir" | "defaultDir">;
@@ -41,19 +64,22 @@ export interface Services {
     listRecent: UC.ListRecentProjects;
     loadOverrides: UC.LoadOverrides;
     deleteProject: UC.DeleteProject;
+    /** 制限モードだけ：zip の書き出し・読み込み（#27） */
+    exportProjectZip?: UC.ExportProjectZip;
+    importProjectZip?: UC.ImportProjectZip;
     clearCache: (project: Project) => Promise<void>;
     probeMedia: UC.ProbeMedia;
     importMedia: UC.ImportMedia;
+    relinkSource: UC.RelinkSource;
     listProfiles: UC.ListProfiles;
     saveProfile: UC.SaveProfile;
     deleteProfile: UC.DeleteProfile;
     selectActiveProfile: UC.SelectActiveProfile;
     testConnection: UC.TestConnection;
+    recordUploadConsent: UC.RecordUploadConsent;
     watchConnection: UC.WatchConnection;
-    saveLocalServerConfig: UC.SaveLocalServerConfig;
-    startLocalServer: UC.StartLocalServer;
-    stopLocalServer: UC.StopLocalServer;
-    localServerStatus: () => Promise<LocalServerStatus>;
+    /** フルモードだけ：画面を配信しているローカルサーバーを接続「この PC」として用意する */
+    ensureLocalProfile?: () => Promise<{ profiles: ComputeProfile[]; activeProfileId: string | null }>;
     submitJob: UC.SubmitJob;
     subscribeJob: UC.SubscribeJob;
     fetchArtifact: UC.FetchArtifact;

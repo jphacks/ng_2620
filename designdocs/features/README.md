@@ -13,3 +13,5 @@
 9. P1 / スコープ外
 
 一覧と担当は [docs/README.md](../README.md#機能一覧features)。
+
+フルモード（ローカルサーバー）と制限モード（Pages のみ）の機能差分は [mode-matrix.md](mode-matrix.md)（[ADR-0015](../adr/0015-web-first-windows-local-server.md)）。

@@ -16,12 +16,10 @@ const WORKSPACES: Workspace[] = ["import", "edit", "export"];
 const MOD = IS_MAC ? "⌘" : "Ctrl+";
 
 export function TitleBar() {
-  const { env, uc } = useServices();
+  const { uc } = useServices();
   const navigate = useNavigate();
   const project = useProjectStore((s) => s.current?.project);
   const toggleJobs = useAppStore((s) => s.toggleJobDrawer);
-  // macOS の Overlay タイトルバーでは信号機ボタンの分だけ空ける
-  const trafficLights = env.isTauri && IS_MAC;
   const overrides = useQuery({
     queryKey: ["overrides", project?.id, project?.updatedAt],
     queryFn: () => uc.loadOverrides.execute(project!.id),
@@ -31,22 +29,16 @@ export function TitleBar() {
   const exportDirty = project && overrides.data ? needsExport(project, overridesHash(overrides.data)) : false;
 
   return (
-    <header
-      data-tauri-drag-region
-      className={cx(
-        "flex h-titlebar shrink-0 items-center gap-3 border-b border-border bg-panel pr-2",
-        trafficLights ? "pl-[78px]" : "pl-3",
-      )}
-    >
+    <header className="flex h-titlebar shrink-0 items-center gap-3 border-b border-border bg-panel pl-3 pr-2">
       <button type="button" onClick={() => navigate("/")} className="font-semibold tracking-wide text-fg">
         {ja.app.name}
       </button>
       {project && (
-        <span data-tauri-drag-region className="max-w-[18rem] truncate text-muted" title={project.name}>
+        <span className="max-w-[18rem] truncate text-muted" title={project.name}>
           {project.name}
         </span>
       )}
-      <div data-tauri-drag-region className="flex flex-1 justify-center">
+      <div className="flex flex-1 justify-center">
         {project && (
           <nav className="flex rounded border border-border bg-bg p-0.5" aria-label="workspace">
             {WORKSPACES.map((w, i) => (

@@ -5,7 +5,7 @@
 
 | ADR | 決定 | 状態 |
 |---|---|---|
-| [0001](0001-desktop-framework-tauri.md) | デスクトップ基盤は Tauri 2 + React + TypeScript | 採択 |
+| [0001](0001-desktop-framework-tauri.md) | デスクトップ基盤は Tauri 2 + React + TypeScript | 置換済み（ADR-0015） |
 | [0002](0002-gpu-server-and-compute-backend-port.md) | 推論は GPU サーバーに分離し、アプリからは `ComputeBackend` ポートで抽象化（ローカル Windows / リモート） | 採択 |
 | [0003](0003-clean-architecture-and-contract-first.md) | クリーンアーキテクチャと契約先行（OpenAPI＋成果物形式）で 3 レーン以上を並列化 | 採択 |
 | [0004](0004-job-stages-and-progressive-results.md) | ジョブは `analyze` / `render` / `export` の 3 種、ステージ単位で成果物を公開し SSE で通知 | 採択 |
@@ -19,3 +19,4 @@
 | [0012](0012-transport-and-auth.md) | 通信は HTTP(S)＋SSE、認証は Bearer トークン。リモートはトンネル経由の HTTPS | 採択 |
 | [0013](0013-frontend-stack.md) | フロントエンドのライブラリ構成（状態管理・パネル・描画・型生成） | 採択 |
 | [0014](0014-server-stack.md) | サーバーは FastAPI＋GPU 1 枚につき 1 ワーカー、ステージはサブプロセスで実行 | 採択 |
+| [0015](0015-web-first-windows-local-server.md) | Tauri を廃止し、Windows 専用のローカル Web サーバー（Python/FastAPI）＋ブラウザ UI にする | 採択 |

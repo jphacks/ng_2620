@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from vvlog_server.adapters.h264 import video_args
+
 
 def _arg(cmd, name):
     return Path(cmd[cmd.index(name) + 1])
@@ -62,7 +64,7 @@ def fake_avatar_app(cmd):
         n = len(list((pout / "masks").glob("*.png")))
         av.mkdir(parents=True, exist_ok=True)
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30:duration=2",
-                        "-c:v", "libx264", "-crf", "12", str(av / f"avatar_{name}.mp4")], check=True)
+                        *video_args(12), str(av / f"avatar_{name}.mp4")], check=True)
         return [f"[avatar] target {targets[0]}: x"] + [f"[avatar] frame {f + 1}/{n}" for f in range(n)], 0
     n = len(list((pout / "masks").glob("*.png")))
     lay = av / "layers"

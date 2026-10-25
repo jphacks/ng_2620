@@ -37,6 +37,28 @@ interface ProjectStore {
 }
 
 const AUTOSAVE_MS = 1000;
+
+/**
+ * タブを閉じる・別のタブへ移る・リロードするときに、自動保存を待たずに保存する（ブラウザ版）。
+ * デスクトップアプリと違い、ブラウザは閉じられるとページがすぐ消えるので、最後の 1 秒の変更が落ちる
+ */
+export function installAutosaveFlush(
+  store: { getState(): Pick<ProjectStore, "saveState" | "saveNow"> },
+  doc: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">,
+  win: Pick<Window, "addEventListener" | "removeEventListener">,
+): () => void {
+  const flush = () => {
+    const s = store.getState();
+    if (s.saveState === "dirty" || timer) void s.saveNow();
+  };
+  const onVisibility = () => doc.visibilityState === "hidden" && flush();
+  doc.addEventListener("visibilitychange", onVisibility);
+  win.addEventListener("pagehide", flush);
+  return () => {
+    doc.removeEventListener("visibilitychange", onVisibility);
+    win.removeEventListener("pagehide", flush);
+  };
+}
 let timer: ReturnType<typeof setTimeout> | null = null;
 let chain: Promise<void> = Promise.resolve();
 

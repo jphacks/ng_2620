@@ -2,6 +2,7 @@
 
 - 状態：採択
 - 日付：2026-10-24
+- 補足：[ADR-0015](0015-web-first-windows-local-server.md) により、FastAPI＋サブプロセス実行は継続し、SPA 配信・ローカル FS API・media/hash API を加える。
 
 ## 文脈
 - パイプラインは Python スクリプト群で、プロセスごとにモデルを読み込み、VRAM を数 GB 使う。`torch.compile` やグローバル状態も持つ。

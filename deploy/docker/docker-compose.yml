@@ -1,0 +1,44 @@
+# vvlog GPU サーバー(BYO)。リポジトリのルートで:
+#   HF_TOKEN=hf_... docker compose -f deploy/docker/docker-compose.yml up --build
+# 手元の 127.0.0.1:8765 にだけ出す。外へ見せるときは Tailscale / Cloudflare Tunnel / Caddy など HTTPS の入口を別に立てる
+# (designdocs/guides/byo-gpu-server.md)。ここを 0.0.0.0 に変えない。
+# 【未検証】GPU のある環境での起動は未確認。
+services:
+  vvlog:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        # 【暫定】#30 / #51 の結論待ち。wheel ができたら DETECTRON2_MODE=wheel と URL を環境変数か .env で渡す
+        DETECTRON2_MODE: ${DETECTRON2_MODE:-source}
+        DETECTRON2_WHEEL_URL: ${DETECTRON2_WHEEL_URL:-}
+    image: vvlog-gpu-server
+    ports:
+      - "127.0.0.1:${VVLOG_HOST_PORT:-8765}:8080"
+    environment:
+      # 空ならコンテナが生成して、起動ログに 1 回だけ出す(docker compose logs vvlog)。固定したいときは自分で決める
+      VVLOG_API_TOKEN: ${VVLOG_API_TOKEN:-}
+      # 画面を開くページのオリジン(例 https://me.github.io)。パスは含めない。カンマ区切り
+      VVLOG_ALLOWED_ORIGINS: ${VVLOG_ALLOWED_ORIGINS:-}
+      VVLOG_MAX_UPLOAD_BYTES: ${VVLOG_MAX_UPLOAD_BYTES:-1073741824}
+      VVLOG_MAX_QUEUED_JOBS: ${VVLOG_MAX_QUEUED_JOBS:-8}
+      VVLOG_ARTIFACT_TTL_HOURS: ${VVLOG_ARTIFACT_TTL_HOURS:-72}
+      VVLOG_GPU_IDS: ${VVLOG_GPU_IDS:-0}
+      VVLOG_MAX_TARGETS: ${VVLOG_MAX_TARGETS:-4}
+      VVLOG_HMR_STRIDE: ${VVLOG_HMR_STRIDE:-3}
+      VVLOG_TRACKER_SIZE: ${VVLOG_TRACKER_SIZE:-672}
+      VVLOG_FUSION_DEPTH: ${VVLOG_FUSION_DEPTH:-da2_indoor_s}
+      # 初回の重み取得にだけ使う。ディスクには書かれない。取得後は外してよい
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - vvlog-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+volumes:
+  vvlog-data:
