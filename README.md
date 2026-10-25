@@ -34,10 +34,26 @@ VTuber の 3D ライブには、お金を払って会場まで足を運ぶファ
 撮った動画を入れてアバター（VRM）を選ぶだけで、映っている人物を**本人の動きのまま**アバターに置き換えた動画を作る。
 人物を追いかけて体の 3D の動きを推定し、手前にある物と奥にある物を見分けてから、人物を消して背景を埋め、同じ動きのアバターを合成する。
 
-| ① 人を見つけて追う | ② 体の 3D の動き | ③ 前後の判定（黄＝手前・青＝奥） | ④ アバターを合成 |
-|:---:|:---:|:---:|:---:|
-| <img src="docs/slide/images/flow_1_frame.jpg" width="180"> | <img src="docs/slide/images/flow_2_mesh.jpg" width="180"> | <img src="docs/slide/images/flow_3_occlusion.jpg" width="180"> | <img src="docs/slide/images/flow_4_composite.jpg" width="180"> |
-| ViTDet（検出）・SAM 3（追跡） | SAM 3D Body | SAM 3（物の切り出し）・MoGe-2（奥行き）＋独自の判定 | LaMa（背景の補完）・MediaPipe（表情）・VRM の描画 |
+<table>
+  <tr>
+    <th width="25%">① 人を見つけて追う</th>
+    <th width="25%">② 体の 3D の動き</th>
+    <th width="25%">③ 前後の判定</th>
+    <th width="25%">④ アバターを合成</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/slide/images/flow_1_frame.jpg" width="180"></td>
+    <td align="center"><img src="docs/slide/images/flow_2_mesh.jpg" width="180"></td>
+    <td align="center"><img src="docs/slide/images/flow_3_occlusion.jpg" width="180"></td>
+    <td align="center"><img src="docs/slide/images/flow_4_composite.jpg" width="180"></td>
+  </tr>
+  <tr>
+    <td align="center">ViTDet（検出）<br>SAM 3（追跡）</td>
+    <td align="center">SAM 3D Body</td>
+    <td align="center">黄＝手前・青＝奥<br>SAM 3（物の切り出し）<br>MoGe-2（奥行き）<br>＋独自の判定</td>
+    <td align="center">LaMa（背景の補完）<br>MediaPipe（表情）<br>VRM の描画</td>
+  </tr>
+</table>
 
 手前のノート PC は手前のまま残り、アバターはその後ろに立つ。自動の判定が外れた物は、エディタでクリックして「前」「後ろ」を選ぶとその場で直る。
 
