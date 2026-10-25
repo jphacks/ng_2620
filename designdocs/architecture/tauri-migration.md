@@ -43,7 +43,7 @@
 | `infrastructure/compute/transports.ts` | `tauri-plugin-http` の `fetch`、`net_download`、`net_upload_chunk` | フル：ブラウザの `fetch`（CORS は外部 GPU 側で許可、#36）。ダウンロード・アップロードは §3.3 | #25、#26 |
 | `infrastructure/media/hashers.ts` | `hash_sha256` | フル：`HttpFileHasher`。制限：`WebCryptoFileHasher`（既存） | #24、#26 |
 | `infrastructure/media/probes.ts` | `media_probe` | フル：`HttpMediaProbe`。制限：`VideoElementMediaProbe`（既存） | #24、#26 |
-| `infrastructure/system/tauriSystem.ts` | `plugin-dialog`、`plugin-opener`、`plugin-notification`、`getCurrentWebview().onDragDropEvent` | §3.2。ダイアログは #28 の決定待ち | #28 |
+| `infrastructure/system/tauriSystem.ts` | `plugin-dialog`、`plugin-opener`、`plugin-notification`、`getCurrentWebview().onDragDropEvent` | §3.2・§3.4（#28 で決定済み） | #46、#47、#48 |
 | `infrastructure/system/localServer.ts` | `server_*` | `LocalServerPort` ごと廃止（フルモードではサーバー＝自分自身）。`LocalServerPanel` は「接続先の状態表示」に作り替える | #29、#31 |
 | `infrastructure/platform.ts` | `isTauri()`（`__TAURI_INTERNALS__`） | `detectMode()` に置き換え（§4） | #26 |
 | `presentation/app/container.ts` | `@tauri-apps/api/path`（`appConfigDir`・`appDataDir`・`videoDir`）、`isTauri` 分岐 | パスはローカルサーバーが返す（`GET /v1/local/info` の `dirs`）。分岐は `mode` で行う | #26 |
@@ -63,25 +63,23 @@
   | `BrowserFileSystem` | 制限 | IndexedDB 上の仮想ファイルシステム。パスは `MEM_ROOT` のような仮想ルート配下 |
   | `MemoryFs` | テスト・dev:memory | 既存 |
 - **`toUrl` の置き換え**：`convertFileSrc`（asset プロトコル）の代わりに `http://127.0.0.1:<port>/v1/local/fs/raw?path=…&t=<トークン>` を返す。`<img>`・`<video>`・`createImageBitmap` はヘッダーを付けられないため、トークンはクエリで渡す（短命のセッショントークン。API のトークンとは別にする）。
-- **パスの安全**：ローカル FS API はサーバーが許可したルート（プロジェクトの保存先・アプリデータ・設定）の配下にだけ作用させる（`..` と symlink を解決してから判定）。任意パスの読み書きは認めない。ルートの外のファイルは、ユーザーが選んだものだけを「ハンドル」経由で読む（§3.2）。
+- **パスの安全**：ローカル FS API はサーバーが許可したルート（プロジェクトの保存先・アプリデータ・設定）の配下にだけ作用させる（`..` と symlink を解決してから判定）。任意パスの読み書きは認めない。ルートの外にあるユーザーの動画は、読み取り専用の導出値（probe・sha256）だけをパスで受け付ける（#24）。ドロップされた動画はサーバーの作業フォルダへ取り込んでから扱う（§3.2）。
 
-### 3.2 パス文字列を前提にしている箇所（最大の設計上の論点）
-現行ポートは**ファイルのパス文字列**を通す設計になっている。
-- `DialogPort.pickFiles` は `string[]` を返す。
-- `FileDropEvent` は `paths: string[]` を持つ。
-- `FileHasherPort.sha256(path)`・`MediaProbePort.probe(path)`・`LocalFilePort.readChunk(path, …)` は、いずれもパスを受け取る。
+### 3.2 パス文字列を前提にしている箇所（#28 で決定済み）
+現行ポートは**ファイルのパス文字列**を通す設計である（`DialogPort.pickFiles` は `string[]`、`FileDropEvent` は `paths`、`FileHasherPort.sha256(path)`・`MediaProbePort.probe(path)`・`LocalFilePort.readChunk(path, …)` もパスを受ける）。ブラウザは選ばれたファイルの実パスを教えない。
 
-ブラウザは、選ばれたファイルの**実パスを教えない**（`File` オブジェクトだけを渡す）。このため、そのままでは動かない。選択肢と推奨は次のとおり。
+**決定（#28）：ポートは変えず、パスを保つ。** 実パスが得られない部分は、モードごとに次のとおり埋める。`FileRef` のような新しい型は導入しない（初版の本書は導入を提案したが、#28 の決定で不要になった）。
 
-| 案 | 内容 | 評価 |
+| 操作 | フル | 制限 |
 |---|---|---|
-| **A. ハンドル方式（推奨）** | `DialogPort`／`FileDropPort` は「ファイルハンドル」（不透明な ID）を返す。ハンドルは `File`（ブラウザ）またはサーバー上のパス（フルモードのサーバー側ファイル選択）を指す。`probe`・`sha256`・`readChunk` はハンドルを受け取る | ポートの引数型を `string` から `FileRef` に変える改修が要る。ただし制限モードと完全に整合し、後から片方を足せる |
-| B. ブラウザで選んだファイルを常にローカルサーバーへアップロード | 選択直後にサーバーの作業領域へコピーし、以後はサーバー上のパスで扱う | 数 GB の動画を localhost 経由でコピーすることになり、無駄が大きい |
-| C. サーバー側でファイル選択ダイアログを開く（OS ダイアログ） | ローカルサーバーが tkinter 等で OS のダイアログを出し、パスを返す | ブラウザの操作感から外れる。ドロップではパスが得られない |
+| ファイル／フォルダ選択・保存先 | ローカルサーバーが Windows のネイティブダイアログを出し、**サーバー上の実パス**を返す（#46）。ローカル接続のときだけ有効 | ブラウザのファイル選択。`File` を `BrowserFileSystem` に登録し、**仮想パス**（`MEM_ROOT` 配下）を返す |
+| ドロップ | `File` をローカルサーバーの作業フォルダへストリームで書き込み、以後は**サーバー上のパス**で扱う（#47） | `File` を仮想パスで登録し、メモリ／IndexedDB／GPU 直送に渡す（#27、#47） |
+| probe／sha256／readChunk | パス（サーバー側で実行） | 仮想パス（ブラウザ側で実行） |
 
-- **推奨は A**。`FileRef = { kind: "path"; path: string } | { kind: "file"; file: File; id: string }` のような判別共用体にし、`FileSystem` の実装がどちらも読めるようにする。
-- フルモードの「フォルダを開く」「保存先を選ぶ」は、ブラウザでは実フォルダを得られない。ローカルサーバーのフォルダ一覧 API を使った**アプリ内ファイルブラウザ**（Radix の Dialog）で代替する案が有力。これは #28（`needs-decision`）で決める。本書では、ポートを `FileRef` にしておけば #28 の結論に依存せず実装を進められる、という点だけを定める。
-- `FileDropPort` は、ブラウザの `dragover`／`drop` イベントから `FileRef`（`kind: "file"`）を作る。座標は CSS ピクセルのまま。
+- どちらのモードでも `string` のパスを返すので、`application` 層とユースケースは変わらない（現行の `browserDialog(memFs)`・`browserFileDrop(memFs)` と同じ考え方）。
+- `DialogPort` のフル版は `POST /v1/local/dialog/{open-files|open-dir|save}` を呼ぶ `HttpDialog`（#46）。`FileDropPort` のフル版は、ドロップ中の座標と `over`／`leave` をブラウザの `dragover`／`dragleave` から作り、`drop` ではアップロードを待ってからパスを渡す（#47）。座標は CSS ピクセルのまま。
+- ネイティブダイアログはサーバー端末の画面に出るため、**ローカル接続（127.0.0.1＋起動トークン）以外では無効**にする。リモート接続や Pages 経由では出さない。
+- ドロップで作業フォルダにコピーしたファイルは、プロジェクトの取り込みで不要になった時点で消す（掃除の方針は #47）。
 
 ### 3.3 大容量の転送（#25）
 - **外部 GPU との通信はブラウザから直接 `fetch` する**（CORS・HTTPS・トークンを外部サーバー側で整える、#36）。ローカルサーバーを中継しない。
@@ -90,12 +88,11 @@
   - 進捗は `fetch` のストリームから直接得られる。
 - ローカル GPU（フルモードで自分自身に投入する場合）は同一サーバーなので、ファイルはサーバーが直接読めるようにし、HTTP を経由しない経路を `HttpTransport` の別実装（`LocalTransport`）として持たせる。
 
-### 3.4 通知・外部を開く・Finder で表示
+### 3.4 通知・外部を開く
 | ポート | フル | 制限 |
 |---|---|---|
-| `NotifierPort.osNotify` | ブラウザの Notification API（初回に許可を求める）。ローカルサーバー経由の OS 通知は使わない | 同左 |
-| `ShellPort.reveal` | ローカルサーバーが `explorer /select,` を実行（`POST /v1/local/shell/reveal`、許可ルートの配下のみ） | 提供しない（ボタンを出さない） |
-| `ShellPort.open` | 同上（既定のアプリで開く）。許可ルートの配下のみ | 提供しない |
+| `NotifierPort.osNotify` | Web Notifications（許可されたときだけ）。未許可・拒否のときは画面内トーストとタブタイトル／ファビコンのバッジで代替する。許可の要求はジョブ開始などのユーザー操作から出す（Safari は必須）（#48） | 同左 |
+| `ShellPort.reveal`／`ShellPort.open` | **今回は提供しない**（#28 で見送り。要望があれば `POST /v1/local/shell/*` を許可ルート配下に限って後から足す） | 提供しない |
 | `ShellPort.openUrl` | `window.open(url, "_blank", "noopener")` | 同左 |
 
 ### 3.5 シークレットと設定
@@ -118,7 +115,7 @@ export interface Capabilities {
   localFs: boolean;      // プロジェクトフォルダを直接読み書きできる
   localGpu: boolean;     // この PC の GPU で推論できる
   localShell: boolean;   // エクスプローラで表示などができる
-  nativeDrops: boolean;  // ファイルのパスが得られる（フルモードでサーバーが選択を受け持つ場合）
+  nativeDialogs: boolean; // サーバー側のネイティブダイアログが使える（ローカル接続のときだけ）
 }
 
 export async function detectMode(origin: Location): Promise<{ mode: AppMode; capabilities: Capabilities; local?: LocalInfo }>;
@@ -138,20 +135,18 @@ export async function detectMode(origin: Location): Promise<{ mode: AppMode; cap
 |---|---|
 | #22 ローカルサーバー | `GET /v1/local/info`（モード判定用・認証なし）、セッショントークン（`raw` 用）、`127.0.0.1` 限定、許可ルートの概念 |
 | #23 ローカルFS API | §2.1 の `fs_*` 13 個。Range 読み出し、zip-slip 対策、パスのルート制限、`raw` エンドポイント（`toUrl` 用） |
-| #24 media/hash API | `media_probe`、`hash_sha256`（進捗は SSE）。パスではなく `FileRef` に対応する場合は、`file` 種別をアップロード経由で受ける口を用意する |
+| #24 media/hash API | `media_probe`、`hash_sha256`（進捗は SSE）。ドロップ分は #47 で作業フォルダへ取り込んでからパスで渡すので、`file` を受ける口は要らない |
 | #25 大容量転送 | §3.3。ブラウザから外部 GPU への直接 `fetch`、`.part` と Range の再開 |
-| #26 アダプタ差し替え | `HttpFileSystem`／`HttpFileHasher`／`HttpMediaProbe`／`LocalTransport`、`TauriLayerCache.ts` の改名、`container.ts` の `mode` 分岐、**ポートの `FileRef` 化（§3.2、新規）** |
+| #26 アダプタ差し替え | `HttpFileSystem`／`HttpFileHasher`／`HttpMediaProbe`／`LocalTransport`、`TauriLayerCache.ts` の改名、`container.ts` の `mode` 分岐 |
 | #27 制限モード | `BrowserFileSystem`（IndexedDB）、zip の保存／読み込み、`WebCryptoFileHasher`・`VideoElementMediaProbe` の上限 |
-| #28 ネイティブダイアログ代替 | §3.2 の案 A を前提に、ファイル／フォルダ選択・保存先指定の UI を決める |
+| #28 → #46／#47／#48 | §3.2・§3.4 のとおり決定済み。ダイアログ API は #46、ドロップのストリーム取り込みは #47、通知は #48 |
 | #29 Tauri 依存除去（フロント） | §2.2 の `package.json`・`vite.config.ts`・`isTauri` 7 か所・`TitleBar`・`LocalServerPanel`・`LocalServerPort` の廃止 |
 | #31 ランチャー | `server_start/stop/status` の責務（起動・多重起動防止・終了）を引き継ぐ |
 | #40 Tauri 削除 | `src-tauri/**`、`lefthook.yml`・ルート `package.json`・`Makefile` の Rust 関連 |
 
 ### 追加で切るべきか（提案）
-- **ポートの `FileRef` 化（§3.2）**：#26 に含めると大きくなる。**独立したチケットに分け、#26・#27・#28 の前提にする**ことを提案する（本 PR のマージ後に起票）。
 - **F12 サンプルの配置**：`src-tauri/resources/samples` は Tauri の `bundle.resources` で同梱していた。Pages とローカルサーバーの両方から取れる静的配信の場所（例 `apps/desktop/public/samples/`）へ移す作業が要る。#37 と #40 のどちらにも明記されていないので、#37 に含めるか別チケットにする。
 
 ## 6. 未確定
-- §3.2 の A 案でよいか（#28 の決定と合わせて確認）。
 - 外部 GPU の CORS／HTTPS 要件が満たせない環境でのローカルサーバー中継（フォールバック）を持つか。持たない場合、BYO の導入手順（#43）に CORS 設定を必須として書く。
-- HTTPS の Pages から `http://127.0.0.1` へ通信できるか（ブラウザごとの混在コンテンツの扱い）は #38 で実測する。
+- HTTPS の Pages から `http://127.0.0.1` へ通信できるか。#28 の決定で Safari は昇格を諦め案内リンクのみとし、Chrome／Edge で #38 が実測する。
