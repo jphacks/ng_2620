@@ -18,6 +18,7 @@ import { TitleBar } from "./TitleBar";
 import { DropUploadHost } from "./DropUploadHost";
 import { RestrictedBanner } from "./RestrictedBanner";
 import { ToastHost } from "./ToastHost";
+import { SetupPrompt } from "./SetupPrompt";
 
 /** 開いたプロジェクトの既定のワークスペース：描画済みなら編集、それ以外は取り込み */
 function defaultWorkspace(p: Project) {
@@ -108,6 +109,7 @@ export function AppFrame() {
     <div className="flex h-full min-w-[1280px] flex-col">
       <TitleBar />
       <RestrictedBanner />
+      <SetupPrompt />
       <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </main>

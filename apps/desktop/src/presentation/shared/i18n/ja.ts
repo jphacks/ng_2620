@@ -382,6 +382,33 @@ export const ja = {
         "この画面を配信しているローカルアプリに自動でつながります。宛先とトークンはアプリの起動ごとに自動で設定されるため、編集できません。",
     },
   },
+  setup: {
+    title: "初回セットアップ",
+    body: "解析を使うには、この PC に解析環境（Python・torch など）とモデルの重み（合計で十数 GB）を取り込みます。下のボタンを押すだけで、順番に進めます。途中で止まっても、続きから再開できます。",
+    banner: "初回セットアップが済んでいません。済ませるまで解析は使えません。",
+    open: "セットアップする",
+    start: "セットアップを始める",
+    resume: "続きから再開",
+    cancel: "中止（続きから再開できます）",
+    later: "あとで",
+    allDone: "セットアップが完了しました。解析を使えます。",
+    env: "解析環境（Python・torch など）",
+    weights: "モデルの重み",
+    done: "完了",
+    todo: "未実施",
+    running: "実行中",
+    unsupportedTitle: "この PC の GPU では解析環境を作れません",
+    unsupportedBody:
+      "制限モード（ブラウザ内）と、自分で用意した外部 GPU サーバーの接続は使えます。設定 > 接続から登録してください。",
+    needToken: "Hugging Face のトークンを入れると、始められます。",
+    tokenGuide:
+      "SAM 3 / SAM 3D Body は Hugging Face の許諾が必要です。次のページでライセンスに同意してアクセスを申請し、承認されたら read 権限のアクセストークンを下に入れてください。",
+    tokenLabel: "Hugging Face のアクセストークン",
+    tokenNote: "トークンは取得のためにだけ使い、保存しません。",
+    getToken: "トークンを作るページを開く",
+    envFailed: "解析環境の作成に失敗しました",
+    other: "セットアップに失敗しました",
+  },
   weights: {
     title: "モデルの重み",
     intro:
@@ -595,6 +622,18 @@ export const ja = {
     DIALOG_UNAVAILABLE: {
       title: "ここでは選択ダイアログを開けません",
       body: () => "ネイティブのダイアログは Windows 版のローカルアプリでだけ使えます。",
+    },
+    BOOTSTRAP_BUSY: {
+      title: "解析環境の作成は実行中です",
+      body: () => "終わるまで待つか、中止してからやり直してください。",
+    },
+    BOOTSTRAP_UNSUPPORTED: {
+      title: "この PC の GPU では解析環境を作れません",
+      body: () => "制限モードか、自分で用意した外部 GPU サーバーを使ってください。",
+    },
+    BOOTSTRAP_UV_MISSING: {
+      title: "uv が見つかりません",
+      body: () => "インストーラーに含まれる uv か、PATH 上の uv が必要です。インストールし直してください。",
     },
     WEIGHTS_BUSY: {
       title: "重みの取得は実行中です",

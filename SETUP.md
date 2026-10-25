@@ -58,6 +58,7 @@ pnpm dev
 画面の「設定（右上の歯車）> 接続」で「開発用モック」を選んで「既定にする」（開発ビルドには最初から登録されている。起動時に選ばせたいなら
 `VITE_BACKEND=mock pnpm dev`）。ステータスバー左のランプが緑になれば接続できている。
 サーバーなしで画面だけ見るなら `pnpm --filter @vvlog/desktop dev:memory`（ブラウザ、シミュレーター）。詳しくは `apps/desktop/README.md`。
+画面の UI・操作感のデバッグ用に `pnpm dev:web`（制限モード）／`pnpm dev:web:app`（フルモード。サーバーも一緒に起動）／`pnpm dev:web:app:fresh`（初回起動の状態）／`pnpm dev:web:app:dist`（ビルドして配信）がある。詳しくは `apps/desktop/README.md`。
 この画面はローカルサーバーが無いので**制限モード**（ファイルはブラウザの IndexedDB）。**フルモード**（ローカルサーバー越しのファイル・ダイアログ）を `pnpm dev` で試すには `apps/desktop/README.md` の「フルモード（ローカルアプリサーバー）で試す」。
 **Mac での開発は、モックサーバー ＋ ブラウザ（`pnpm dev`）で続ける**（Windows の GPU 機が無くてもよい）。
 

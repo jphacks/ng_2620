@@ -32,6 +32,7 @@ import {
   LocalStorageSettings,
 } from "@/infrastructure/settings/settingsStores";
 import { HttpDialog } from "@/infrastructure/system/httpDialog";
+import { HttpBootstrap } from "@/infrastructure/bootstrap/HttpBootstrap";
 import { HttpWeights } from "@/infrastructure/weights/HttpWeights";
 import { serverFileDrop, sweepImports } from "@/infrastructure/system/serverDrop";
 import { useDropUploadStore } from "@/presentation/shared/stores/dropUploadStore";
@@ -135,6 +136,7 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
       appQuit: api ? new HttpAppQuit(api) : undefined,
       clock,
       weights: api ? new HttpWeights(api) : undefined,
+      bootstrap: api ? new HttpBootstrap(api) : undefined,
     },
     maintenance: api
       ? async () => {
