@@ -10,6 +10,8 @@
     "dev": "pnpm --filter @vvlog/desktop dev",
     "tauri": "pnpm --filter @vvlog/desktop tauri",
     "build": "pnpm --filter @vvlog/desktop build",
+    "build:web": "pnpm --filter @vvlog/desktop build",
+    "build:app": "pnpm --filter @vvlog/desktop tauri build",
     "test": "pnpm --filter @vvlog/desktop test",
     "lint": "pnpm --filter @vvlog/desktop lint",
     "typecheck": "pnpm --filter @vvlog/desktop typecheck",
