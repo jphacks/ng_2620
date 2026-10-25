@@ -28,6 +28,7 @@ designdocs/
     contracts.md            GPU サーバー API（OpenAPI の元）、イベント、成果物（レイヤー）形式、プロジェクトファイル形式、合成規則
     parallel-plan.md        レーン分割、2 日間のマイルストーン、依存関係、ブランチ運用、Definition of Done
     pipeline-integration.md 既存パイプライン（scripts/）をサーバーのステージに載せる方法と必要な改修
+    tauri-migration.md      Tauri 依存の棚卸しと、ポート／アダプタ・モード判定の再設計（ADR-0015）
   ux/
     README.md               UX 原則、情報設計、画面遷移
     screens.md              画面ごとのワイヤーフレームと状態（空・処理中・エラー）
