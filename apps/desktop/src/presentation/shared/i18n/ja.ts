@@ -2,7 +2,6 @@
 
 import type { LicenseBadge } from "@/domain/avatar";
 import type { ProfileProblem } from "@/domain/connection";
-import type { LocalServerProblem } from "@/domain/localServer";
 import type { JobStatus, JobType, StageName, StageStatus } from "@/domain/job";
 import type { ProjectPhase } from "@/domain/project";
 import { IS_MAC } from "../commands/useCommands";
@@ -21,6 +20,13 @@ export function formatSeconds(sec: number): string {
 export const ja = {
   app: { name: "vvlog" },
   workspace: { import: "取り込み", edit: "編集", export: "書き出し" },
+  dropUpload: {
+    uploading: (name: string) => `${name} を取り込み中`,
+    done: (name: string) => `${name} を取り込みました`,
+    failed: (name: string) => `${name} を取り込めませんでした`,
+    canceled: (name: string) => `${name} の取り込みを中止しました`,
+    cancel: "中止",
+  },
   common: {
     cancel: "キャンセル",
     close: "閉じる",
@@ -70,6 +76,21 @@ export const ja = {
     openJobs: "ジョブパネルを開く（⌃J）",
     polling: "（ポーリング）",
   },
+  restricted: {
+    title: "制限モード — データはこのブラウザの中にだけ保存されます",
+    body: "ブラウザの都合で消えることがあるので、大事なプロジェクトは［zip で保存］しておいてください。動画の解析・描画・書き出しは、接続した GPU サーバーで行います。",
+    notPersisted: "（このブラウザは保存領域の永続化を許可していません）",
+    install: "この PC のローカルアプリを使うと、フォルダへの自動保存・この PC の GPU・保存先の指定が使えます。",
+    dismiss: "閉じる",
+    find: "ローカルアプリを探す",
+    finding: "探しています…",
+    foundBody: "この PC でローカルアプリが動いています。",
+    open: "ローカル版を開く",
+    notFound:
+      "見つかりませんでした。ローカルアプリが起動しているか確認してください（ブラウザが、この画面からこの PC への接続を許可していないこともあります）。",
+    openByAddress: (url: string) =>
+      `ローカルアプリが動いているときは、アドレス ${url} をブラウザで直接開いてください。`,
+  },
   home: {
     dropTitle: "動画をここにドロップ",
     or: "または",
@@ -80,6 +101,10 @@ export const ja = {
     openSample: "サンプルを開く",
     sampleMissing: "サンプルプロジェクトはまだ同梱されていません",
     openProject: "プロジェクトを開く…",
+    openZip: "zip を読み込む…",
+    saveZip: "zip で保存",
+    zipSaved: (file: string) => `${file} を保存しました`,
+    zipImported: (name: string) => `${name} を読み込みました`,
     recent: "最近のプロジェクト",
     firstTime: "まずはサンプルを開いてみましょう",
     firstTimeBody: "処理済みのサンプルなら、サーバーに接続しなくても編集を試せます。",
@@ -123,6 +148,11 @@ export const ja = {
     resumeBody: "途中まで送った部分は再利用し、残りだけを送ります。",
     resume: "アップロードを再開",
     previewUnavailable: "この動画はプレビューで再生できません（解析はできます）",
+    sourceMissingTitle: "元の動画が見つかりません",
+    sourceMissingBody:
+      "別の PC やブラウザで作られたプロジェクトです。解析を始めるには、同じ動画を選び直してください（解析済みのときは、そのまま編集できます）。",
+    relink: "動画を選び直す",
+    relinked: "動画を結びつけ直しました",
   },
   upload: {
     label: "アップロード",
@@ -309,6 +339,23 @@ export const ja = {
     queueLength: "キュー",
     apiVersion: "API 版",
     serverVersion: "サーバーの版",
+    reachReason: {
+      mixed_content:
+        "https のページからは、暗号化されていない http:// の接続先は使えません（ブラウザが止めます）。https:// の URL にしてください。Tailscale serve や Cloudflare Tunnel を使うと https:// になります。",
+      cors: (origin: string) =>
+        `サーバーには届きましたが、ブラウザが応答を拒否しました（CORS）。サーバー側の VVLOG_ALLOWED_ORIGINS に ${origin} を追加して、サーバーを再起動してください。`,
+      unreachable:
+        "サーバーに届きません。URL・サーバーが起動しているか・トンネルやファイアウォール・証明書（https の場合）を確認してください。",
+    },
+    storageNote:
+      "トークンはこのブラウザの中（IndexedDB）にだけ保存され、このサーバー以外には送られません。共有の PC では使わないでください。",
+    consent: {
+      title: "動画の送信先を確認してください",
+      body: (name: string, url: string) =>
+        `動画と解析結果は、あなたが用意したサーバー「${name}」（${url}）にだけ送られます。運営側のサーバーには送られません。`,
+      note: "このサーバーの運営者は、送った動画を見ることができます。信頼できるサーバーにだけ送ってください。",
+      ok: "同意して続ける",
+    },
     testFailed: {
       reach: "サーバーに届きません",
       auth: "トークンが違います",
@@ -330,41 +377,47 @@ export const ja = {
     empty: "接続プロファイルがありません。GPU サーバーの URL とトークンを登録してください。",
     selectHint: "左の一覧から接続を選んで編集するか、追加してください。",
     local: {
-      title: "この PC の GPU サーバー",
       profileName: "この PC",
-      intro:
-        "services/gpu_server をこのアプリから起動・停止します。トークンは自動で作られ、接続「この PC」が登録されて既定になります。",
-      useThisPc: "この PC の GPU を使う",
-      serverDir: "サーバーのフォルダ",
-      serverDirHint: "C:\\…\\ng_2620\\services\\gpu_server",
-      serverDirNote: "フォルダの中に .venv（run_local.ps1 を一度実行すると作られます）が必要です。",
-      python: "推論用の Python",
-      pythonHint: "C:\\…\\pipeline\\.venv\\Scripts\\python.exe",
-      pythonNote: "torch と pipeline の依存が入った Python（VVLOG_PYTHON）。",
-      port: "ポート",
-      autoStart: "アプリの起動時に自動で起動する",
-      browse: "参照…",
-      start: "起動",
-      starting: "起動しています…",
-      stop: "停止",
-      saved: "この PC の GPU サーバーの設定を保存しました",
-      started: "この PC の GPU サーバーを起動しました",
-      stopped: "この PC の GPU サーバーを停止しました",
-      stopTitle: "GPU サーバーを停止しますか？",
-      stopBody: "実行中のジョブは中断され、次に起動したときに失敗として扱われます。",
-      status: {
-        running: (pid: number | null) => `動いています${pid ? `（PID ${pid}）` : ""}`,
-        stopped: "停止しています",
-        exited: (code: number | null) => `終了しました（終了コード ${code ?? "—"}）`,
-      },
-      log: "サーバーのログ",
-      logEmpty: "まだ出力はありません",
-      browserOnly: "ブラウザ版ではサーバーを起動できません。デスクトップアプリで開いてください。",
-      problems: {
-        server_dir_required: "サーバーのフォルダを選んでください",
-        python_required: "推論用の Python を選んでください",
-        port_invalid: "ポートは 1〜65535 の数で指定してください",
-      } satisfies Record<LocalServerProblem, string>,
+      autoNote:
+        "この画面を配信しているローカルアプリに自動でつながります。宛先とトークンはアプリの起動ごとに自動で設定されるため、編集できません。",
+    },
+  },
+  weights: {
+    title: "モデルの重み",
+    intro:
+      "解析に使うモデルの重み（約 7GB）を、初めてのときにこの PC へ取得します。アプリには同梱していません。途中で止めても、続きから再開できます。",
+    location: "保存先",
+    free: "空き容量",
+    ready: "取得済み（検証済み）",
+    start: "取得を始める",
+    resume: "続きから再開",
+    cancel: "中止（続きから再開できます）",
+    gatedGuide:
+      "一部の重み（SAM 3 / SAM 3D Body）は Hugging Face の許諾が必要です。下のページでライセンスに同意してアクセスを申請し、承認されたら、そのアカウントのアクセストークン（read 権限）を入力してください。",
+    tokenLabel: "Hugging Face のアクセストークン",
+    tokenNote: "トークンは取得のためにだけ使い、保存しません。画面を閉じると消えます。",
+    openLicense: "許諾のページを開く",
+    canceled: "中止しました。保存済みの分は残してあるので、続きから再開できます。",
+    unpinned: "検証値が未固定のファイルの sha256",
+    fileState: { ok: "取得済み", unverified: "未検証", partial: "途中", missing: "未取得" },
+    phase: {
+      preparing: "準備中",
+      checking: "確認中",
+      downloading: "取得中",
+      verifying: "検証中",
+      done: "完了",
+      failed: "失敗",
+      canceled: "中止",
+    },
+    errors: {
+      HF_TOKEN_REQUIRED: "Hugging Face のトークンが必要です",
+      HF_TOKEN_INVALID: "トークンが無効です",
+      HF_ACCESS_DENIED: "このアカウントにはアクセス許諾がありません",
+      WEIGHTS_DISK_FULL: "ディスクの空き容量が足りません",
+      WEIGHTS_NETWORK: "ネットワークが途切れました",
+      WEIGHTS_NOT_FOUND: "取得元にファイルが見つかりません",
+      WEIGHTS_CHECKSUM_MISMATCH: "ファイルの検証に失敗しました",
+      other: "取得に失敗しました",
     },
   },
   general: {
@@ -383,10 +436,22 @@ export const ja = {
     no: "使えません",
     notChecked: "未確認",
     runtime: "実行環境",
-    runtimeTauri: "デスクトップ（Tauri）",
-    runtimeBrowser: "ブラウザ（開発用。ファイルはメモリ上にだけ保存）",
+    runtimeBrowser: "ブラウザ（制限モード。ファイルはメモリ上にだけ保存）",
+    runtimeFull: "ローカルアプリ（ブラウザ＋この PC のサーバー）",
+    notifications: "完了の通知",
+    notifyGranted: "許可されています",
+    notifyDenied: "ブロックされています（ブラウザのサイトの設定から変更できます）",
+    notifyDefault: "まだ決めていません。解析などを始めるときに許可を求めます",
+    notifyUnsupported: "このブラウザでは使えません（画面内のお知らせとタブのバッジだけ出ます）",
+    notifyAsk: "通知を許可する",
     backendMode: "計算バックエンド",
     version: "バージョン",
+    app: "アプリ",
+    quit: "アプリを終了",
+    quitBody:
+      "この PC のサーバーを止めて、画面を閉じられる状態にします。実行中の解析があれば中断され、次に起動したときに『中断』と表示されます。",
+    quitDone: "終了しました。このタブは閉じてかまいません。",
+    quitDoneBody: "もう一度使うときは start.bat から起動してください。",
   },
   project: {
     serverMissingTitle: "サーバーのデータが見つかりません",
@@ -507,6 +572,46 @@ export const ja = {
       body: () => "依存するジョブ（解析・描画）の状態を確認してください。",
     },
     NOT_IMPLEMENTED: { title: "今後対応します", body: () => "この機能はまだ使えません。" },
+    PATH_NOT_ALLOWED: {
+      title: "この場所は使えません",
+      body: () => "アプリが許可しているフォルダの外です。プロジェクトの保存先を確認してください。",
+    },
+    FS_CONFLICT: {
+      title: "ファイルを書き込めません",
+      body: (d: { message?: string }) => d.message || "同じ名前のものが既にあります。",
+    },
+    FS_FAILED: {
+      title: "ファイルを操作できません",
+      body: (d: { message?: string }) => d.message || "ディスクの空き容量や権限を確認してください。",
+    },
+    DIALOG_LOCAL_ONLY: {
+      title: "この操作はローカルアプリだけです",
+      body: () => "ファイルやフォルダの選択は、この PC のローカルアプリに接続しているときだけ使えます。",
+    },
+    DIALOG_BUSY: {
+      title: "ダイアログが開いています",
+      body: () => "開いているダイアログを閉じてからやり直してください。",
+    },
+    DIALOG_UNAVAILABLE: {
+      title: "ここでは選択ダイアログを開けません",
+      body: () => "ネイティブのダイアログは Windows 版のローカルアプリでだけ使えます。",
+    },
+    WEIGHTS_BUSY: {
+      title: "重みの取得は実行中です",
+      body: () => "終わるまで待つか、中止してからやり直してください。",
+    },
+    WEIGHTS_DISK_FULL: {
+      title: "ディスクの空き容量が足りません",
+      body: (d: { message?: string }) => d.message || "空きを作ってから、もう一度お試しください。",
+    },
+    DIALOG_FAILED: {
+      title: "ダイアログを開けません",
+      body: (d: { message?: string }) => d.message || "もう一度試してください。",
+    },
+    FFPROBE_UNAVAILABLE: {
+      title: "動画の詳細を調べられません",
+      body: () => "ffprobe が見つかりません。ブラウザで読める範囲の情報で続けます。",
+    },
     API_VERSION_MISMATCH: { title: "API 版が合いません", body: () => "サーバーとアプリの版を揃えてください。" },
     PROJECT_TOO_NEW: { title: "新しい版のアプリで作られています", body: () => "アプリを更新してから開いてください。" },
     PROJECT_INVALID: { title: "プロジェクトを開けません", body: () => "project.json が壊れているか、形式が違います。" },

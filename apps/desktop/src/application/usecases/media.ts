@@ -30,6 +30,35 @@ export class ProbeMedia {
   }
 }
 
+/**
+ * 元の動画が見つからないプロジェクト（別の PC・別のブラウザで作られた zip など）で、動画を選び直して結びつけ直す。
+ * 解析済みの sha256 があれば『同じ動画』であることを確かめる（違う動画に差し替えて、解析と合わなくなるのを防ぐ）
+ */
+export class RelinkSource {
+  constructor(private readonly d: { files: LocalFilePort; hasher: FileHasherPort }) {}
+
+  async execute(input: {
+    project: Project;
+    path: string;
+    onProgress?: (ratio: number) => void;
+  }): Promise<ProjectMutation> {
+    const { files, hasher } = this.d;
+    if (!isAcceptedVideoPath(input.path)) throw new AppError("VALIDATION_FAILED", "mp4 / mov の動画を選んでください");
+    if (!(await files.exists(input.path))) throw new AppError("NOT_FOUND", "選んだ動画を開けません");
+    const want = input.project.source.sha256;
+    if (want) {
+      const got = await hasher.sha256(input.path, input.onProgress);
+      if (got.toLowerCase() !== want.toLowerCase()) {
+        throw new AppError("VALIDATION_FAILED", "元の動画と違う動画です。同じ動画を選んでください", {
+          detail: { expected: want, actual: got },
+        });
+      }
+    }
+    const path = input.path;
+    return (p) => ({ ...p, source: { ...p.source, path } });
+  }
+}
+
 export type ImportPhase = "creating" | "hashing" | "uploading" | "finalizing";
 
 export interface ImportProgress {

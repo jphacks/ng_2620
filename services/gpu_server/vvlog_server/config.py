@@ -2,10 +2,60 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+
+
+def find_ffprobe(bin_dir: Path | None = None, configured: str | None = None) -> str | None:
+    """Bundled copy (next to the server / in the installer's bin dir) first, then PATH — the order the Tauri app used."""
+    if configured:
+        return configured if Path(configured).is_file() else None
+    name = "ffprobe.exe" if os.name == "nt" else "ffprobe"
+    if bin_dir and (bin_dir / name).is_file():
+        return str(bin_dir / name)
+    return shutil.which("ffprobe")
+
+
+def _local_dirs(e) -> dict[str, Path]:
+    """Where the local app keeps projects, app data and config (Windows first; the others follow XDG-ish defaults)."""
+    home = Path(e.get("USERPROFILE") or e.get("HOME") or Path.home())
+    if os.name == "nt":
+        appdata = Path(e.get("LOCALAPPDATA") or home / "AppData" / "Local")
+        config = Path(e.get("APPDATA") or home / "AppData" / "Roaming")
+        base = {"projects": home / "Videos" / "vvlog", "appData": appdata / "vvlog", "config": config / "vvlog"}
+    else:
+        base = {"projects": home / "Videos" / "vvlog", "appData": home / ".local" / "share" / "vvlog",
+                "config": home / ".config" / "vvlog"}
+    for key, var in (("projects", "VVLOG_LOCAL_PROJECTS_DIR"), ("appData", "VVLOG_LOCAL_APPDATA_DIR"),
+                     ("config", "VVLOG_LOCAL_CONFIG_DIR")):
+        if e.get(var):
+            base[key] = Path(e[var])
+    return {k: v.resolve() for k, v in base.items()}
+
+
+def find_uv(bin_dir: Path | None = None, configured: str | None = None) -> str | None:
+    """uv (bootstrap, #32): VVLOG_UV, then the installer's bin dir, then PATH."""
+    if configured:
+        return configured if Path(configured).is_file() else None
+    name = "uv.exe" if os.name == "nt" else "uv"
+    if bin_dir and (bin_dir / name).is_file():
+        return str(bin_dir / name)
+    return shutil.which("uv")
+
+
+def env_b_python(env_dir: Path) -> Path:
+    return env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def _spa_dir(e) -> Path | None:
+    given = e.get("VVLOG_SPA_DIR")
+    if given:
+        return Path(given).resolve()
+    built = REPO / "apps" / "desktop" / "dist"
+    return built if (built / "index.html").is_file() else None
 
 
 @dataclass(frozen=True)
@@ -23,8 +73,22 @@ class Settings:
     hmr_stride: int
     max_duration_sec: float
     max_long_side: int
+    max_upload_bytes: int         # one source upload (public servers: set it to what you accept)
+    max_queued_jobs: int          # queued + running; more are refused with QUEUE_FULL
+    artifact_ttl_hours: float     # 0 = keep forever; else finished projects / stale uploads older than this are purged
     backend: str                  # "pipeline" (real) | "replay" (mock server)
     record_fixture: Path | None
+    local: bool                   # local app server (ADR-0015): 127.0.0.1 only, serves the SPA, Host/Origin guard
+    spa_dir: Path | None          # built SPA (apps/desktop/dist); local mode only
+    local_dirs: dict                  # local mode: {projects, appData, config} folders (each is an allowed root)
+    local_roots: tuple[Path, ...]     # local mode: further allowed roots (VVLOG_LOCAL_ROOTS, os.pathsep-separated)
+    ffprobe: str | None           # local mode: VVLOG_FFPROBE, else <VVLOG_BIN_DIR>/ffprobe, else PATH
+    weights_manifest: Path        # weights/manifest.json (the installer ships a copy; VVLOG_WEIGHTS_MANIFEST)
+    weights_hf_base: str         # where weights are fetched from (tests point it at a fake server)
+    bootstrap_spec: Path          # services/gpu_server/bootstrap-spec.json: how the first-run setup builds environment B (#32)
+    uv: str | None                # local mode: VVLOG_UV, else <VVLOG_BIN_DIR>/uv, else PATH
+    env_b_dir: Path               # where the bootstrap puts environment B (VVLOG_ENV_B_DIR; default <appData>/envs/pipeline)
+    allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
     def from_env(cls, env: dict | None = None, **over) -> "Settings":
@@ -44,8 +108,28 @@ class Settings:
             hmr_stride=int(e.get("VVLOG_HMR_STRIDE", "3")),
             max_duration_sec=float(e.get("VVLOG_MAX_DURATION_SEC", "30")),
             max_long_side=int(e.get("VVLOG_MAX_LONG_SIDE", "1920")),
+            max_upload_bytes=int(e.get("VVLOG_MAX_UPLOAD_BYTES", str(4 * 1024 ** 3))),
+            max_queued_jobs=int(e.get("VVLOG_MAX_QUEUED_JOBS", "16")),
+            artifact_ttl_hours=float(e.get("VVLOG_ARTIFACT_TTL_HOURS", "0")),
             backend=e.get("VVLOG_BACKEND", "pipeline"),
             record_fixture=Path(rec).resolve() if rec else None,
+            local=e.get("VVLOG_LOCAL", "").lower() in ("1", "true", "yes"),
+            spa_dir=_spa_dir(e),
+            local_dirs=_local_dirs(e),
+            local_roots=tuple(Path(r).resolve() for r in e.get("VVLOG_LOCAL_ROOTS", "").split(os.pathsep) if r.strip()),
+            ffprobe=find_ffprobe(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_FFPROBE")),
+            weights_manifest=Path(e.get("VVLOG_WEIGHTS_MANIFEST") or REPO / "weights" / "manifest.json").resolve(),
+            weights_hf_base=e.get("VVLOG_WEIGHTS_HF_BASE", "https://huggingface.co"),
+            bootstrap_spec=Path(e.get("VVLOG_BOOTSTRAP_SPEC") or REPO / "services" / "gpu_server" / "bootstrap-spec.json").resolve(),
+            uv=find_uv(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_UV")),
+            env_b_dir=Path(e["VVLOG_ENV_B_DIR"]).resolve() if e.get("VVLOG_ENV_B_DIR") else Path("."),
+            allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
+        if not e.get("VVLOG_CKPT_ROOT") and s["local"]:  # local app: weights live in the app-data folder, not next to the cwd
+            s["ckpt_root"] = s["local_dirs"]["appData"] / "weights"
+        if not e.get("VVLOG_ENV_B_DIR"):
+            s["env_b_dir"] = (s["local_dirs"]["appData"] if s["local"] else s["data_root"]) / "envs" / "pipeline"
+        if not e.get("VVLOG_PYTHON") and s["local"]:  # local app: the pipeline runs in the environment the bootstrap builds
+            s["python"] = str(env_b_python(s["env_b_dir"]))
         s.update(over)
         return cls(**s)

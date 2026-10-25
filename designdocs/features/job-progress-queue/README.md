@@ -1,5 +1,8 @@
 # F05 job-progress-queue — ジョブ進捗・キュー・通知・段階的プレビュー
 
+> **注（ADR-0015、2026-10-25）**：この文書の Tauri・Rust・`src-tauri` に関する記述は、Tauri 廃止（ブラウザ ＋ ローカルアプリサーバー）より前のものです。現在の構成は [ADR-0015](../../adr/0015-web-first-windows-local-server.md)・[tauri-migration.md](../../architecture/tauri-migration.md)・[mode-matrix.md](../mode-matrix.md) を正とします。
+
+
 | 項目 | 内容 |
 |---|---|
 | レーン | A（SSE・キュー API は C） |

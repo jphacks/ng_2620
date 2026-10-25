@@ -1,6 +1,10 @@
-// ブラウザ版の OS 機能（Tauri なしの開発用）。選んだ・落としたファイルは MemoryFs に登録してパスで扱う
+// 制限モードのブラウザ側の OS 機能。選んだ・落としたファイルは MemoryFs に登録して（仮想）パスで扱う
 
+import type { FileExchangePort } from "@/application/ports/archive";
+import type { NetworkProbePort } from "@/application/ports/system";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
+import type { FileSystem } from "../fs/FileSystem";
+import { createWebNotifier } from "./webNotifier";
 import type { MemoryFs } from "../fs/memoryFs";
 
 export function browserDialog(fs: MemoryFs): DialogPort {
@@ -26,7 +30,7 @@ export function browserDialog(fs: MemoryFs): DialogPort {
   };
 }
 
-export function browserShell(fs: MemoryFs): ShellPort {
+export function browserShell(fs: Pick<FileSystem, "toUrl">): ShellPort {
   return {
     async reveal(path) {
       console.info("[shell] Finder で表示（ブラウザ版では未対応）:", path);
@@ -71,10 +75,51 @@ export function browserFileDrop(fs: MemoryFs): FileDropPort {
   };
 }
 
-export const browserNotifier: NotifierPort = {
-  async osNotify(title, body) {
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission === "default") await Notification.requestPermission();
-    if (Notification.permission === "granted") new Notification(title, { body });
+export const browserNotifier: NotifierPort = createWebNotifier();
+
+/** 制限モード：ファイルのダウンロードと選択（zip の保存・読み込み用） */
+export const browserFileExchange: FileExchangePort = {
+  async download(filename, bytes, mime = "application/octet-stream") {
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mime }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
+  pickFile({ accept }) {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = accept.join(",");
+      input.onchange = async () => {
+        const f = input.files?.[0];
+        if (!f) return resolve(null);
+        try {
+          resolve({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+        } catch (e) {
+          reject(e);
+        }
+      };
+      input.oncancel = () => resolve(null);
+      input.click();
+    });
+  },
+};
+
+/** 接続テストの失敗理由の推定用：no-cors で『つながったか』だけを見る */
+export const browserNetworkProbe: NetworkProbePort = {
+  get pageOrigin() {
+    return window.location.origin;
+  },
+  async reachable(url) {
+    try {
+      await fetch(url, { mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(4000) });
+      return true;
+    } catch {
+      return false;
+    }
   },
 };

@@ -13,6 +13,15 @@ describe("normalizeCombo", () => {
     expect(normalizeCombo("ArrowLeft", true)).toBe("left");
   });
 
+  it("⌥ を押すと文字が変わる配列でも、文字キーは物理キーで見る（⌘⌥N が登録した mod+alt+n になる）", () => {
+    const mac = { key: "˜", code: "KeyN", metaKey: true, ctrlKey: false, altKey: true, shiftKey: false };
+    expect(comboFromEvent(mac, true)).toBe("mod+alt+n");
+    const win = { key: "n", code: "KeyN", metaKey: false, ctrlKey: true, altKey: true, shiftKey: false };
+    expect(comboFromEvent(win, false)).toBe("mod+alt+n");
+    // ⌥ を押していなければ、これまでどおり key を見る（Dvorak など別配列のキー名を壊さない）
+    expect(comboFromEvent({ ...win, key: "k", code: "KeyJ", altKey: false }, false)).toBe("mod+k");
+  });
+
   it("キー入力から同じ表記を作る", () => {
     const ev = { key: "Z", code: "KeyZ", metaKey: true, ctrlKey: false, altKey: false, shiftKey: true };
     expect(comboFromEvent(ev, true)).toBe("mod+shift+z");

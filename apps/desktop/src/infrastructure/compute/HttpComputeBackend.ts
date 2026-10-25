@@ -1,5 +1,5 @@
 // ComputeBackendPort の HTTP 実装（ローカル・リモート・モックサーバー共通、contracts §2）。
-// HTTP は Tauri では tauri-plugin-http（CORS と任意 URL の許可を回避）、ブラウザでは window.fetch
+// HTTP は window.fetch（外部 GPU には CORS・HTTPS・トークンが要る。ADR-0015）
 
 import type { ChunkBody, ComputeBackendPort, CreateUploadReq, DownloadProgress } from "@/application/ports/compute";
 import type { ApiErrorBody } from "@/domain/errors";
@@ -20,9 +20,9 @@ import { resilientSse } from "./sse";
 
 export interface HttpTransport {
   fetch: typeof fetch;
-  /** 成果物をディスクに保存（Tauri は Rust 側で Range 再開） */
+  /** 成果物を dest に保存（fetchTransport は <dest>.part に追記し、Range で再開する） */
   download(url: string, headers: Record<string, string>, dest: string, onProgress?: DownloadProgress): Promise<void>;
-  /** ファイルの範囲をそのまま PUT する（Tauri は Rust 側。無ければ readChunk → fetch） */
+  /** ファイルの範囲をそのまま PUT する実装があれば使う。無ければ readChunk → fetch */
   uploadFile?(
     url: string,
     headers: Record<string, string>,
@@ -72,6 +72,8 @@ export class HttpComputeBackend implements ComputeBackendPort {
       profileId: string | null;
       getToken: () => Promise<string | null>;
       transport: HttpTransport;
+      /** 断片の送信が通信エラーで失敗したときの再試行（PUT は断片番号ごとに冪等）。既定は 3 回・0.5 秒から倍々 */
+      uploadRetry?: { tries?: number; backoffMs?: number; sleep?: (ms: number) => Promise<void> };
     },
   ) {
     this.base = `${d.baseUrl.replace(/\/+$/, "")}/v1`;
@@ -139,6 +141,22 @@ export class HttpComputeBackend implements ComputeBackendPort {
   }
 
   async uploadChunk(uploadId: string, index: number, body: ChunkBody) {
+    const {
+      tries = 3,
+      backoffMs = 500,
+      sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+    } = this.d.uploadRetry ?? {};
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.uploadChunkOnce(uploadId, index, body);
+      } catch (e) {
+        if (!isAppError(e, "NETWORK") || attempt >= tries) throw e;
+        await sleep(backoffMs * 2 ** (attempt - 1));
+      }
+    }
+  }
+
+  private async uploadChunkOnce(uploadId: string, index: number, body: ChunkBody) {
     const path = `/uploads/${encodeURIComponent(uploadId)}/chunks/${index}`;
     const contentType = { "Content-Type": "application/octet-stream" };
     if (body instanceof Uint8Array) {

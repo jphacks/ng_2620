@@ -8,6 +8,7 @@ import { getServices } from "@/presentation/shared/services";
 import { currentBackend } from "@/presentation/shared/stores/connectionStore";
 import { useJobsStore } from "@/presentation/shared/stores/jobsStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
+import { askNotifyPermission } from "@/presentation/shared/notifyPermission";
 
 interface ImportRun {
   status: "running" | "done" | "error";
@@ -24,6 +25,7 @@ interface ImportStore {
 export const useImportStore = create<ImportStore>((set, get) => ({
   runs: {},
   async start() {
+    askNotifyPermission();
     const session = useProjectStore.getState().current;
     if (!session) return;
     const id = session.project.id;

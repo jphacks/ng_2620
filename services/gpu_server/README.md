@@ -127,6 +127,87 @@ curl -H "Authorization: Bearer $VVLOG_API_TOKEN" http://127.0.0.1:8765/v1/capabi
 .venv/bin/python scripts/smoke_e2e.py --token $VVLOG_API_TOKEN --video <動画.mp4> --vrm <アバター.vrm>
 ```
 
+## ローカルアプリサーバーとして起動する（ADR-0015）
+
+Windows 版のアプリ本体。画面（SPA）も配信し、ブラウザで `http://127.0.0.1:<ポート>/` を開いて使う。
+
+```sh
+# 先に画面をビルドする: pnpm --filter @vvlog/desktop build（apps/desktop/dist）
+VVLOG_LOCAL=1 VVLOG_PORT=0 python -m vvlog_server      # PowerShell: $env:VVLOG_LOCAL=1; $env:VVLOG_PORT=0
+# → VVLOG_LOCAL_READY http://127.0.0.1:51234/   （この行の URL をランチャーがブラウザで開く）
+```
+
+| 環境変数 | 既定 | 意味 |
+|---|---|---|
+| `VVLOG_LOCAL` | 無し | `1` でローカルアプリサーバーにする |
+| `VVLOG_PORT` | `8765` | `0` で空きポートを自動選定 |
+| `VVLOG_API_TOKEN` | 起動ごとに自動生成 | 指定すればそれを使う |
+| `VVLOG_SPA_DIR` | `apps/desktop/dist` | 配信する画面のビルド成果物 |
+| `VVLOG_ALLOWED_ORIGINS` | 空 | 自分以外に許可するオリジン（カンマ区切り。GitHub Pages のオリジンなど） |
+
+- `127.0.0.1` にだけバインドする（外部には出ない）。`Host` が `127.0.0.1`／`localhost`／`[::1]`＋実ポート以外、`Origin` が自分と `VVLOG_ALLOWED_ORIGINS` 以外のリクエストは `403`（DNS リバインディング・クロスサイト対策）。
+- `GET /v1/local/info`（認証なし）が `{"mode":"local",…}` を返す。画面はこれでフルモードを判定する。トークンは**同一オリジンの呼び出しにだけ**含まれ、Pages など別オリジンには含まれない。
+- `/v1/*` は従来どおり Bearer トークンが要る。
+- `POST /v1/local/shutdown`（#31）：サーバーを穏やかに止める。トークン必須＋同一オリジンのみ（別オリジンは `403 SHUTDOWN_LOCAL_ONLY`）。ローカルモード以外では存在しない（`404`）。画面の 設定 > 一般 >『アプリを終了』から呼ぶ。
+
+### ランチャー（`start.bat`／`start.ps1`、#31）
+UI なしでサーバーを起動し、既定ブラウザで画面を開く。`python -m vvlog_server.launcher`（`--no-browser` で開かない）の薄いラッパー。
+
+- ポートは `8765`（Pages の案内リンクが探す番号）を優先し、使用中なら空きポートを自動で選ぶ（`VVLOG_LAUNCHER_PORT` で優先ポートを変更）。
+- 多重起動防止：`%LOCALAPPDATA%\vvlog\launcher.json`（pid・port・url）。2 つ目の起動は、既存インスタンスが生きていれば（pid が存在し `/v1/health` が答える）その URL をブラウザで開いて終わる。古い状態ファイルは自動で掃除する。`VVLOG_STATE_DIR` で場所を変更。
+- 終了：起動した窓で Ctrl+C（子プロセスごと止める）／画面の『アプリを終了』。実行中のジョブは次回起動で `INTERRUPTED` になる（既存仕様）。トレイアイコンは付けていない（依存を増やさないため）。
+- ログ：`%LOCALAPPDATA%\vvlog\logs\server.log`（2MB×5 世代でローテーション。`VVLOG_LOG_DIR` で変更）。データは `VVLOG_DATA_ROOT` 未指定なら `%LOCALAPPDATA%\vvlog\data`。
+
+### ローカル FS API（`/v1/local/fs`、#23）
+Tauri の `fs_*` コマンドの移植。ブラウザからプロジェクトフォルダを読み書きする。HTTP 経由なので、**許可ルートの外は `403 PATH_NOT_ALLOWED`**。
+
+- 許可ルート：プロジェクト（`~/Videos/vvlog`）・アプリデータ・設定の各フォルダ（`GET /v1/local/info` の `dirs`。`VVLOG_LOCAL_PROJECTS_DIR`／`_APPDATA_DIR`／`_CONFIG_DIR` で変更）と、`VVLOG_LOCAL_ROOTS`（OS のパス区切りで複数）。
+- パスは絶対パスだけ。`realpath` で `..`・シンボリックリンクを解いてから判定する。許可フォルダそのものの削除・上書きはできない。
+- `PUT /text`・`PUT /raw` は一時ファイル → fsync → rename の原子的書き込み（`raw` は本体をディスクへストリーム）。`GET /raw` は Range 対応（`<img>`／`<video>` 用に `?t=<トークン>` でも認証できる）。`POST /append?expectedSize=` は再開できるダウンロード用。
+- `POST /unzip` は zip-slip・絶対パス・シンボリックリンクの項目を、何も書く前に拒否する。
+
+### ローカル media／hash API（`/v1/local/media/probe`・`/v1/local/hash/sha256`、#24）
+Tauri の `media_probe`・`hash_sha256` の移植。ユーザーが選んだ動画（許可ルートの外にあることが多い）を扱うので、**絶対パスの実在する通常ファイル**だけを受け付け、返すのは長さ・解像度・sha256 などの導出値だけ（中身は返さない）。
+
+- `POST /media/probe {"path"}` → `{durationSec, width, height, rotation, codec, fps, hasAudio, sizeBytes}`。ffprobe は `VVLOG_FFPROBE` → `VVLOG_BIN_DIR/ffprobe(.exe)`（同梱）→ PATH の順に探す。見つからなければ `503 FFPROBE_UNAVAILABLE`（画面は `<video>` で代用する）。映像トラックが無い・読めない場合は `422 MEDIA_UNSUPPORTED`。
+- `POST /hash/sha256 {"path"}` → `{"sha256"}`。`Accept: text/event-stream` を付けると `progress`（`{"ratio"}`、1% ごと）→ `done`（`{"sha256"}`）をストリームする。同じファイル（パス・サイズ・更新時刻）は計算結果を再利用する。
+
+### ネイティブダイアログ API（`/v1/local/dialog/{open-files|open-dir|save}`、#46）
+ブラウザは実パスを渡せないので、サーバーが**この PC の画面に** Windows のダイアログを出して実パスを返す（#28 の決定）。Windows のみ実装（PowerShell + System.Windows.Forms。見えない最前面ウィンドウを親にして、ブラウザの背面に隠れないようにする）。他の OS は `501 DIALOG_UNAVAILABLE`。
+
+- 本体は `{filters:[{name,extensions}], multiple, defaultPath, title}`。結果は `{paths:[…]}`（open-files）／`{path|null}`（open-dir・save）。キャンセルとタイムアウト（10 分）は空の結果で、エラーにしない。
+- 同時に開けるのは 1 つ（`409 DIALOG_BUSY`）。ローカルアプリ自身（同一オリジン）からだけ開ける。Pages など別オリジンは、トークンを持っていても `403 DIALOG_LOCAL_ONLY`。
+- **選んだものは `/v1/local/fs` の許可対象になる**（フォルダ＝ルート、ファイル＝そのファイルだけ）。許可を広げる唯一の経路で、再起動後も `VVLOG_DATA_ROOT/local/grants.json` から復元する（このファイルは許可ルートの外なので、ブラウザからは書き換えられない）。
+- 引数は環境変数 `VVLOG_DIALOG_ARGS`（JSON）で渡し、スクリプトの文字列には入れない。
+
+Windows での手動確認（PowerShell）：
+```powershell
+$env:VVLOG_LOCAL=1; $env:VVLOG_PORT=8765; python -m vvlog_server          # 別のシェルで:
+$t = (irm http://127.0.0.1:8765/v1/local/info).token
+irm -Method Post -Headers @{Authorization="Bearer $t"} -ContentType 'application/json' `
+  -Body '{"filters":[{"name":"動画","extensions":["mp4","mov"]}]}' http://127.0.0.1:8765/v1/local/dialog/open-files
+```
+
+### 重みの取得 API（`/v1/local/weights`、#33）
+初回に重み（`weights/manifest.json`、約 7GB。インストーラーには入れない）を取得する。`huggingface_hub` / torch には依存せず（環境 A で動く）、`https://huggingface.co/<repo>/resolve/main/<file>` を urllib で Range 再開しながら取る。
+
+- `GET /weights` 保存先・ファイルごとの状態（`ok`/`unverified`/`partial`/`missing`）・空き容量・実行中ジョブ。`POST /weights/start {"hfToken"?}`（202。実行中は `409 WEIGHTS_BUSY`、空き不足は `507 WEIGHTS_DISK_FULL`）。`POST /weights/cancel`（`.part` は残す）。`GET /weights/events`（SSE: `progress`→`done`）。開始・中止は同一オリジンの画面からだけ。
+- 保存先は `VVLOG_CKPT_ROOT`。ローカルモードで未指定なら `%LOCALAPPDATA%\vvlog\weights`（`VVLOG_LOCAL_APPDATA_DIR\weights`）。manifest は `VVLOG_WEIGHTS_MANIFEST` で差し替え。
+- `<dest>.part` に書いて再開（Range）。切断は自動で数回再試行。完了後に sha256 を検証し、不一致は `.part` を消して 1 回だけ取り直す。固定値の無いファイルは計算結果を `job.unpinned` で返す。検証済みの印は保存先の `.vvlog-weights.json`（サイズ・更新時刻・sha256）。
+- **HF トークンは Bearer ヘッダーにだけ載せ、メモリ以外（ログ・エラー・状態・ディスク）に残さない**。リダイレクト先が別ホスト（CDN）や HF 以外の URL には送らない。
+- 失敗は `job.error.code`：`HF_TOKEN_REQUIRED`（トークン無しで 401/403）・`HF_TOKEN_INVALID`（401）・`HF_ACCESS_DENIED`（403＝ライセンス未承諾。`detail.url` に同意ページ）・`WEIGHTS_DISK_FULL`・`WEIGHTS_NETWORK`・`WEIGHTS_CHECKSUM_MISMATCH` ほか。
+- 対象外：`hf_cache`（Depth Anything V2。transformers が HF キャッシュから読む）は引き続き `weights/fetch.py`。
+
+### 初回セットアップ API（`/v1/local/bootstrap`、#32）
+
+ローカルアプリが uv で環境 B（§2 の手順の自動版）を作る。置き場は `VVLOG_ENV_B_DIR`（既定 `<appData>/envs/pipeline`）。`VVLOG_PYTHON` を指定しなければ、ローカルアプリのパイプラインはここの Python を使う。
+
+- `GET /v1/local/bootstrap` → `ready`・GPU（`nvidia-smi`）とその判定（`judgement.verdict` = supported / unsupported / unknown、`reasons`、`warnings`）・手順ごとの完了・実行中ジョブ（ログ末尾つき）
+- `POST /v1/local/bootstrap/start {"force"?}`（202）／`cancel`／`GET .../events`（SSE: `progress`、終わりに `done`）。開始・キャンセルは同一オリジンの画面から。実行中は `409 BOOTSTRAP_BUSY`、uv が無ければ `503 BOOTSTRAP_UV_MISSING`、GPU 非対応なら `409 BOOTSTRAP_UNSUPPORTED`（画面は制限モードか外部 GPU（BYO）へ案内する）
+- 手順は detect → venv → torch → detectron2 → deps → verify。終わった手順は `<env>/.vvlog-bootstrap.json` に記録され、失敗・中断のあとの start は続きから進む（`bootstrap-spec.json` が変わったら最初から確かめ直す）
+- 版の決まりは `services/gpu_server/bootstrap-spec.json`（`VVLOG_BOOTSTRAP_SPEC`）。**`provisional: true` の値は #30（実機検証）で確定するまでの暫定**。`detectron2.wheelUrl` は #51 の成果物ができるまで空で、その手順は `BOOTSTRAP_NO_WHEEL` で止まる
+- uv は `VVLOG_UV` → `VVLOG_BIN_DIR/uv(.exe)` → PATH の順に探す。`MoGe`・`utils3d` は git の URL なので、いまは git が要る（『ドライバのみ』を満たすには zip URL への置き換えが要る。#30 の結果を見て決める）
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |

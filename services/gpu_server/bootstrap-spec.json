@@ -1,0 +1,20 @@
+{
+  "comment": "初回ブートストラップ(#32)が環境 B を作るときの決まり。provisional=true の値は #30 の実機検証で確定する(torch/CUDA/Python の固定版・detectron2 wheel の URL と sha256・GPU 下限)。",
+  "provisional": true,
+  "python": "3.12",
+  "torch": { "index": "cu128", "packages": ["torch", "torchvision"] },
+  "detectron2": { "wheelUrl": null, "sha256": null },
+  "packages": [
+    "setuptools", "wheel",
+    "opencv-python~=4.12.0.88", "einops~=0.8.1", "pycocotools~=2.0.10", "roma~=1.5.4", "omegaconf~=2.3.0", "pytorch_lightning",
+    "yacs~=0.1.8", "fvcore", "pyrender~=0.1.45", "termcolor~=3.2.0", "diffusers==0.29.1", "transformers~=4.57.3",
+    "accelerate~=1.12.0", "imageio[ffmpeg]", "timm", "ftfy", "regex", "iopath", "trimesh", "braceexpand~=0.1.7",
+    "cloudpickle~=3.1.2", "psutil", "torchmetrics", "webdataset", "scipy", "moderngl", "ai-edge-litert",
+    "huggingface-hub<1.0", "eva-decord", "triton-windows; sys_platform == 'win32'"
+  ],
+  "git": ["git+https://github.com/microsoft/MoGe.git", "huggingface-hub<1.0"],
+  "uninstall": ["utils3d_moge"],
+  "gitNoDeps": ["git+https://github.com/EasternJournalist/utils3d.git"],
+  "editable": ["models/sam3"],
+  "gpu": { "minComputeCap": "8.0", "minVramGiB": 12, "minDriver": "570.0" }
+}

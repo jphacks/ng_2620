@@ -1,10 +1,10 @@
-// MediaProbePort の実装。Tauri は ffprobe（Rust 側）を第一候補、失敗したら <video> の loadedmetadata で代用（F02）
+// MediaProbePort の実装。フルモードは ffprobe（サーバー）を第一候補、失敗したら <video> の loadedmetadata で代用（F02）。制限モードは <video> だけ
 
-import { invoke } from "@tauri-apps/api/core";
 import type { MediaProbePort } from "@/application/ports/media";
 import type { LocalMediaInfo } from "@/domain/media";
 import { normalizeCodec } from "@/domain/media";
 import type { FileSystem } from "../fs/FileSystem";
+import type { LocalApi } from "../local/localApi";
 
 /** <video> で長さと寸法だけ読む。コーデック・音声・回転はわからない（サーバーの ingest に任せる） */
 export function probeWithVideoElement(
@@ -44,7 +44,7 @@ export class VideoElementMediaProbe implements MediaProbePort {
   }
 }
 
-interface RustProbe {
+interface ProbeResponse {
   durationSec: number;
   width: number;
   height: number;
@@ -55,14 +55,18 @@ interface RustProbe {
   sizeBytes: number;
 }
 
-export class TauriMediaProbe implements MediaProbePort {
+/** フルモード：ローカルサーバーの ffprobe を第一候補、使えなければ <video> で代用 */
+export class HttpMediaProbe implements MediaProbePort {
   private readonly fallback: VideoElementMediaProbe;
-  constructor(fs: FileSystem) {
+  constructor(
+    private readonly api: LocalApi,
+    fs: FileSystem,
+  ) {
     this.fallback = new VideoElementMediaProbe(fs);
   }
   async probe(path: string): Promise<LocalMediaInfo> {
     try {
-      const r = await invoke<RustProbe>("media_probe", { path });
+      const r = await this.api.json<ProbeResponse>("POST", "/media/probe", { json: { path } });
       return { ...r, codec: normalizeCodec(r.codec) };
     } catch (e) {
       console.warn("[probe] ffprobe が使えないので <video> で代用します", e);

@@ -8,14 +8,15 @@
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
-        { "type": "json", "path": "package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "apps/desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
-        { "type": "toml", "path": "apps/desktop/src-tauri/Cargo.toml", "jsonpath": "$.package.version" },
         {
-          "type": "toml",
-          "path": "apps/desktop/src-tauri/Cargo.lock",
-          "jsonpath": "$.package[?(@.name=='vvlog-desktop')].version"
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "apps/desktop/package.json",
+          "jsonpath": "$.version"
         }
       ]
     }

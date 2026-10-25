@@ -10,7 +10,7 @@ powershell -ExecutionPolicy Bypass -File services\mock_server\run.ps1    # Windo
 ```
 
 初回だけ `services/gpu_server/.venv` を作って依存を入れる（uv があれば uv、無ければ `python3 -m venv` + pip。1 分ほど）。2 回目からはすぐ起動する。
-前提は Python 3.10 以上と ffmpeg（`ffprobe` が PATH にあること。アップロードの検証に使う）。引数は `--port`、`--fixture <dir>`。
+前提は Python 3.10 以上と ffmpeg（`ffprobe` が PATH にあること。アップロードの検証に使う）。引数は `--port`、`--fixture <dir>`、`--local --spa-dir <dist>`（ローカルアプリサーバーとして画面も配信する。E2E 用、apps/desktop/e2e）。
 
 | 環境変数 | 既定 | 意味 |
 |---|---|---|

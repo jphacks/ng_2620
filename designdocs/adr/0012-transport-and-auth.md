@@ -2,6 +2,7 @@
 
 - 状態：採択
 - 日付：2026-10-24
+- 補足：[ADR-0015](0015-web-first-windows-local-server.md) により、項目 5（Tauri の CSP／`tauri-plugin-http`）は無効。ブラウザからの外部接続に HTTPS・CORS・トークン必須化が要る。
 
 ## 文脈
 - 経路はローカル（127.0.0.1）とリモート（Mac → Windows 機 / クラウド GPU）。リモートはインターネットを越える。
