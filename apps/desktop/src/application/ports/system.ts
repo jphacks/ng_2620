@@ -72,3 +72,15 @@ export interface IdPort {
   /** 接頭辞付きの ID（例 loc_6f1c…） */
   newId(prefix: string): string;
 }
+
+export type LocalAppProbe = { found: true; url: string } | { found: false };
+
+/** 制限モード（Pages など）から、この PC のローカルアプリ（フルモード）を探す・案内する（#38） */
+export interface LocalAppPort {
+  /** ローカルアプリのアドレス（既定ポート） */
+  readonly url: string;
+  /** このブラウザで探せるか（Safari・Firefox は止められるので false＝案内リンクだけ） */
+  readonly canProbe: boolean;
+  /** 利用者の操作のときだけ呼ぶ（ブラウザが許可を求めることがある） */
+  probe(): Promise<LocalAppProbe>;
+}

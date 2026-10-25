@@ -21,6 +21,7 @@ import { HttpFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hash
 import { HttpMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
 import type { Runtime } from "@/infrastructure/platform";
 import { LocalApi } from "@/infrastructure/local/localApi";
+import { createLocalApp } from "@/infrastructure/local/probeLocalApp";
 import { FsProjectArchive } from "@/infrastructure/project/FsProjectArchive";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
 import {
@@ -125,6 +126,7 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
             onUpload: (ev) => useDropUploadStore.getState().update(ev),
           }),
       notifier: browserNotifier,
+      localApp: memFs && window.location.protocol === "https:" ? createLocalApp() : undefined,
       clock,
     },
     maintenance: api

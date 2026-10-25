@@ -7,7 +7,14 @@ import type { EditorMediaPort } from "@/application/ports/editor";
 import type { LocalFilePort } from "@/application/ports/media";
 import type { ProjectRepositoryPort } from "@/application/ports/project";
 import type { SettingsPort } from "@/application/ports/settings";
-import type { ClockPort, DialogPort, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
+import type {
+  ClockPort,
+  DialogPort,
+  FileDropPort,
+  LocalAppPort,
+  NotifierPort,
+  ShellPort,
+} from "@/application/ports/system";
 import type * as UC from "@/application/usecases";
 import type { ComputeProfile } from "@/domain/connection";
 import type { Project } from "@/domain/project";
@@ -30,6 +37,8 @@ export interface Services {
     shell: ShellPort;
     drops: FileDropPort;
     notifier: NotifierPort;
+    /** 制限モードを https（Pages）で開いているときだけ：ローカルアプリの探索と案内 */
+    localApp?: LocalAppPort;
     clock: ClockPort;
   };
   /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */
