@@ -1,5 +1,9 @@
 # 開発環境と起動（vvlog）
 
+> **この手順は現行の Tauri 版（`develop` / `main`）のもの。** `refactor/web-first-windows-local-server` で Tauri を廃止して
+> ブラウザ UI + Windows ローカルサーバーにする計画があり（[#18](https://github.com/jphacks/ng_2620/issues/18)）、実装が入ると Rust・Xcode CLT・`pnpm tauri` は不要になる。
+> そのときこのファイルも書き換える（[#42](https://github.com/jphacks/ng_2620/issues/42)）。技術スタックの違いは [README](README.md#技術スタックの-2-つの系統) を参照。
+
 このリポジトリは 3 つの部品でできている。どれを動かすかで、必要なものが違う。
 
 | 部品 | 場所 | 何をする | 動く機械 |
