@@ -13,8 +13,5 @@ pre-push:
     1-ts:
       glob: "apps/desktop/**/*.{ts,tsx,js,json}"
       run: sh scripts/prepush.sh ts
-    2-rust:
-      glob: "apps/desktop/src-tauri/**/*.{rs,toml}"
-      run: sh scripts/prepush.sh rust
-    3-commit:
+    2-commit:
       run: sh scripts/prepush.sh commit

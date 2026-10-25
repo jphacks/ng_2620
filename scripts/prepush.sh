@@ -1,5 +1,5 @@
 #!/bin/sh
-# lefthook の pre-push から呼ぶ。使い方: prepush.sh init | ts | rust | commit（lefthook.yml 参照）
+# lefthook の pre-push から呼ぶ。使い方: prepush.sh init | ts | commit（lefthook.yml 参照）
 # 直せるものを直し、直せなかった lint は警告として出す（終了コードは 0）。commit だけが差分を見て 1 を返す。
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 0
@@ -11,7 +11,7 @@ init)
   [ -n "$(git status --porcelain)" ] && : >"$dirty_file"
   exit 0
   ;;
-ts | rust)
+ts)
   [ -f "$dirty_file" ] && {
     echo "⚠ 未コミットの変更があるので、自動修正はせずチェックだけ行います"
     mode=check
@@ -28,16 +28,6 @@ ts)
     pnpm exec prettier --check apps/desktop --log-level warn || echo "⚠ prettier の差分があります"
     pnpm --filter @vvlog/desktop exec eslint . || echo "⚠ ESLint の指摘があります"
   fi
-  ;;
-rust)
-  cd apps/desktop/src-tauri || exit 0
-  if [ "$mode" = fix ]; then
-    cargo fmt
-    cargo clippy --fix --allow-dirty --allow-staged --quiet >/dev/null 2>&1
-  else
-    cargo fmt --check >/dev/null 2>&1 || echo "⚠ rustfmt の差分があります"
-  fi
-  cargo clippy --quiet 2>&1 | grep -E '^(warning|error)' | sort | uniq -c | sed 's/^/⚠ clippy: /'
   ;;
 commit)
   if [ -f "$dirty_file" ]; then

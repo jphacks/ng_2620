@@ -1,4 +1,0 @@
-/target/
-/gen/schemas
-# ffprobe サイドカー（バイナリはコミットしない。scripts の手順で取得）
-/binaries/

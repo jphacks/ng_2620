@@ -21,7 +21,6 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] }, // #40 で src-tauri を消すときに外す
     // フルモードを `pnpm dev` で試す：VVLOG_DEV_SERVER=http://127.0.0.1:<port> pnpm dev
     // （サーバーは同一オリジンの呼び出しにだけトークンを渡すので、Host を書き換え Origin を外して転送する）
     proxy: process.env.VVLOG_DEV_SERVER

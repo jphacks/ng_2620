@@ -1,6 +1,6 @@
 ---
 name: virtualtwin-app-icon
-description: VirtualTwin のアイコン（正方形マークの PNG・.ico・.icns）をデスクトップアプリ（Tauri）に差し込む、複数サイズの PNG を作り直す、別のサイズや形式のアイコンを書き出すときの手順。apps/desktop/src-tauri/icons/ と tauri.conf.json の対応、既にあるサイズ違いの置き場所、icns/ico の作り方をまとめている。アプリのアイコンを差し替える、ファビコンや Dock のアイコンを作る、アイコンのサイズ違いが欲しいと言われたときに使う。
+description: VirtualTwin のアイコン（正方形マークの PNG・.ico・.icns）をアプリ（ブラウザ版の favicon・ランチャー・インストーラー）に差し込む、複数サイズの PNG を作り直す、別のサイズや形式のアイコンを書き出すときの手順。apps/desktop/assets/icons/ と apps/desktop/public/favicon.png の対応、既にあるサイズ違いの置き場所、icns/ico の作り方をまとめている。アプリのアイコンを差し替える、ファビコンや Dock のアイコンを作る、アイコンのサイズ違いが欲しいと言われたときに使う。
 ---
 
 # VirtualTwin アプリアイコンの扱い
@@ -18,24 +18,28 @@ description: VirtualTwin のアイコン（正方形マークの PNG・.ico・.i
 
 まず、これで足りるか確認する。足りなければ §3 で作り直す。
 
-## 2. Tauri アプリに差し込む
+## 2. アプリに差し込む
 
-アプリは `apps/desktop`（Tauri）。アイコンは `apps/desktop/src-tauri/icons/` にあり、`tauri.conf.json` の `bundle.icon` で一覧している。
+Tauri は廃止した（ADR-0015）。アイコンは次の 2 か所にある。
+
+| 場所 | 使われ方 |
+|---|---|
+| `apps/desktop/public/favicon.png` | ブラウザのタブのアイコン（`index.html`）。画面のビルドに入る |
+| `apps/desktop/assets/icons/` | `icon.ico`（Windows のランチャー・インストーラー・ショートカット）、`icon.icns`（将来の macOS 向け）、各サイズの PNG。**ビルドには入らず**、ランチャー（#31）とインストーラー（#34）が参照する置き場 |
 
 対応（コピー元 → コピー先）:
 
 | コピー先 | コピー元 |
 |---|---|
-| `32x32.png` | `mark-sizes/virtualtwin-mark-32.png` |
-| `128x128.png` | `mark-sizes/virtualtwin-mark-128.png` |
-| `128x128@2x.png` | `mark-sizes/virtualtwin-mark-256.png` |
-| `icon.png` | `mark-sizes/virtualtwin-mark-512.png`（または 1024） |
-| `icon.ico` | `color/icon/virtualtwin.ico` |
-| `icon.icns` | `color/icon/virtualtwin.icns` |
+| `public/favicon.png` | `mark-sizes/virtualtwin-mark-32.png` |
+| `assets/icons/32x32.png` | `mark-sizes/virtualtwin-mark-32.png` |
+| `assets/icons/128x128.png` | `mark-sizes/virtualtwin-mark-128.png` |
+| `assets/icons/128x128@2x.png` | `mark-sizes/virtualtwin-mark-256.png` |
+| `assets/icons/icon.png` | `mark-sizes/virtualtwin-mark-512.png`（または 1024） |
+| `assets/icons/icon.ico` | `color/icon/virtualtwin.ico` |
+| `assets/icons/icon.icns` | `color/icon/virtualtwin.icns` |
 
-- `icon.icns` は今の `tauri.conf.json` の `bundle.icon` に載っていない。macOS 向けのビルドに使うなら、`"icons/icon.icns"` を足す。
-- 差し替えたら、`pnpm --filter @vvlog/desktop tauri build`（または `tauri dev`）で、Dock・タスクバー・ウィンドウのアイコンが変わったか、実機で確かめる。ビルド・実機の確認は、自動では行われない。
-- 代わりに `pnpm --filter @vvlog/desktop tauri icon <1024px の PNG>` で、必要な形式を一括生成する方法もある。生成物には iOS / Android 用が混ざるので、不要なものは消す。
+- 差し替えたら、`pnpm --filter @vvlog/desktop build` が通り、ブラウザのタブのアイコンが変わったことを確かめる。ショートカット・インストーラーのアイコンは Windows の実機で見る（自動では確かめられない）。
 
 ## 3. サイズ違いや形式を作り直す
 
