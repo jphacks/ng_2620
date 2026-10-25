@@ -13,7 +13,7 @@
     "yacs~=0.1.8", "fvcore", "pyrender~=0.1.45", "termcolor~=3.2.0", "diffusers==0.29.1", "transformers~=4.57.3",
     "accelerate~=1.12.0", "imageio[ffmpeg]", "timm", "ftfy", "regex", "iopath", "trimesh", "braceexpand~=0.1.7",
     "cloudpickle~=3.1.2", "psutil", "torchmetrics", "webdataset", "scipy", "moderngl", "ai-edge-litert",
-    "huggingface-hub<1.0", "eva-decord", "triton-windows; sys_platform == 'win32'"
+    "huggingface-hub<1.0", "eva-decord", "triton-windows>=3.4,<3.5; sys_platform == 'win32'"
   ],
   "git": ["git+https://github.com/microsoft/MoGe.git", "huggingface-hub<1.0"],
   "uninstall": ["utils3d_moge"],
