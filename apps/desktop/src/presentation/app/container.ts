@@ -1,12 +1,13 @@
 // composition root（DI）。ポートの実装を組み立てる唯一の場所（architecture/overview §3）。
-//   Tauri の中   ：Rust コマンド（fs / media / hash / net）＋ tauri-plugin-http / dialog / opener / notification
-//   ブラウザだけ ：メモリ上のファイル＋ fetch（`pnpm dev` を Tauri なしで開いたとき。開発用）
+//   tauri      ：Rust コマンド（fs / media / hash / net）＋ tauri-plugin-http / dialog / opener / notification（#29・#40 で消える）
+//   full       ：ローカルアプリサーバー（/v1/local/*）越しのファイル・ハッシュ・probe＋ブラウザの fetch（ADR-0015）
+//   restricted ：メモリ上のファイル＋ fetch（Pages 単体。IndexedDB 化は #27）／`pnpm dev` を単体で開いたとき
 //   VITE_BACKEND ：mock = モックサーバー（F14、:8766）を既定に、memory = シミュレーターを既定に、http = 登録した接続だけ
 
 import { appConfigDir, appDataDir, join, videoDir } from "@tauri-apps/api/path";
 import * as UC from "@/application/usecases";
 import { FsAvatarLibrary } from "@/infrastructure/avatar/FsAvatarLibrary";
-import { FsLayerCache } from "@/infrastructure/cache/TauriLayerCache";
+import { FsLayerCache } from "@/infrastructure/cache/FsLayerCache";
 import { DefaultComputeBackendFactory } from "@/infrastructure/compute/factory";
 import { InMemoryComputeBackend } from "@/infrastructure/compute/InMemoryComputeBackend";
 import { canvasSynth } from "@/infrastructure/compute/simArtifacts";
@@ -16,10 +17,13 @@ import { BrowserEditorMedia } from "@/infrastructure/editor/editorMedia";
 import { LocalFiles } from "@/infrastructure/fs/LocalFiles";
 import { MEM_ROOT, MemoryFs } from "@/infrastructure/fs/memoryFs";
 import { joinPath } from "@/infrastructure/fs/path";
+import { HttpFileSystem } from "@/infrastructure/fs/httpFs";
 import { tauriFs } from "@/infrastructure/fs/tauriFs";
-import { TauriFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hashers";
-import { TauriMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
+import { HttpFileHasher, TauriFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hashers";
+import { HttpMediaProbe, TauriMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
+import type { Runtime } from "@/infrastructure/platform";
 import { isTauri } from "@/infrastructure/platform";
+import { LocalApi } from "@/infrastructure/local/localApi";
 import { FsProjectRepository } from "@/infrastructure/project/FsProjectRepository";
 import {
   FileSecretStore,
@@ -27,7 +31,14 @@ import {
   LocalStorageSecretStore,
   LocalStorageSettings,
 } from "@/infrastructure/settings/settingsStores";
-import { browserDialog, browserFileDrop, browserNotifier, browserShell } from "@/infrastructure/system/browserSystem";
+import {
+  browserDialog,
+  browserFileDrop,
+  browserNotifier,
+  browserShell,
+  pendingDialog,
+  pendingFileDrop,
+} from "@/infrastructure/system/browserSystem";
 import { randomIds, randomToken, systemClock } from "@/infrastructure/system/common";
 import { browserLocalServer, tauriLocalServer } from "@/infrastructure/system/localServer";
 import { tauriDialog, tauriFileDrop, tauriNotifier, tauriShell } from "@/infrastructure/system/tauriSystem";
@@ -38,28 +49,38 @@ function backendMode(): BackendMode {
   return v === "mock" || v === "memory" ? v : "http";
 }
 
-export function createServices(): Services {
-  const inTauri = isTauri();
+/** detectRuntime() の結果を渡す。省略時は Tauri の中なら tauri、そうでなければ restricted（テストと単体の開発用） */
+export function createServices(runtime: Runtime = { mode: isTauri() ? "tauri" : "restricted" }): Services {
+  const inTauri = runtime.mode === "tauri";
+  const local = runtime.mode === "full" && runtime.local ? runtime.local : null;
+  const api = local ? new LocalApi(local) : null;
+  const diskBacked = inTauri || !!api; // 実ディスクに置く（設定・シークレットもファイル）
   const isDev = import.meta.env.DEV;
-  const memFs = inTauri ? null : new MemoryFs();
-  const fs: FileSystem = memFs ?? tauriFs;
+  const memFs = diskBacked ? null : new MemoryFs();
+  const fs: FileSystem = memFs ?? (api ? new HttpFileSystem(api) : tauriFs);
 
-  const dirs = inTauri
+  const dirs = local
     ? {
-        projects: async () => join(await videoDir(), "vvlog"),
-        appData: () => appDataDir(),
-        config: () => appConfigDir(),
+        projects: async () => local.dirs.projects,
+        appData: async () => local.dirs.appData,
+        config: async () => local.dirs.config,
       }
-    : {
-        projects: async () => `${MEM_ROOT}/Movies/vvlog`,
-        appData: async () => `${MEM_ROOT}/AppData`,
-        config: async () => `${MEM_ROOT}/Config`,
-      };
+    : inTauri
+      ? {
+          projects: async () => join(await videoDir(), "vvlog"),
+          appData: () => appDataDir(),
+          config: () => appConfigDir(),
+        }
+      : {
+          projects: async () => `${MEM_ROOT}/Movies/vvlog`,
+          appData: async () => `${MEM_ROOT}/AppData`,
+          config: async () => `${MEM_ROOT}/Config`,
+        };
 
-  const settings = inTauri
+  const settings = diskBacked
     ? new FileSettings(fs, async () => joinPath(await dirs.config(), "settings.json"))
     : new LocalStorageSettings();
-  const secrets = inTauri
+  const secrets = diskBacked
     ? new FileSecretStore(fs, async () => joinPath(await dirs.config(), "secrets.json"))
     : new LocalStorageSecretStore();
   const projects = new FsProjectRepository(fs, {
@@ -67,8 +88,8 @@ export function createServices(): Services {
     appDataDir: dirs.appData,
   });
   const files = new LocalFiles(fs);
-  const hasher = inTauri ? new TauriFileHasher() : new WebCryptoFileHasher(fs);
-  const probe = inTauri ? new TauriMediaProbe(fs) : new VideoElementMediaProbe(fs);
+  const hasher = api ? new HttpFileHasher(api) : inTauri ? new TauriFileHasher() : new WebCryptoFileHasher(fs);
+  const probe = api ? new HttpMediaProbe(api, fs) : inTauri ? new TauriMediaProbe(fs) : new VideoElementMediaProbe(fs);
   const cache = new FsLayerCache(fs, hasher);
   const avatars = new FsAvatarLibrary(fs, async () => joinPath(await dirs.appData(), "avatars"));
   const transport = inTauri ? tauriTransport(fs) : browserTransport(fs);
@@ -93,12 +114,13 @@ export function createServices(): Services {
   const localServer = inTauri ? tauriLocalServer : browserLocalServer;
 
   return {
-    env: { isTauri: inTauri, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
+    env: { isTauri: inTauri, mode: runtime.mode, isDev, backendMode: backendMode(), version: __APP_VERSION__ },
     platform: {
       files,
-      dialog: memFs ? browserDialog(memFs) : tauriDialog,
-      shell: memFs ? browserShell(memFs) : tauriShell,
-      drops: memFs ? browserFileDrop(memFs) : tauriFileDrop,
+      // full のダイアログとドロップは、サーバー側のネイティブダイアログ（#46）とドロップ取り込み（#47）ができるまで未対応
+      dialog: memFs ? browserDialog(memFs) : api ? pendingDialog : tauriDialog,
+      shell: memFs || api ? browserShell(fs) : tauriShell,
+      drops: memFs ? browserFileDrop(memFs) : api ? pendingFileDrop : tauriFileDrop,
       notifier: inTauri ? tauriNotifier : browserNotifier,
       clock,
     },

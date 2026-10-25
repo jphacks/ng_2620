@@ -21,6 +21,17 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: { ignored: ["**/src-tauri/**"] },
+    // フルモードを `pnpm dev` で試す：VVLOG_DEV_SERVER=http://127.0.0.1:<port> pnpm dev
+    // （サーバーは同一オリジンの呼び出しにだけトークンを渡すので、Host を書き換え Origin を外して転送する）
+    proxy: process.env.VVLOG_DEV_SERVER
+      ? {
+          "/v1": {
+            target: process.env.VVLOG_DEV_SERVER,
+            changeOrigin: true,
+            configure: (proxy) => proxy.on("proxyReq", (req) => req.removeHeader("origin")),
+          },
+        }
+      : undefined,
   },
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {

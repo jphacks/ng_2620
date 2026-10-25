@@ -1,6 +1,8 @@
 // ブラウザ版の OS 機能（Tauri なしの開発用）。選んだ・落としたファイルは MemoryFs に登録してパスで扱う
 
+import { AppError } from "@/domain/errors";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
+import type { FileSystem } from "../fs/FileSystem";
 import type { MemoryFs } from "../fs/memoryFs";
 
 export function browserDialog(fs: MemoryFs): DialogPort {
@@ -26,7 +28,7 @@ export function browserDialog(fs: MemoryFs): DialogPort {
   };
 }
 
-export function browserShell(fs: MemoryFs): ShellPort {
+export function browserShell(fs: Pick<FileSystem, "toUrl">): ShellPort {
   return {
     async reveal(path) {
       console.info("[shell] Finder で表示（ブラウザ版では未対応）:", path);
@@ -76,5 +78,25 @@ export const browserNotifier: NotifierPort = {
     if (typeof Notification === "undefined") return;
     if (Notification.permission === "default") await Notification.requestPermission();
     if (Notification.permission === "granted") new Notification(title, { body });
+  },
+};
+
+/** フルモードの暫定：サーバー側のネイティブダイアログ（#46）ができるまで、選択系は使えない */
+export const pendingDialog: DialogPort = {
+  async pickFiles() {
+    throw new AppError("NOT_IMPLEMENTED", "ファイルの選択は準備中です（#46）");
+  },
+  async pickDirectory() {
+    throw new AppError("NOT_IMPLEMENTED", "フォルダの選択は準備中です（#46）");
+  },
+  async saveFile({ defaultPath }) {
+    return defaultPath ?? null; // 保存先は既定の場所を使う
+  },
+};
+
+/** フルモードの暫定：ドロップ取り込み（#47）ができるまで何も受けない */
+export const pendingFileDrop: FileDropPort = {
+  subscribe() {
+    return () => {};
   },
 };

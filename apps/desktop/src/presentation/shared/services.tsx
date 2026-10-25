@@ -14,13 +14,16 @@ import type { Project } from "@/domain/project";
 
 export type BackendMode = "mock" | "http" | "memory";
 
+/** tauri：現行のデスクトップ版（#29・#40 で消える）／full：ローカルアプリサーバー／restricted：Pages 単体（features/mode-matrix.md） */
+export type RuntimeMode = "tauri" | "full" | "restricted";
+
 export interface Diagnostics {
   webgl2: boolean;
   stream: boolean | null; // fetch のストリームが読めるか（接続先が無ければ null）
 }
 
 export interface Services {
-  env: { isTauri: boolean; isDev: boolean; backendMode: BackendMode; version: string };
+  env: { isTauri: boolean; mode: RuntimeMode; isDev: boolean; backendMode: BackendMode; version: string };
   platform: {
     files: LocalFilePort;
     dialog: DialogPort;

@@ -39,7 +39,12 @@ export function fetchTransport(fs: FileSystem, opts: FetchTransportOptions = {})
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => window.fetch(input, init));
 
   /** .part に追記できない FS（制限モードの一部）：メモリに溜めて最後に書く */
-  async function downloadBuffered(url: string, headers: Record<string, string>, dest: string, onProgress?: DownloadProgress) {
+  async function downloadBuffered(
+    url: string,
+    headers: Record<string, string>,
+    dest: string,
+    onProgress?: DownloadProgress,
+  ) {
     const res = await doFetch(url, { headers });
     if (!res.ok) throw new HttpFailure(`HTTP ${res.status} ${await res.text().catch(() => "")}`);
     const total = Number(res.headers.get("content-length")) || null;

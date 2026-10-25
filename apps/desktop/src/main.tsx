@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./presentation/shared/index.css";
 import { AppRoot } from "./presentation/app/AppRoot";
+import { detectRuntime } from "./infrastructure/platform";
 import { createServices } from "./presentation/app/container";
 
 // 開発ビルドだけ：VITE_START_ROUTE=/dev/editor?fixture=v0 pnpm tauri dev で、その画面から始める
@@ -11,8 +12,11 @@ if (import.meta.env.DEV && import.meta.env.VITE_START_ROUTE && !sessionStorage.g
   window.location.hash = import.meta.env.VITE_START_ROUTE;
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <AppRoot services={createServices()} />
-  </StrictMode>,
-);
+// どの動作モードか（ローカルサーバーが居るか）を先に確かめてから組み立てる
+void detectRuntime().then((runtime) => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <AppRoot services={createServices(runtime)} />
+    </StrictMode>,
+  );
+});
