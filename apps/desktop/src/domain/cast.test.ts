@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { canRender, castHash, draftFromCast, parsePersons, renamePerson, toCast } from "./cast";
+import type { Person } from "./cast";
+import { autoDraft, canRender, castHash, draftFromCast, parsePersons, renamePerson, toCast } from "./cast";
 
 describe("canRender", () => {
   it("1 人以上を選び、全員にアバターがあれば描画できる", () => {
@@ -90,5 +91,29 @@ describe("下書き", () => {
       { personId: 2, selected: true, avatarId: "av_b" },
     ]);
     expect(toCast(draft)).toEqual([{ personId: 2, action: "replace", avatarId: "av_b" }]);
+  });
+});
+
+describe("autoDraft", () => {
+  const person = (personId: number, visibleRatio: number): Person => ({
+    personId,
+    label: `人物 ${personId}`,
+    firstFrame: 0,
+    lastFrame: 9,
+    visibleRatio,
+  });
+
+  it("映っている割合の大きい順に上限まで選び、全員に同じアバターを割り当てる", () => {
+    const persons = [person(1, 0.2), person(2, 0.9), person(3, 0.5)];
+    expect(autoDraft(persons, "av_a", 2)).toEqual([
+      { personId: 1, selected: false, avatarId: null },
+      { personId: 2, selected: true, avatarId: "av_a" },
+      { personId: 3, selected: true, avatarId: "av_a" },
+    ]);
+    expect(canRender(autoDraft(persons, "av_a"))).toMatchObject({ ok: true });
+  });
+
+  it("人物がいなければ描画できない下書きになる", () => {
+    expect(canRender(autoDraft([], "av_a"))).toEqual({ ok: false, reason: "none_selected" });
   });
 });

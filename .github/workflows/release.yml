@@ -17,13 +17,13 @@ concurrency:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
       test: ${{ steps.v.outputs.test }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: v
         run: |
           version=$(jq -r .version apps/desktop/package.json)
@@ -57,7 +57,7 @@ jobs:
     needs: [prepare, build]
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/download-artifact@v4
         with:

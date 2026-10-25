@@ -4,6 +4,7 @@ import { Play } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { hasUploadConsent } from "@/domain/connection";
+import type { ReactNode } from "react";
 import { fileNameOf } from "@/domain/validation";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { errorText } from "@/presentation/shared/errors";
@@ -20,10 +21,16 @@ export function VideoStep({
   onCancel,
   onStarted,
   onOpenConnection,
+  options,
+  optionsReady = true,
 }: {
   onCancel(): void;
   onStarted(): void;
   onOpenConnection(): void;
+  /** 解析の始め方の選択（自動仕上げ）。ウィザードが組み立てる */
+  options?: ReactNode;
+  /** options の選択が揃っていなければ false（解析を始められない） */
+  optionsReady?: boolean;
 }) {
   const { platform, uc } = useServices();
   const project = useProjectStore((s) => s.current?.project);
@@ -49,7 +56,11 @@ export function VideoStep({
   const src = project.source;
   const resumable = !!project.compute.upload && !project.compute.mediaId;
   const canStart =
-    !!profile && status === "connected" && !running && !(sourceExists.data === false && !project.compute.mediaId);
+    !!profile &&
+    status === "connected" &&
+    !running &&
+    optionsReady &&
+    !(sourceExists.data === false && !project.compute.mediaId);
 
   const relink = async () => {
     setRelinking(true);
@@ -144,6 +155,7 @@ export function VideoStep({
           </ErrorNotice>
         )}
         {resumable && <ErrorNotice tone="info" title={T.resumeTitle} body={T.resumeBody} />}
+        {options}
         <div className="mt-auto flex justify-end gap-2">
           <Button onClick={onCancel}>{ja.common.cancel}</Button>
           <Button

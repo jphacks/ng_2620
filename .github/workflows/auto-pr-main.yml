@@ -1,0 +1,71 @@
+# develop に変更が push されたら、main に向けた PR を自動で作成（または既存 PR を確認）する。
+# この PR を main にマージすることで、Pages デプロイや Release（タグ付け・ドラフト作成）が走る。
+name: Auto PR to main
+
+"on":
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-pr-main
+  cancel-in-progress: true
+
+jobs:
+  create-pr:
+    name: main への PR を作成 / 確認
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: main への差分確認と PR 作成
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          # main と develop の最新を取得
+          git fetch origin main develop
+
+          # develop にあって main にないコミットがあるか確認
+          NEW_COMMITS=$(git log origin/main..origin/develop --oneline)
+          if [ -z "$NEW_COMMITS" ]; then
+            echo "develop と main の間に差分はありません。PR は不要です。"
+            exit 0
+          fi
+
+          echo "以下のコミットが main に未反映です:"
+          echo "$NEW_COMMITS"
+
+          # 既に open な develop -> main の PR が存在するか確認
+          EXISTING_PR=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "既存の PR #$EXISTING_PR (develop -> main) が既にオープンされています。"
+            exit 0
+          fi
+
+          # PR 本文の作成
+          printf "%s\n" \
+            "## 概要" \
+            "" \
+            "develop ブランチの変更を main に反映するための自動生成 PR です。" \
+            "" \
+            "マージすると以下の GitHub Actions が実行されます：" \
+            "- **GitHub Pages デプロイ** (\`pages.yml\`)：Web 版 SPA の自動ビルド・公開" \
+            "- **Release 作成** (\`release.yml\`)：タグの付与、draft Release の作成" \
+            "" \
+            "---" \
+            "*この PR は GitHub Actions (\`auto-pr-main.yml\`) により自動作成されました。*" \
+            > /tmp/pr-body.md
+
+          # PR を新規作成
+          echo "main への PR を作成します..."
+          gh pr create \
+            --base main \
+            --head develop \
+            --title "Release: develop を main に反映" \
+            --body-file /tmp/pr-body.md

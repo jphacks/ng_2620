@@ -153,6 +153,10 @@ export const ja = {
       "別の PC やブラウザで作られたプロジェクトです。解析を始めるには、同じ動画を選び直してください（解析済みのときは、そのまま編集できます）。",
     relink: "動画を選び直す",
     relinked: "動画を結びつけ直しました",
+    autoFinish: "既定のアバターで自動仕上げ",
+    autoFinishHint:
+      "人物の選択を飛ばし、映っている人物を上限までこのアバターに置き換えて描画し、終わったらエディタで再生します",
+    autoFinishNeedsAvatar: "アバターを選んでください",
   },
   upload: {
     label: "アップロード",
@@ -504,6 +508,8 @@ export const ja = {
     layerKeys: { avatar: "", units: "U", hide: "H", mask: "" },
     play: "再生",
     pause: "停止",
+    prevFrame: "前のフレーム",
+    nextFrame: "次のフレーム",
     fit: "フィット",
     tracks: { video: "映像", persons: "人物", unit: "選択中の物", overrides: "手修正" },
     noSelection: "ビューアで物をクリックすると、その物と人物の前後を直せます",

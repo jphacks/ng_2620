@@ -2,7 +2,7 @@
 // フルモード：ローカルサーバーの設定フォルダの settings.json / secrets.json（権限 600。P1 で OS のキーチェーンへ）
 // 制限モード：localStorage
 
-import type { AppSettings, SecretStorePort, SettingsPort } from "@/application/ports/settings";
+import type { AppSettings, AutoFinishSetting, SecretStorePort, SettingsPort } from "@/application/ports/settings";
 import { defaultSettings } from "@/application/ports/settings";
 import type { FileSystem } from "../fs/FileSystem";
 
@@ -19,7 +19,14 @@ export function normalizeSettings(raw: unknown): AppSettings {
     panelLayouts: r.panelLayouts && typeof r.panelLayouts === "object" ? r.panelLayouts : {},
     projectsDir: typeof r.projectsDir === "string" ? r.projectsDir : undefined,
     uploadConsents: normalizeConsents(r.uploadConsents),
+    autoFinish: normalizeAutoFinish(r.autoFinish),
   };
+}
+
+function normalizeAutoFinish(raw: unknown): AutoFinishSetting | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Partial<AutoFinishSetting>;
+  return { enabled: r.enabled === true, avatarId: typeof r.avatarId === "string" ? r.avatarId : null };
 }
 
 function normalizeConsents(raw: unknown): Record<string, string> | undefined {
