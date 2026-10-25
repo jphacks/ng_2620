@@ -13,9 +13,10 @@ import { JobStageList, LogDialog, ProgressivePreview } from "@/presentation/feat
 import { jobErrorText } from "@/presentation/shared/errors";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { useAvatars } from "@/presentation/shared/queries";
+import { useAutoFinishStore } from "@/presentation/shared/stores/autoFinishStore";
 import { useJobsStore, useProjectJob } from "@/presentation/shared/stores/jobsStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
-import { Button, cx, ErrorNotice } from "@/presentation/shared/ui";
+import { Button, Checkbox, cx, ErrorNotice } from "@/presentation/shared/ui";
 
 type Step = "video" | "analysis" | "cast" | "render";
 const STEPS: Step[] = ["video", "analysis", "cast", "render"];
@@ -26,6 +27,33 @@ function LicenseFor({ avatarId }: { avatarId: string }) {
   return a ? <LicenseSummary avatar={a} /> : null;
 }
 
+/** 取り込み画面の「既定のアバターで自動仕上げ」：ON とアバターは次回も覚えておく */
+function AutoFinishOption() {
+  const choice = useAutoFinishStore((s) => s.choice);
+  const setChoice = useAutoFinishStore((s) => s.setChoice);
+  const T = ja.importStep;
+  return (
+    <div className="rounded border border-border bg-panel-2 p-3">
+      <Checkbox
+        checked={choice.enabled}
+        onChange={(enabled) => setChoice({ enabled })}
+        label={<span className="font-medium">{T.autoFinish}</span>}
+      />
+      <div className="mt-1 text-xs text-faint">{T.autoFinishHint}</div>
+      {choice.enabled && (
+        <div className="mt-2 flex flex-col items-start gap-1">
+          <AvatarPicker value={choice.avatarId} onChange={(avatarId) => setChoice({ avatarId })} />
+          {choice.avatarId ? (
+            <LicenseFor avatarId={choice.avatarId} />
+          ) : (
+            <span className="text-xs text-warning">{T.autoFinishNeedsAvatar}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ImportWizard() {
   const navigate = useNavigate();
   const project = useProjectStore((s) => s.current?.project);
@@ -33,6 +61,8 @@ export function ImportWizard() {
   const analyze = useProjectJob("analyze");
   const render = useProjectJob("render");
   const { importPaths } = useImportAvatars();
+  const auto = useAutoFinishStore((s) => s.choice);
+  const autoRun = useAutoFinishStore((s) => (project ? s.runs[project.id] : undefined));
 
   const initial = (): Step => {
     if (!project) return "video";
@@ -42,6 +72,11 @@ export function ImportWizard() {
     return "video";
   };
   const [step, setStep] = useState<Step>(initial);
+
+  // 自動仕上げで描画を投入したら、描画のステップを見せる
+  useEffect(() => {
+    if (autoRun === "play" && project?.jobs.render) setStep("render");
+  }, [autoRun, project?.jobs.render]);
 
   // 描画が（この画面を開いている間に）終わったらエディタへ
   const prevRender = useRef(render?.status);
@@ -106,8 +141,13 @@ export function ImportWizard() {
         {step === "video" && (
           <VideoStep
             onCancel={() => navigate("/")}
-            onStarted={() => setStep("analysis")}
+            onStarted={() => {
+              useAutoFinishStore.getState().arm(project.id);
+              setStep("analysis");
+            }}
             onOpenConnection={() => navigate("/settings/connection")}
+            options={<AutoFinishOption />}
+            optionsReady={!auto.enabled || !!auto.avatarId}
           />
         )}
         {step === "analysis" && (

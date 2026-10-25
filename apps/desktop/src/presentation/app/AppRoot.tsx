@@ -12,6 +12,7 @@ import { useHotkeyDispatcher } from "@/presentation/shared/commands/useCommands"
 import type { Services } from "@/presentation/shared/services";
 import { ServicesProvider } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
+import { useAutoFinishStore } from "@/presentation/shared/stores/autoFinishStore";
 import { loadPrefs } from "@/presentation/shared/stores/prefsStore";
 import { TooltipProvider } from "@/presentation/shared/ui";
 import { AppFrame, HomeRoute } from "./AppFrame";
@@ -51,7 +52,7 @@ function Boot({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   useHotkeyDispatcher();
   useEffect(() => {
-    void Promise.all([useConnectionStore.getState().init(), loadPrefs()])
+    void Promise.all([useConnectionStore.getState().init(), loadPrefs(), useAutoFinishStore.getState().load()])
       .catch((e) => console.error("[boot]", e))
       .finally(() => setReady(true));
   }, []);
