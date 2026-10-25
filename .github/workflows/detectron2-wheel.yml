@@ -74,6 +74,8 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --no-deps (Get-ChildItem wheelhouse\*.whl).FullName
+          # detectron2 は import 時に fvcore を読む(--no-deps なので実行時依存を入れておく)
+          python -m pip install fvcore
           python -c "import detectron2, detectron2._C; print('ok', detectron2.__version__)"
       - uses: actions/upload-artifact@v4
         with:
