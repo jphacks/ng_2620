@@ -26,6 +26,8 @@ export const API_ERROR_CODES = [
   "DIALOG_BUSY",
   "DIALOG_UNAVAILABLE",
   "DIALOG_FAILED",
+  "WEIGHTS_BUSY", // 重みの取得がすでに実行中（#33）
+  "WEIGHTS_DISK_FULL", // 取得を始める前の空き容量チェック
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

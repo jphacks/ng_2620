@@ -7,5 +7,6 @@ export type * from "./media";
 export type * from "./project";
 export type * from "./settings";
 export type * from "./system";
+export type * from "./weights";
 export { defaultSettings } from "./settings";
 export { RECENT_LIMIT } from "./project";

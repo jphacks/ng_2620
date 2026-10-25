@@ -10,6 +10,8 @@ import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { Badge, Button, ConfirmDialog, Label, Select, Spinner } from "@/presentation/shared/ui";
 
+import { WeightsSection } from "./WeightsSection";
+
 const T = ja.general;
 
 export function GeneralSettings() {
@@ -74,6 +76,8 @@ export function GeneralSettings() {
           {T.clearCache}
         </Button>
       </section>
+
+      <WeightsSection />
 
       <section>
         <h3 className="mb-3 font-semibold">{T.notifications}</h3>

@@ -23,6 +23,17 @@ HTTP_STATUS = {
     "DIALOG_UNAVAILABLE": 501,
     "DIALOG_FAILED": 500,
     "FFPROBE_UNAVAILABLE": 503,   # /v1/local/media/probe: the app falls back to the <video> element
+    # weights download (/v1/local/weights, #33). Most of these appear as the job's `error.code`, not as an HTTP status
+    "WEIGHTS_BUSY": 409,
+    "WEIGHTS_DISK_FULL": 507,
+    "HF_TOKEN_REQUIRED": 401,
+    "HF_TOKEN_INVALID": 401,
+    "HF_ACCESS_DENIED": 403,
+    "WEIGHTS_NETWORK": 502,
+    "WEIGHTS_NOT_FOUND": 404,
+    "WEIGHTS_CHECKSUM_MISMATCH": 409,
+    "WEIGHTS_IO_ERROR": 500,
+    "WEIGHTS_FAILED": 500,
     # job failures: reported through the job, not as an HTTP status
     "NO_PERSON_FOUND": 200,
     "GPU_OOM": 200,

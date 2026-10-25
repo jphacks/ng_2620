@@ -69,6 +69,8 @@ class Settings:
     local_dirs: dict                  # local mode: {projects, appData, config} folders (each is an allowed root)
     local_roots: tuple[Path, ...]     # local mode: further allowed roots (VVLOG_LOCAL_ROOTS, os.pathsep-separated)
     ffprobe: str | None           # local mode: VVLOG_FFPROBE, else <VVLOG_BIN_DIR>/ffprobe, else PATH
+    weights_manifest: Path        # weights/manifest.json (the installer ships a copy; VVLOG_WEIGHTS_MANIFEST)
+    weights_hf_base: str         # where weights are fetched from (tests point it at a fake server)
     allowed_origins: tuple[str, ...]  # extra origins allowed to call a local server (the GitHub Pages origin)
 
     @classmethod
@@ -99,7 +101,11 @@ class Settings:
             local_dirs=_local_dirs(e),
             local_roots=tuple(Path(r).resolve() for r in e.get("VVLOG_LOCAL_ROOTS", "").split(os.pathsep) if r.strip()),
             ffprobe=find_ffprobe(Path(e["VVLOG_BIN_DIR"]) if e.get("VVLOG_BIN_DIR") else None, e.get("VVLOG_FFPROBE")),
+            weights_manifest=Path(e.get("VVLOG_WEIGHTS_MANIFEST") or REPO / "weights" / "manifest.json").resolve(),
+            weights_hf_base=e.get("VVLOG_WEIGHTS_HF_BASE", "https://huggingface.co"),
             allowed_origins=tuple(o.strip() for o in e.get("VVLOG_ALLOWED_ORIGINS", "").split(",") if o.strip()),
         )
+        if not e.get("VVLOG_CKPT_ROOT") and s["local"]:  # local app: weights live in the app-data folder, not next to the cwd
+            s["ckpt_root"] = s["local_dirs"]["appData"] / "weights"
         s.update(over)
         return cls(**s)

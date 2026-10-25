@@ -19,11 +19,13 @@ from ..domain.errors import VvlogError
 from . import schemas as S
 from ..adapters.local_fs import LocalFs, LocalRoots
 from ..adapters.local_media import LocalMedia
+from ..adapters.local_weights import WeightsManager
 from ..adapters.native_dialog import NativeDialog
 from .local import LocalGuard, mount_local, self_origins
 from .local_dialog import mount_local_dialog
 from .local_fs import mount_local_fs
 from .local_media import mount_local_media
+from .local_weights import mount_local_weights
 from .ranges import range_response
 
 HEARTBEAT_S = 15
@@ -182,6 +184,8 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
         app.state.native_dialog = NativeDialog()  # tests swap .backend
         mount_local_dialog(app, app.state.native_dialog, roots, auth, st.port)
         mount_local_media(app, LocalMedia(st.ffprobe), auth)
+        app.state.weights = WeightsManager(st.weights_manifest, st.ckpt_root, hf_base=st.weights_hf_base)
+        mount_local_weights(app, app.state.weights, auth, st.port)
         mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs, auth=auth)
     return app
 

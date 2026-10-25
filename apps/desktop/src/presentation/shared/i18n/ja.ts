@@ -382,6 +382,44 @@ export const ja = {
         "この画面を配信しているローカルアプリに自動でつながります。宛先とトークンはアプリの起動ごとに自動で設定されるため、編集できません。",
     },
   },
+  weights: {
+    title: "モデルの重み",
+    intro:
+      "解析に使うモデルの重み（約 7GB）を、初めてのときにこの PC へ取得します。アプリには同梱していません。途中で止めても、続きから再開できます。",
+    location: "保存先",
+    free: "空き容量",
+    ready: "取得済み（検証済み）",
+    start: "取得を始める",
+    resume: "続きから再開",
+    cancel: "中止（続きから再開できます）",
+    gatedGuide:
+      "一部の重み（SAM 3 / SAM 3D Body）は Hugging Face の許諾が必要です。下のページでライセンスに同意してアクセスを申請し、承認されたら、そのアカウントのアクセストークン（read 権限）を入力してください。",
+    tokenLabel: "Hugging Face のアクセストークン",
+    tokenNote: "トークンは取得のためにだけ使い、保存しません。画面を閉じると消えます。",
+    openLicense: "許諾のページを開く",
+    canceled: "中止しました。保存済みの分は残してあるので、続きから再開できます。",
+    unpinned: "検証値が未固定のファイルの sha256",
+    fileState: { ok: "取得済み", unverified: "未検証", partial: "途中", missing: "未取得" },
+    phase: {
+      preparing: "準備中",
+      checking: "確認中",
+      downloading: "取得中",
+      verifying: "検証中",
+      done: "完了",
+      failed: "失敗",
+      canceled: "中止",
+    },
+    errors: {
+      HF_TOKEN_REQUIRED: "Hugging Face のトークンが必要です",
+      HF_TOKEN_INVALID: "トークンが無効です",
+      HF_ACCESS_DENIED: "このアカウントにはアクセス許諾がありません",
+      WEIGHTS_DISK_FULL: "ディスクの空き容量が足りません",
+      WEIGHTS_NETWORK: "ネットワークが途切れました",
+      WEIGHTS_NOT_FOUND: "取得元にファイルが見つかりません",
+      WEIGHTS_CHECKSUM_MISMATCH: "ファイルの検証に失敗しました",
+      other: "取得に失敗しました",
+    },
+  },
   general: {
     cache: "キャッシュ",
     cacheLocation: "場所",
@@ -557,6 +595,14 @@ export const ja = {
     DIALOG_UNAVAILABLE: {
       title: "ここでは選択ダイアログを開けません",
       body: () => "ネイティブのダイアログは Windows 版のローカルアプリでだけ使えます。",
+    },
+    WEIGHTS_BUSY: {
+      title: "重みの取得は実行中です",
+      body: () => "終わるまで待つか、中止してからやり直してください。",
+    },
+    WEIGHTS_DISK_FULL: {
+      title: "ディスクの空き容量が足りません",
+      body: (d: { message?: string }) => d.message || "空きを作ってから、もう一度お試しください。",
     },
     DIALOG_FAILED: {
       title: "ダイアログを開けません",

@@ -188,6 +188,16 @@ irm -Method Post -Headers @{Authorization="Bearer $t"} -ContentType 'application
   -Body '{"filters":[{"name":"動画","extensions":["mp4","mov"]}]}' http://127.0.0.1:8765/v1/local/dialog/open-files
 ```
 
+### 重みの取得 API（`/v1/local/weights`、#33）
+初回に重み（`weights/manifest.json`、約 7GB。インストーラーには入れない）を取得する。`huggingface_hub` / torch には依存せず（環境 A で動く）、`https://huggingface.co/<repo>/resolve/main/<file>` を urllib で Range 再開しながら取る。
+
+- `GET /weights` 保存先・ファイルごとの状態（`ok`/`unverified`/`partial`/`missing`）・空き容量・実行中ジョブ。`POST /weights/start {"hfToken"?}`（202。実行中は `409 WEIGHTS_BUSY`、空き不足は `507 WEIGHTS_DISK_FULL`）。`POST /weights/cancel`（`.part` は残す）。`GET /weights/events`（SSE: `progress`→`done`）。開始・中止は同一オリジンの画面からだけ。
+- 保存先は `VVLOG_CKPT_ROOT`。ローカルモードで未指定なら `%LOCALAPPDATA%\vvlog\weights`（`VVLOG_LOCAL_APPDATA_DIR\weights`）。manifest は `VVLOG_WEIGHTS_MANIFEST` で差し替え。
+- `<dest>.part` に書いて再開（Range）。切断は自動で数回再試行。完了後に sha256 を検証し、不一致は `.part` を消して 1 回だけ取り直す。固定値の無いファイルは計算結果を `job.unpinned` で返す。検証済みの印は保存先の `.vvlog-weights.json`（サイズ・更新時刻・sha256）。
+- **HF トークンは Bearer ヘッダーにだけ載せ、メモリ以外（ログ・エラー・状態・ディスク）に残さない**。リダイレクト先が別ホスト（CDN）や HF 以外の URL には送らない。
+- 失敗は `job.error.code`：`HF_TOKEN_REQUIRED`（トークン無しで 401/403）・`HF_TOKEN_INVALID`（401）・`HF_ACCESS_DENIED`（403＝ライセンス未承諾。`detail.url` に同意ページ）・`WEIGHTS_DISK_FULL`・`WEIGHTS_NETWORK`・`WEIGHTS_CHECKSUM_MISMATCH` ほか。
+- 対象外：`hf_cache`（Depth Anything V2。transformers が HF キャッシュから読む）は引き続き `weights/fetch.py`。
+
 ## つまずきやすい点
 
 | 症状 | 原因と対処 |

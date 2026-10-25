@@ -16,6 +16,7 @@ import type {
   NotifierPort,
   ShellPort,
 } from "@/application/ports/system";
+import type { WeightsPort } from "@/application/ports/weights";
 import type * as UC from "@/application/usecases";
 import type { ComputeProfile } from "@/domain/connection";
 import type { Project } from "@/domain/project";
@@ -43,6 +44,8 @@ export interface Services {
     /** フルモードだけ：アプリ（ローカルサーバー）を終了する */
     appQuit?: AppQuitPort;
     clock: ClockPort;
+    /** フルモードだけ：重み（約 7GB）の取得（#33） */
+    weights?: WeightsPort;
   };
   /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */
   maintenance?: () => Promise<void>;
