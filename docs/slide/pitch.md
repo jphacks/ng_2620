@@ -169,7 +169,7 @@ div.flow p.model { font-size: 15px; color: var(--vt-green-700); }
 
 **② 体の 3D の動き**
 
-<p class="model">SAM 3D Body</p>
+<p class="model">SAM 3D Body<br>MoGe-2（カメラの画角）</p>
 
 </div>
 <div>
@@ -178,7 +178,7 @@ div.flow p.model { font-size: 15px; color: var(--vt-green-700); }
 
 **③ 前後の判定**
 
-<p class="model">黄＝手前・青＝奥<br>SAM 3（物の切り出し）・MoGe-2（奥行き）＋独自の判定</p>
+<p class="model">黄＝手前・青＝奥<br>SAM 3（物の切り出し）・Depth Anything V2（奥行き）＋独自の判定</p>
 
 </div>
 <div>
