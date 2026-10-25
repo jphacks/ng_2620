@@ -52,12 +52,12 @@ class AvatarActor:
         if self.spring is not None:
             self.spring.reset()
 
-    def pose(self, joint_rots, coords_cam, arm_ik=True, leg_ik=True, gpu=None, expr=None, near=0.0):
+    def pose(self, joint_rots, coords_cam, arm_ik=True, leg_ik=True, gpu=None, expr=None, near=0.0, anchor=0.0):
         """Pose the avatar for one frame (frames must be fed in order: spring bones keep state).
         expr: {VRM expression name: weight 0-1} (avatar/face.py), added to the rest mesh before skinning.
-        near: placement weight towards the neck (retarget_mhr.near_weights)."""
+        near: placement weight towards the neck (retarget_mhr.near_weights); anchor: the same for every frame."""
         rt = self.rt
-        g, t, self.ik_err = rt.solve(joint_rots, coords_cam, self.scale, arm_ik=arm_ik, leg_ik=leg_ik, near=near)
+        g, t, self.ik_err = rt.solve(joint_rots, coords_cam, self.scale, arm_ik=arm_ik, leg_ik=leg_ik, near=near, anchor=anchor)
         if self.spring is not None:
             # inertia source: the avatar's translation back in glTF units (A is a signed permutation, A^-1 = A^T)
             t_gltf = (rt.A.T @ t) / self.scale

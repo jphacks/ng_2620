@@ -43,7 +43,7 @@ import cv2
 import numpy as np
 import torch
 
-REPO = "C:/VScodeFiles/sam-body4d"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
 FV2 = f"{REPO}/scripts/occlusion/fusion_v2"
 for p in (REPO, FV2):
     if p not in sys.path:

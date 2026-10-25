@@ -3,7 +3,8 @@
 Per frame f, at the pipeline's resolution:
   clean/{f:05d}.webp            the clean plate (avatar_app's composite base)
   avatar/{pid}/{f:05d}.webp     the avatar's RGBA, straight alpha: the supersampled render area-averaged with
-                                premultiplied colour (the same reduction composite_gpu applies)
+                                premultiplied colour (the same reduction composite_gpu applies). The render is RGBA
+                                and cv2 writes BGRA, so the channels are swapped on the way out (as composite_gpu does)
   hide/{pid}/{f:05d}.png        AvatarHider's smoothed hide mask, 0 / 255
 and layers.json: {persons, order: {f: [pid, ...] far -> near by the median avatar depth}, avatarIds}.
 The editor recomposites these with the contract's rule; writes go through a Sink (one worker thread, in order).
@@ -83,7 +84,7 @@ class LayerWriter:
                 h = hides.get(pid)
                 if h is not None:
                     hide[h >= 0.5] = 255
-            self._put(cv2.imwrite, os.path.join(self.dir, "avatar", str(pid), f"{name}.webp"), rgba,
+            self._put(cv2.imwrite, os.path.join(self.dir, "avatar", str(pid), f"{name}.webp"), rgba[..., [2, 1, 0, 3]],
                       [cv2.IMWRITE_WEBP_QUALITY, WEBP_Q])
             self._put(cv2.imwrite, os.path.join(self.dir, "hide", str(pid), f"{name}.png"), hide)
         self.order[str(f)] = sorted(depth, key=lambda p: -depth[p])          # far -> near
