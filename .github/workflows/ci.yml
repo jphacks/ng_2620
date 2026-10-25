@@ -31,3 +31,64 @@ jobs:
       - name: eslint
         # error があれば失敗。warning は annotation として表示（eslint-formatter-gha）
         run: pnpm --filter @vvlog/desktop exec eslint . --format gha
+
+  web:
+    name: 画面（型チェック・vitest・ビルド）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版は package.json の packageManager
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 型チェック
+        run: pnpm typecheck
+      - name: vitest（実サーバーを起動する通しテストは venv が無いので skip。integration ジョブで走らせる）
+        run: pnpm test
+      - name: build（Pages に公開するものと同じ。相対パス）
+        run: pnpm build
+
+  server:
+    name: サーバー（pytest）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: ffmpeg（動画の検証に使う）
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: 環境 A
+        run: |
+          python -m venv services/gpu_server/.venv
+          services/gpu_server/.venv/bin/pip install -q -e "services/gpu_server[dev]"
+      - name: gpu_server
+        working-directory: services/gpu_server
+        run: .venv/bin/python -m pytest -q
+      - name: mock_server
+        working-directory: services/mock_server
+        run: ../gpu_server/.venv/bin/python -m pytest -q
+
+  integration:
+    name: 画面 ⇄ ローカルサーバーの通しテスト（vitest）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - name: 環境 A（実サーバーを起動するテストが使う）
+        run: |
+          python -m venv services/gpu_server/.venv
+          services/gpu_server/.venv/bin/pip install -q -e "services/gpu_server[dev]"
+      - name: vitest（localApi.integration.test.ts を含む）
+        run: pnpm test
