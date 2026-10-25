@@ -8,6 +8,10 @@
   "scripts": {
     "prepare": "lefthook install",
     "dev": "pnpm --filter @vvlog/desktop dev",
+    "dev:web": "pnpm --filter @vvlog/desktop dev",
+    "dev:web:app": "node scripts/dev-web-app.mjs",
+    "dev:web:app:fresh": "node scripts/dev-web-app.mjs --fresh",
+    "dev:web:app:dist": "node scripts/dev-web-app.mjs --dist",
     "build": "pnpm --filter @vvlog/desktop build",
     "test": "pnpm --filter @vvlog/desktop test",
     "lint": "pnpm --filter @vvlog/desktop lint",

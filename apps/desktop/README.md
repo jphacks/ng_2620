@@ -24,6 +24,18 @@ pnpm build       # 型チェック + vite build（dist/）
 
 開発ビルドでは、接続プロファイルに「開発用モック」と「開発用シミュレーター（`memory://sim`）」が自動で入る（設定 > 接続で切り替えられる）。
 
+### 画面の UI・操作感をデバッグする（リポジトリのルートで実行）
+
+| コマンド | 起動するもの | 用途 |
+|---|---|---|
+| `pnpm dev:web` | Vite のみ（http://localhost:1420/） | 制限モード（Pages で開いた状態）の確認 |
+| `pnpm dev:web:app` | ローカルアプリサーバー + Vite（HMR あり） | フルモード（ソフトウェア同梱版と同じ）を、画面を編集しながら確認 |
+| `pnpm dev:web:app:fresh` | 同上。データの置き場を `.dev-data/` の空フォルダにする | 初回セットアップの案内・空のホームなど、**初回起動の状態**の確認（消せば初回に戻る） |
+| `pnpm dev:web:app:dist` | 画面をビルドして、ローカルアプリサーバーが配信（http://127.0.0.1:8765/） | 配布物と同じ構成での最終確認（HMR なし） |
+
+`dev:web:app*` はサーバーと画面を一緒に立ち上げ、Ctrl+C で一緒に止める（`scripts/dev-web-app.mjs`）。サーバーのポートは `VVLOG_DEV_PORT`（既定 8765）、Python は `VVLOG_DEV_PYTHON`（既定 `services/gpu_server/.venv`、無ければ `python3`）で変える。
+サーバーの Python 環境は `services/gpu_server/README.md` を参照。シミュレーターだけで見るなら `pnpm --filter @vvlog/desktop dev:memory`。
+
 ### フルモード（ローカルアプリサーバー）で試す（ADR-0015）
 
 画面がローカルサーバーから配信されているとき、起動時に `GET /v1/local/info` で**フルモード**を判定し、ファイル・ハッシュ・ffprobe をサーバー越しにする（以前の Tauri 版の `invoke` は廃止した）。判定できなければ制限モード（メモリ上のファイル）。

@@ -34,3 +34,6 @@ weights/*
 # ローカル環境
 .env.local
 .env.*.local
+
+# pnpm dev:web:app:fresh のデータ置き場
+.dev-data/

@@ -16,6 +16,7 @@ import type {
   NotifierPort,
   ShellPort,
 } from "@/application/ports/system";
+import type { BootstrapPort } from "@/application/ports/bootstrap";
 import type { WeightsPort } from "@/application/ports/weights";
 import type * as UC from "@/application/usecases";
 import type { ComputeProfile } from "@/domain/connection";
@@ -46,6 +47,8 @@ export interface Services {
     clock: ClockPort;
     /** フルモードだけ：重み（約 7GB）の取得（#33） */
     weights?: WeightsPort;
+    /** フルモードだけ：解析環境（Python / torch など）の初回セットアップ（#32） */
+    bootstrap?: BootstrapPort;
   };
   /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */
   maintenance?: () => Promise<void>;
