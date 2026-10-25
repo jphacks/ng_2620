@@ -1,6 +1,6 @@
 [package]
 name = "vvlog-desktop"
-version = "0.1.1"
+version = "0.2.0"
 description = "vvlog — 実写動画の人物を VRM アバターに置き換えるデスクトップアプリ"
 edition = "2021"
 rust-version = "1.77"
