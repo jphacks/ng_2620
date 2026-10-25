@@ -64,7 +64,12 @@ describe.skipIf(!python)("ローカルアプリサーバー（実サーバー）
       });
       proc.on("exit", (code) => reject(new Error(`サーバーが終了しました（${code}）`)));
     });
-    const got = await fetchLocalInfo({ base });
+    let got: LocalInfo | null = null;
+    const infoDeadline = Date.now() + 5_000;
+    while (!got && Date.now() < infoDeadline) {
+      got = await fetchLocalInfo({ base, timeoutMs: 1000 });
+      if (!got) await new Promise((r) => setTimeout(r, 100));
+    }
     if (!got) throw new Error("GET /v1/local/info に答えがありません");
     info = got;
     api = new LocalApi(info, base);
