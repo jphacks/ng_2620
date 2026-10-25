@@ -4,14 +4,6 @@
 name: E2E
 
 on:
-  pull_request:
-    paths:
-      - "apps/desktop/**"
-      - "services/gpu_server/**"
-      - "services/mock_server/**"
-      - ".github/workflows/e2e.yml"
-  push:
-    branches: [develop, main]
   workflow_dispatch:
 
 permissions:
