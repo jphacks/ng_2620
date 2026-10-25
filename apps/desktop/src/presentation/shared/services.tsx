@@ -66,6 +66,7 @@ export interface Services {
     deleteProfile: UC.DeleteProfile;
     selectActiveProfile: UC.SelectActiveProfile;
     testConnection: UC.TestConnection;
+    recordUploadConsent: UC.RecordUploadConsent;
     watchConnection: UC.WatchConnection;
     /** フルモードだけ：画面を配信しているローカルサーバーを接続「この PC」として用意する */
     ensureLocalProfile?: () => Promise<{ profiles: ComputeProfile[]; activeProfileId: string | null }>;

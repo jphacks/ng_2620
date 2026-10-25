@@ -73,6 +73,14 @@ export interface IdPort {
   newId(prefix: string): string;
 }
 
+/** 接続テストの失敗理由を推定するためのブラウザ側の手がかり（#44） */
+export interface NetworkProbePort {
+  /** この画面を開いているオリジン（例 https://jphacks.github.io） */
+  readonly pageOrigin: string;
+  /** 宛先に『つながった』か。CORS で応答を読めなくても、つながったなら true（no-cors） */
+  reachable(url: string): Promise<boolean>;
+}
+
 export type LocalAppProbe = { found: true; url: string } | { found: false };
 
 /** 制限モード（Pages など）から、この PC のローカルアプリ（フルモード）を探す・案内する（#38） */

@@ -6,6 +6,8 @@ export interface AppSettings {
   schemaVersion: 1;
   profiles: ComputeProfile[];
   activeProfileId: string | null;
+  /** 動画を送ってよいと確認した外部サーバー（プロファイル ID → 確認したときの URL）。URL が変わると確認し直す */
+  uploadConsents?: Record<string, string>;
   /** エディタのパネル寸法（react-resizable-panels が保存する値、グループ ID ごと） */
   panelLayouts: Record<string, unknown>;
   /** 新規プロジェクトの保存先（未設定なら ~/Movies/vvlog） */

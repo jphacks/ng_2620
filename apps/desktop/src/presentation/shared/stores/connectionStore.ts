@@ -33,11 +33,15 @@ interface ConnectionStore {
   state: ConnectionState;
   capabilities: Capabilities | null;
   backend: ComputeBackendPort | null;
+  /** 動画を送ってよいと確認した宛先（プロファイル ID → URL） */
+  consents: Record<string, string>;
   init(): Promise<void>;
   select(profileId: string | null): Promise<void>;
   save(profile: ComputeProfile, token?: string): Promise<void>;
   remove(profileId: string): Promise<void>;
   checkNow(): void;
+  /** 利用者が『この宛先に動画を送ってよい』と確認した */
+  consent(profile: ComputeProfile): Promise<void>;
 }
 
 let watch: ConnectionWatch | null = null;
@@ -85,6 +89,7 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
     state: initialConnection(null),
     capabilities: null,
     backend: null,
+    consents: {},
 
     async init() {
       const { uc, env } = getServices();
@@ -111,7 +116,7 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
         profiles = profiles.filter((p) => !p.devOnly);
         if (!profiles.some((p) => p.id === activeProfileId)) activeProfileId = profiles[0]?.id ?? null;
       }
-      set({ profiles, activeProfileId, ready: true });
+      set({ profiles, activeProfileId, consents: listed.uploadConsents ?? {}, ready: true });
       restartWatch();
     },
 
@@ -132,6 +137,11 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
       const s = await getServices().uc.deleteProfile.execute(profileId);
       set({ profiles: s.profiles, activeProfileId: s.activeProfileId });
       restartWatch();
+    },
+
+    async consent(profile) {
+      const s = await getServices().uc.recordUploadConsent.execute(profile);
+      set({ consents: s.uploadConsents ?? {} });
     },
 
     checkNow() {

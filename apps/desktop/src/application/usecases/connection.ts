@@ -1,9 +1,10 @@
 // F03 接続プロファイルと疎通確認
 
-import type { ComputeProfile, ConnectionState } from "@/domain/connection";
+import type { ComputeProfile, ConnectionState, ReachReason } from "@/domain/connection";
 import {
   HEALTH_INTERVAL_MS,
   initialConnection,
+  isMixedContent,
   localProfile,
   nextConnectionState,
   normalizeBaseUrl,
@@ -12,13 +13,13 @@ import {
 import { AppError, toAppError } from "@/domain/errors";
 import type { Capabilities, ComputeBackendFactory, ComputeBackendPort, Health } from "../ports/compute";
 import type { AppSettings, SecretStorePort, SettingsPort } from "../ports/settings";
-import type { ClockPort } from "../ports/system";
+import type { ClockPort, NetworkProbePort } from "../ports/system";
 
 export class ListProfiles {
   constructor(private readonly d: { settings: SettingsPort }) {}
-  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId">> {
+  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId" | "uploadConsents">> {
     const s = await this.d.settings.load();
-    return { profiles: s.profiles, activeProfileId: s.activeProfileId };
+    return { profiles: s.profiles, activeProfileId: s.activeProfileId, uploadConsents: s.uploadConsents };
   }
 }
 
@@ -72,19 +73,27 @@ export type TestStep = "reach" | "api_version" | "auth" | "other";
 
 export type TestResult =
   | { ok: true; health: Health; capabilities: Capabilities }
-  | { ok: false; failedStep: TestStep; error: AppError; health?: Health };
+  | {
+      ok: false;
+      failedStep: TestStep;
+      error: AppError;
+      health?: Health;
+      /** failedStep が reach のとき：届かなかった理由の推定。pageOrigin は CORS の許可に加えるオリジン */
+      reason?: ReachReason;
+      pageOrigin?: string;
+    };
 
 export class TestConnection {
-  constructor(private readonly d: { compute: ComputeBackendFactory }) {}
+  constructor(private readonly d: { compute: ComputeBackendFactory; net?: NetworkProbePort }) {}
 
-  /** health（認証なし）→ API 版の確認 → capabilities（認証あり）の順。失敗は段階別に返す */
+  /** health（認証なし）→ API 版の確認 → capabilities（認証あり）の順。失敗は段階別に返す。届かないときは理由も推定する */
   async execute(profile: ComputeProfile, opts: { token?: string | null } = {}): Promise<TestResult> {
     const backend = this.d.compute.forProfile(profile, opts.token !== undefined ? { token: opts.token } : undefined);
     let health: Health;
     try {
       health = await backend.health();
     } catch (e) {
-      return { ok: false, failedStep: "reach", error: toAppError(e) };
+      return { ok: false, failedStep: "reach", error: toAppError(e), ...(await this.whyUnreachable(profile)) };
     }
     if (health.apiVersion !== SUPPORTED_API_VERSION) {
       return {
@@ -104,6 +113,29 @@ export class TestConnection {
       const err = toAppError(e);
       return { ok: false, failedStep: err.code === "UNAUTHORIZED" ? "auth" : "other", error: err, health };
     }
+  }
+
+  /** http:// を https のページから → 混在コンテンツ／no-cors でつながる → CORS で拒否／それ以外 → 届かない */
+  private async whyUnreachable(profile: ComputeProfile): Promise<{ reason?: ReachReason; pageOrigin?: string }> {
+    const net = this.d.net;
+    if (!net) return {};
+    if (isMixedContent(net.pageOrigin, profile.baseUrl)) return { reason: "mixed_content", pageOrigin: net.pageOrigin };
+    const reached = await net.reachable(`${normalizeBaseUrl(profile.baseUrl)}/v1/health`).catch(() => false);
+    return { reason: reached ? "cors" : "unreachable", pageOrigin: net.pageOrigin };
+  }
+}
+
+/** 動画を送ってよいという確認を記録する（宛先の URL と一緒に） */
+export class RecordUploadConsent {
+  constructor(private readonly d: { settings: SettingsPort }) {}
+  async execute(profile: Pick<ComputeProfile, "id" | "baseUrl">): Promise<AppSettings> {
+    const s = await this.d.settings.load();
+    const next: AppSettings = {
+      ...s,
+      uploadConsents: { ...s.uploadConsents, [profile.id]: normalizeBaseUrl(profile.baseUrl) },
+    };
+    await this.d.settings.save(next);
+    return next;
   }
 }
 

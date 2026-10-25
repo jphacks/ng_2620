@@ -334,6 +334,23 @@ export const ja = {
     queueLength: "キュー",
     apiVersion: "API 版",
     serverVersion: "サーバーの版",
+    reachReason: {
+      mixed_content:
+        "https のページからは、暗号化されていない http:// の接続先は使えません（ブラウザが止めます）。https:// の URL にしてください。Tailscale serve や Cloudflare Tunnel を使うと https:// になります。",
+      cors: (origin: string) =>
+        `サーバーには届きましたが、ブラウザが応答を拒否しました（CORS）。サーバー側の VVLOG_ALLOWED_ORIGINS に ${origin} を追加して、サーバーを再起動してください。`,
+      unreachable:
+        "サーバーに届きません。URL・サーバーが起動しているか・トンネルやファイアウォール・証明書（https の場合）を確認してください。",
+    },
+    storageNote:
+      "トークンはこのブラウザの中（IndexedDB）にだけ保存され、このサーバー以外には送られません。共有の PC では使わないでください。",
+    consent: {
+      title: "動画の送信先を確認してください",
+      body: (name: string, url: string) =>
+        `動画と解析結果は、あなたが用意したサーバー「${name}」（${url}）にだけ送られます。運営側のサーバーには送られません。`,
+      note: "このサーバーの運営者は、送った動画を見ることができます。信頼できるサーバーにだけ送ってください。",
+      ok: "同意して続ける",
+    },
     testFailed: {
       reach: "サーバーに届きません",
       auth: "トークンが違います",

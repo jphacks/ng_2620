@@ -18,7 +18,15 @@ export function normalizeSettings(raw: unknown): AppSettings {
     activeProfileId: typeof r.activeProfileId === "string" ? r.activeProfileId : null,
     panelLayouts: r.panelLayouts && typeof r.panelLayouts === "object" ? r.panelLayouts : {},
     projectsDir: typeof r.projectsDir === "string" ? r.projectsDir : undefined,
+    uploadConsents: normalizeConsents(r.uploadConsents),
   };
+}
+
+function normalizeConsents(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) if (typeof v === "string") out[k] = v;
+  return Object.keys(out).length ? out : undefined;
 }
 
 export class FileSettings implements SettingsPort {

@@ -67,6 +67,23 @@ export function validateProfile(p: Pick<ComputeProfile, "name" | "baseUrl">): Pr
   return out;
 }
 
+/** つながらなかった理由（ブラウザは『届かない』と『CORS で拒否』と『混在コンテンツ』を区別して教えてくれないので、こちらで推定する） */
+export type ReachReason = "mixed_content" | "cors" | "unreachable";
+
+/** https のページから http:// の宛先（loopback 以外）は、ブラウザが混在コンテンツとして止める */
+export function isMixedContent(pageOrigin: string, baseUrl: string): boolean {
+  return /^https:/i.test(pageOrigin) && /^http:\/\//i.test(baseUrl.trim()) && !isLoopbackUrl(baseUrl);
+}
+
+/** 動画を送ってよいと利用者が確認した宛先。宛先（URL）が変わったら確認し直す */
+export function hasUploadConsent(
+  consents: Record<string, string> | undefined,
+  p: Pick<ComputeProfile, "id" | "kind" | "baseUrl" | "devOnly">,
+): boolean {
+  if (p.kind === "local" || p.devOnly) return true; // この PC・開発用は自分の機械
+  return consents?.[p.id] === normalizeBaseUrl(p.baseUrl);
+}
+
 /** フルモードで、この画面を配信しているローカルサーバー自身につなぐプロファイルの ID（トークンも同じキーで保存） */
 export const LOCAL_PROFILE_ID = "local-gpu";
 

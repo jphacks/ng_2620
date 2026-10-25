@@ -2,12 +2,13 @@
 
 import { Play } from "lucide-react";
 import { useState } from "react";
+import { hasUploadConsent } from "@/domain/connection";
 import { fileNameOf } from "@/domain/validation";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
 import { activeProfile, useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
-import { Button, ErrorNotice, Spinner } from "@/presentation/shared/ui";
+import { Button, ConfirmDialog, ErrorNotice, Spinner } from "@/presentation/shared/ui";
 import { useImportStore } from "./importStore";
 
 const T = ja.importStep;
@@ -28,15 +29,23 @@ export function VideoStep({
   const gpu = useConnectionStore((s) => s.capabilities?.gpuName);
   const start = useImportStore((s) => s.start);
   const running = useImportStore((s) => (project ? s.runs[project.id]?.status === "running" : false));
+  const consents = useConnectionStore((s) => s.consents);
+  const consent = useConnectionStore((s) => s.consent);
   const [videoError, setVideoError] = useState(false);
+  const [askConsent, setAskConsent] = useState(false);
   if (!project) return null;
   const src = project.source;
   const resumable = !!project.compute.upload && !project.compute.mediaId;
   const canStart = !!profile && status === "connected" && !running;
 
-  const begin = () => {
+  const go = () => {
     void start();
     onStarted();
+  };
+  // 自分で用意した外部サーバーへ初めて送るときは、送信先の確認を挟む（BYO、#35）
+  const begin = () => {
+    if (profile && !hasUploadConsent(consents, profile)) setAskConsent(true);
+    else go();
   };
 
   return (
@@ -107,6 +116,20 @@ export function VideoStep({
           </Button>
         </div>
       </div>
+      {profile && (
+        <ConfirmDialog
+          open={askConsent}
+          onOpenChange={setAskConsent}
+          title={ja.connection.consent.title}
+          body={ja.connection.consent.body(profile.name, profile.baseUrl)}
+          confirmLabel={ja.connection.consent.ok}
+          onConfirm={() => {
+            void consent(profile).then(go);
+          }}
+        >
+          <p className="text-sm text-muted">{ja.connection.consent.note}</p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

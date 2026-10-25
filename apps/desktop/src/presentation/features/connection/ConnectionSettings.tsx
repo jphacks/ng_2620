@@ -190,6 +190,7 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
         )}
       </div>
       {auto && <div className="text-sm text-muted">{T.local.autoNote}</div>}
+      {!auto && <div className="text-xs text-faint">{T.storageNote}</div>}
 
       {touched && problems.length > 0 && <ErrorNotice title={problems.map((x) => T.problems[x]).join(" / ")} />}
       {insecure && <ErrorNotice tone="warning" title={T.insecure} />}
@@ -268,7 +269,15 @@ export function TestResultView({ result }: { result: TestResult }) {
         <XCircle size={16} className="text-danger" />
         {T.testFailed[result.failedStep]}
       </div>
-      <div className="mt-1 text-sm text-muted">{result.failedStep === "auth" ? e.body : result.error.message}</div>
+      <div className="mt-1 text-sm text-muted">
+        {result.failedStep === "auth"
+          ? e.body
+          : result.failedStep === "reach" && result.reason
+            ? result.reason === "cors"
+              ? T.reachReason.cors(result.pageOrigin ?? window.location.origin)
+              : T.reachReason[result.reason]
+            : result.error.message}
+      </div>
     </div>
   );
 }

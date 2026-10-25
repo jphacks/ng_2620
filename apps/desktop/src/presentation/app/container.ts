@@ -37,6 +37,7 @@ import {
   browserDialog,
   browserFileDrop,
   browserFileExchange,
+  browserNetworkProbe,
   browserNotifier,
   browserShell,
 } from "@/infrastructure/system/browserSystem";
@@ -73,10 +74,12 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
         config: async () => `${MEM_ROOT}/Config`,
       };
 
-  const settings = diskBacked
+  // 設定とトークンはファイルに（フルモード＝ローカルサーバーの設定フォルダ／制限モード＝IndexedDB）。IndexedDB が使えないときだけ localStorage
+  const persistent = diskBacked || !!runtime.storage;
+  const settings = persistent
     ? new FileSettings(fs, async () => joinPath(await dirs.config(), "settings.json"))
     : new LocalStorageSettings();
-  const secrets = diskBacked
+  const secrets = persistent
     ? new FileSecretStore(fs, async () => joinPath(await dirs.config(), "secrets.json"))
     : new LocalStorageSecretStore();
   const projects = new FsProjectRepository(fs, {
@@ -171,7 +174,8 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
       saveProfile: new UC.SaveProfile({ settings, secrets }),
       deleteProfile: new UC.DeleteProfile({ settings, secrets }),
       selectActiveProfile: new UC.SelectActiveProfile({ settings }),
-      testConnection: new UC.TestConnection({ compute }),
+      testConnection: new UC.TestConnection({ compute, net: browserNetworkProbe }),
+      recordUploadConsent: new UC.RecordUploadConsent({ settings }),
       watchConnection: new UC.WatchConnection({ clock }),
       ...(local
         ? {

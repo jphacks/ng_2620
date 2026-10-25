@@ -1,6 +1,7 @@
 // 制限モードのブラウザ側の OS 機能。選んだ・落としたファイルは MemoryFs に登録して（仮想）パスで扱う
 
 import type { FileExchangePort } from "@/application/ports/archive";
+import type { NetworkProbePort } from "@/application/ports/system";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
 import type { FileSystem } from "../fs/FileSystem";
 import { createWebNotifier } from "./webNotifier";
@@ -105,5 +106,20 @@ export const browserFileExchange: FileExchangePort = {
       input.oncancel = () => resolve(null);
       input.click();
     });
+  },
+};
+
+/** 接続テストの失敗理由の推定用：no-cors で『つながったか』だけを見る */
+export const browserNetworkProbe: NetworkProbePort = {
+  get pageOrigin() {
+    return window.location.origin;
+  },
+  async reachable(url) {
+    try {
+      await fetch(url, { mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(4000) });
+      return true;
+    } catch {
+      return false;
+    }
   },
 };
