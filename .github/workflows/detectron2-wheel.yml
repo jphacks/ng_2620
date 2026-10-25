@@ -54,7 +54,7 @@ jobs:
       - name: torch(CUDA 版)
         shell: pwsh
         run: |
-          $cu = "cu" + ("${{ inputs.cuda || '12.8.0' }}" -split "\.")[0..1] -join ""
+          $cu = "cu" + ((("${{ inputs.cuda || '12.8.0' }}" -split "\.")[0..1]) -join "")
           python -m pip install --upgrade pip setuptools wheel ninja
           python -m pip install "torch==${{ inputs.torch || '2.8.0' }}" torchvision --index-url "https://download.pytorch.org/whl/$cu"
           python -c "import torch; print(torch.__version__, torch.version.cuda)"
