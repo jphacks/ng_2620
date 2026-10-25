@@ -148,6 +148,15 @@ VVLOG_LOCAL=1 VVLOG_PORT=0 python -m vvlog_server      # PowerShell: $env:VVLOG_
 - `127.0.0.1` にだけバインドする（外部には出ない）。`Host` が `127.0.0.1`／`localhost`／`[::1]`＋実ポート以外、`Origin` が自分と `VVLOG_ALLOWED_ORIGINS` 以外のリクエストは `403`（DNS リバインディング・クロスサイト対策）。
 - `GET /v1/local/info`（認証なし）が `{"mode":"local",…}` を返す。画面はこれでフルモードを判定する。トークンは**同一オリジンの呼び出しにだけ**含まれ、Pages など別オリジンには含まれない。
 - `/v1/*` は従来どおり Bearer トークンが要る。
+- `POST /v1/local/shutdown`（#31）：サーバーを穏やかに止める。トークン必須＋同一オリジンのみ（別オリジンは `403 SHUTDOWN_LOCAL_ONLY`）。ローカルモード以外では存在しない（`404`）。画面の 設定 > 一般 >『アプリを終了』から呼ぶ。
+
+### ランチャー（`start.bat`／`start.ps1`、#31）
+UI なしでサーバーを起動し、既定ブラウザで画面を開く。`python -m vvlog_server.launcher`（`--no-browser` で開かない）の薄いラッパー。
+
+- ポートは `8765`（Pages の案内リンクが探す番号）を優先し、使用中なら空きポートを自動で選ぶ（`VVLOG_LAUNCHER_PORT` で優先ポートを変更）。
+- 多重起動防止：`%LOCALAPPDATA%\vvlog\launcher.json`（pid・port・url）。2 つ目の起動は、既存インスタンスが生きていれば（pid が存在し `/v1/health` が答える）その URL をブラウザで開いて終わる。古い状態ファイルは自動で掃除する。`VVLOG_STATE_DIR` で場所を変更。
+- 終了：起動した窓で Ctrl+C（子プロセスごと止める）／画面の『アプリを終了』。実行中のジョブは次回起動で `INTERRUPTED` になる（既存仕様）。トレイアイコンは付けていない（依存を増やさないため）。
+- ログ：`%LOCALAPPDATA%\vvlog\logs\server.log`（2MB×5 世代でローテーション。`VVLOG_LOG_DIR` で変更）。データは `VVLOG_DATA_ROOT` 未指定なら `%LOCALAPPDATA%\vvlog\data`。
 
 ### ローカル FS API（`/v1/local/fs`、#23）
 Tauri の `fs_*` コマンドの移植。ブラウザからプロジェクトフォルダを読み書きする。HTTP 経由なので、**許可ルートの外は `403 PATH_NOT_ALLOWED`**。

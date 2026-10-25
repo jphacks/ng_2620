@@ -85,7 +85,12 @@ def main() -> None:
         # local app server: free port if VVLOG_PORT=0, a fresh token per launch unless one is given
         sock = bind_local_socket(s.port)
         s = dataclasses.replace(s, port=sock.getsockname()[1], api_token=s.api_token or secrets.token_hex(24))
-        server = uvicorn.Server(uvicorn.Config(create_app(s), log_level="info"))
+        app = create_app(s)
+        server = uvicorn.Server(uvicorn.Config(app, log_level="info"))
+
+        def request_shutdown() -> None:  # POST /v1/local/shutdown -> uvicorn's graceful exit (same path as Ctrl+C)
+            server.should_exit = True
+        app.state.request_shutdown = request_shutdown
         print(f"VVLOG_LOCAL_READY http://127.0.0.1:{s.port}/", flush=True)  # the launcher (#31) opens this URL
         server.run(sockets=[sock])
         return

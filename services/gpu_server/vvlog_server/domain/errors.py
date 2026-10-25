@@ -18,6 +18,7 @@ HTTP_STATUS = {
     "FS_CONFLICT": 409,
     "FS_FAILED": 500,
     "DIALOG_LOCAL_ONLY": 403,     # /v1/local/dialog: only the app served by this server may open a dialog
+    "SHUTDOWN_LOCAL_ONLY": 403,   # POST /v1/local/shutdown: only the app served by this server may stop it
     "DIALOG_BUSY": 409,
     "DIALOG_UNAVAILABLE": 501,
     "DIALOG_FAILED": 500,

@@ -408,6 +408,12 @@ export const ja = {
     notifyAsk: "通知を許可する",
     backendMode: "計算バックエンド",
     version: "バージョン",
+    app: "アプリ",
+    quit: "アプリを終了",
+    quitBody:
+      "この PC のサーバーを止めて、画面を閉じられる状態にします。実行中の解析があれば中断され、次に起動したときに『中断』と表示されます。",
+    quitDone: "終了しました。このタブは閉じてかまいません。",
+    quitDoneBody: "もう一度使うときは start.bat から起動してください。",
   },
   project: {
     serverMissingTitle: "サーバーのデータが見つかりません",

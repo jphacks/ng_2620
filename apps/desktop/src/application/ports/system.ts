@@ -83,6 +83,11 @@ export interface NetworkProbePort {
 
 export type LocalAppProbe = { found: true; url: string } | { found: false };
 
+/** フルモード：この画面を配信しているローカルサーバー（とランチャー）を止める（#31） */
+export interface AppQuitPort {
+  quit(): Promise<void>;
+}
+
 /** 制限モード（Pages など）から、この PC のローカルアプリ（フルモード）を探す・案内する（#38） */
 export interface LocalAppPort {
   /** ローカルアプリのアドレス（既定ポート） */

@@ -182,7 +182,7 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
         app.state.native_dialog = NativeDialog()  # tests swap .backend
         mount_local_dialog(app, app.state.native_dialog, roots, auth, st.port)
         mount_local_media(app, LocalMedia(st.ffprobe), auth)
-        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs)
+        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs, auth=auth)
     return app
 
 

@@ -20,6 +20,7 @@ import { HttpFileSystem } from "@/infrastructure/fs/httpFs";
 import { HttpFileHasher, WebCryptoFileHasher } from "@/infrastructure/media/hashers";
 import { HttpMediaProbe, VideoElementMediaProbe } from "@/infrastructure/media/probes";
 import type { Runtime } from "@/infrastructure/platform";
+import { HttpAppQuit } from "@/infrastructure/system/httpAppQuit";
 import { LocalApi } from "@/infrastructure/local/localApi";
 import { createLocalApp } from "@/infrastructure/local/probeLocalApp";
 import { FsProjectArchive } from "@/infrastructure/project/FsProjectArchive";
@@ -130,6 +131,7 @@ export function createServices(runtime: Runtime = { mode: "restricted" }): Servi
           }),
       notifier: browserNotifier,
       localApp: memFs && window.location.protocol === "https:" ? createLocalApp() : undefined,
+      appQuit: api ? new HttpAppQuit(api) : undefined,
       clock,
     },
     maintenance: api

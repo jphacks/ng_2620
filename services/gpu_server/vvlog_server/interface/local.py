@@ -92,7 +92,8 @@ def _same_origin(request: Request, port: int) -> bool:
     return request.headers.get("sec-fetch-site", "same-origin") in ("same-origin", "none")
 
 
-def mount_local(app: FastAPI, *, port: int, token: str, spa_dir: Path | None, dirs: dict | None = None) -> None:
+def mount_local(app: FastAPI, *, port: int, token: str, spa_dir: Path | None, dirs: dict | None = None,
+                auth=None) -> None:
     @app.get("/v1/local/info", tags=["local"], include_in_schema=False)
     def local_info(request: Request):
         info = {"mode": "local", "version": __version__, "apiVersion": 1, "port": port,
@@ -101,6 +102,23 @@ def mount_local(app: FastAPI, *, port: int, token: str, spa_dir: Path | None, di
             info["token"] = token
             info["dirs"] = {k: str(v) for k, v in (dirs or {}).items()}  # home-dir paths: not for other origins
         return JSONResponse(info, headers={"Cache-Control": "no-store"})
+
+    if auth is not None:
+        from fastapi import APIRouter, Depends
+        from ..domain.errors import VvlogError
+
+        def same_app_only(request: Request) -> None:
+            if not _same_origin(request, port):
+                raise VvlogError("SHUTDOWN_LOCAL_ONLY", "終了はローカルアプリの画面からだけ行えます")
+
+        @app.post("/v1/local/shutdown", tags=["local"], include_in_schema=False, status_code=202,
+                  dependencies=[Depends(auth), Depends(same_app_only)])
+        def shutdown():
+            """Stop this server (the launcher, #31, notices the exit and cleans up). Local mode only."""
+            hook = getattr(app.state, "request_shutdown", None)
+            if hook is not None:
+                hook()
+            return {"status": "shutting-down"}
 
     root = spa_dir.resolve() if spa_dir else None
 

@@ -10,6 +10,7 @@ import type { SettingsPort } from "@/application/ports/settings";
 import type {
   ClockPort,
   DialogPort,
+  AppQuitPort,
   FileDropPort,
   LocalAppPort,
   NotifierPort,
@@ -39,6 +40,8 @@ export interface Services {
     notifier: NotifierPort;
     /** 制限モードを https（Pages）で開いているときだけ：ローカルアプリの探索と案内 */
     localApp?: LocalAppPort;
+    /** フルモードだけ：アプリ（ローカルサーバー）を終了する */
+    appQuit?: AppQuitPort;
     clock: ClockPort;
   };
   /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */

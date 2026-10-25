@@ -40,6 +40,18 @@ export function GeneralSettings() {
     }
   };
 
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  const [quit, setQuit] = useState(false);
+  const doQuit = async () => {
+    try {
+      await platform.appQuit?.quit();
+      setQuit(true);
+    } catch (e) {
+      const t = errorText(e);
+      toast({ kind: "error", title: t.title, body: t.body });
+    }
+  };
+
   const yesNo = (v: boolean | null | undefined) =>
     v === null || v === undefined ? (
       <Badge>{T.notChecked}</Badge>
@@ -99,6 +111,30 @@ export function GeneralSettings() {
           </dl>
         )}
       </section>
+
+      {platform.appQuit && (
+        <section>
+          <h3 className="mb-3 font-semibold">{T.app}</h3>
+          {quit ? (
+            <div className="text-sm">
+              <div className="font-medium">{T.quitDone}</div>
+              <div className="text-muted">{T.quitDoneBody}</div>
+            </div>
+          ) : (
+            <Button onClick={() => setConfirmQuit(true)}>{T.quit}</Button>
+          )}
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={confirmQuit}
+        onOpenChange={setConfirmQuit}
+        title={T.quit}
+        body={T.quitBody}
+        confirmLabel={T.quit}
+        danger
+        onConfirm={() => void doQuit()}
+      />
 
       <ConfirmDialog
         open={confirm}
