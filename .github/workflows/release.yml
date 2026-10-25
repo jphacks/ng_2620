@@ -1,12 +1,12 @@
 # main に push（develop → main のマージ）されたら、apps/desktop/package.json の version で release/vX.Y.Z ブランチと draft Release を作る。
-# Tauri を廃止した（ADR-0015）ので、配布物（Windows インストーラー・ポータブル zip）のビルドと公開は #41（#34 のインストーラーができてから）。
-# それまでは draft のまま残る（空のリリースを公開しない）。
+# 配布物（Windows インストーラー・ポータブル zip）は build-windows.yml でビルドして draft に添付する。公開（draft 解除）は人が確認してから手動。
+# ci/release-test ブランチへの push は『試し』: 版は 0.0.0-ci.<run>、draft の prerelease だけ作り、タグ・release ブランチは作らない。
 # 同じ version のタグが既にあれば何もしない（version を上げていないマージでは配布しない）。
 name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, ci/release-test]
 
 permissions:
   contents: write
@@ -21,11 +21,20 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
+      test: ${{ steps.v.outputs.test }}
     steps:
       - uses: actions/checkout@v4
       - id: v
         run: |
           version=$(jq -r .version apps/desktop/package.json)
+          if [ "$GITHUB_REF_NAME" != main ]; then
+            version="0.0.0-ci.$GITHUB_RUN_NUMBER"
+            echo "test=true" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "test=false" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "v$version は作成済みなのでリリースしません"
@@ -33,12 +42,37 @@ jobs:
           else
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: release ブランチ・タグ・draft Release
-        if: steps.v.outputs.release == 'true'
+      - name: release ブランチ（main のときだけ）
+        if: steps.v.outputs.release == 'true' && steps.v.outputs.test == 'false'
+        run: git push origin "HEAD:refs/heads/release/v${{ steps.v.outputs.version }}"
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  attach:
+    needs: [prepare, build]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-dist
+          path: dist-win
+      # draft の Release はタグ名では取れない(gh release upload が見つけられない)ので、成果物と一緒に 1 回で作る
+      - name: draft Release を成果物つきで作る（公開はしない）
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.v.outputs.version }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          git push origin "HEAD:refs/heads/release/v$VERSION"
-          gh release view "v$VERSION" >/dev/null 2>&1 ||
-            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "vvlog v$VERSION" --generate-notes --draft
+          if [ "${{ needs.prepare.outputs.test }}" = true ]; then
+            gh release create "ci-test-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT" dist-win/* --target "$GITHUB_SHA" \
+              --title "CI 試し ${{ needs.prepare.outputs.version }}（消してよい）" --notes "release.yml の動作確認。公開しない。" --draft --prerelease
+          else
+            v="${{ needs.prepare.outputs.version }}"
+            gh release create "v$v" dist-win/* --target "$GITHUB_SHA" --title "vvlog v$v" --generate-notes --draft
+          fi

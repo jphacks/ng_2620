@@ -2,7 +2,7 @@
   "comment": "初回ブートストラップ(#32)が環境 B を作るときの決まり。provisional=true の値は #30 の実機検証で確定する(torch/CUDA/Python の固定版・detectron2 wheel の URL と sha256・GPU 下限)。",
   "provisional": true,
   "python": "3.12",
-  "torch": { "index": "cu128", "packages": ["torch", "torchvision"] },
+  "torch": { "index": "cu128", "packages": ["torch==2.8.0", "torchvision==0.23.0"] },
   "detectron2": { "wheelUrl": null, "sha256": null },
   "packages": [
     "setuptools", "wheel",
