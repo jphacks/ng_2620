@@ -127,13 +127,11 @@ p.src { margin-top: 0.3em; font-size: 13px; line-height: 1.4; color: var(--vt-gr
 
 ## デモ：会場で撮った動画が、ロケ動画に
 
-<div>
-<div class="card">
+<style scoped>
+video { display: block; margin: 0 auto; height: 450px; border-radius: 12px; }
+</style>
 
-（ここに会場で撮った動画と、30 秒くらいの vlog を流す）
-
-</div>
-</div>
+<video src="../media/demo.mp4" poster="../media/demo_poster.jpg" controls playsinline></video>
 
 <!--
 （7 ページ目）デモ：会場で撮った使用動画と 30 秒くらいの vlog を見せる。
@@ -245,14 +243,14 @@ section.cols p.cap { margin-top: 0.3em; font-size: 20px; text-align: center !imp
 
 ![](images/correction_front.jpg)
 
-<p class="cap">バッグを「前」に：足が隠れる</p>
+<p class="cap">椅子を「前」に：足が隠れる</p>
 
 </div>
 <div>
 
 ![](images/correction_behind.jpg)
 
-<p class="cap">バッグを「後ろ」に：足が出る</p>
+<p class="cap">椅子を「後ろ」に：足が出る</p>
 
 </div>
 <div>

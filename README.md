@@ -17,7 +17,11 @@ JPHACKS 2026 のチーム ng_2620 の作品（ロゴとブランドのガイド�
 
 ## 製品概要
 
-> デモ動画は準備中です。
+### デモ
+<p align="center">
+  <a href="docs/media/demo.mp4"><img src="docs/media/demo.gif" width="520" alt="会場で撮った動画の人物が、同じ動きのアバターに置き換わったロケ動画（30 秒）"></a><br>
+  会場で撮った動画を VirtualTwin で仕上げたロケ動画（30 秒）。画像をクリックすると音声つきの動画（<a href="docs/media/demo.mp4">docs/media/demo.mp4</a>）を開く
+</p>
 
 ### 背景（製品開発のきっかけ）
 VTuber はゲーム実況などのリアルタイム配信のイメージが強いが、最近はトラッキング技術で、スタジオでライブ映像を収録したり、

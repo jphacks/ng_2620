@@ -1,3 +1,6 @@
 {
-  "markdown.marp.themes": ["./docs/slide/themes/virtualtwin.css"]
+  "markdown.marp.themes": [
+    "./docs/slide/themes/virtualtwin.css"
+  ],
+  "markdown.marp.html": "all"
 }
