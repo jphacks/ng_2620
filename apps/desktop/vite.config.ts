@@ -5,8 +5,10 @@ import { defineConfig } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as { version: string };
 
-// Tauri 2 の標準設定：固定ポート 1420、Rust 側の変更で再読み込みしない
+// 開発サーバーは固定ポート 1420（フルモードの許可 Origin に使う）。Pages 用は VVLOG_BASE=/<リポジトリ名>/ でビルドする（#37）
 export default defineConfig({
+  // GitHub Pages ではリポジトリ名の下に置かれる。ローカルサーバーは / で配信する
+  base: process.env.VVLOG_BASE || "/",
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -16,11 +18,10 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
-  clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] },
+    watch: { ignored: ["**/src-tauri/**"] }, // #40 で src-tauri を消すときに外す
     // フルモードを `pnpm dev` で試す：VVLOG_DEV_SERVER=http://127.0.0.1:<port> pnpm dev
     // （サーバーは同一オリジンの呼び出しにだけトークンを渡すので、Host を書き換え Origin を外して転送する）
     proxy: process.env.VVLOG_DEV_SERVER
@@ -33,11 +34,10 @@ export default defineConfig({
         }
       : undefined,
   },
-  envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
     target: "safari16",
     sourcemap: true,
-    // デスクトップアプリはローカルから読むので 1 ファイルで構わない
+    // ローカルサーバーから配信するので 1 ファイルで構わない
     chunkSizeWarningLimit: 2000,
   },
   test: {

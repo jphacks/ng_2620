@@ -5,8 +5,6 @@ import type { Capabilities, ComputeBackendPort } from "@/application/ports/compu
 import type { ConnectionWatch } from "@/application/usecases";
 import type { ComputeProfile, ConnectionState } from "@/domain/connection";
 import { initialConnection } from "@/domain/connection";
-import type { LocalServerConfig } from "@/domain/localServer";
-import { LOCAL_PROFILE_ID } from "@/domain/localServer";
 import { ja } from "../i18n/ja";
 import { getServices } from "../services";
 
@@ -35,19 +33,11 @@ interface ConnectionStore {
   state: ConnectionState;
   capabilities: Capabilities | null;
   backend: ComputeBackendPort | null;
-  /** この PC の GPU サーバーの設定（未設定なら null） */
-  localServer: LocalServerConfig | null;
-  /** この PC の GPU サーバーを起動して応答を待っているところ */
-  localStarting: boolean;
   init(): Promise<void>;
   select(profileId: string | null): Promise<void>;
   save(profile: ComputeProfile, token?: string): Promise<void>;
   remove(profileId: string): Promise<void>;
   checkNow(): void;
-  saveLocal(config: LocalServerConfig): Promise<void>;
-  /** 起動して「この PC」の接続を既定にする。失敗は AppError（LOCAL_SERVER_FAILED）で投げる */
-  startLocal(): Promise<void>;
-  stopLocal(): Promise<void>;
 }
 
 let watch: ConnectionWatch | null = null;
@@ -95,14 +85,13 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
     state: initialConnection(null),
     capabilities: null,
     backend: null,
-    localServer: null,
-    localStarting: false,
 
     async init() {
       const { uc, env } = getServices();
       const listed = await uc.listProfiles.execute();
-      const { localServer } = listed;
       let { profiles, activeProfileId } = listed;
+      // フルモード：この画面を配信しているサーバー自身を接続「この PC」として用意する（トークンは起動ごとに変わる）
+      if (uc.ensureLocalProfile) ({ profiles, activeProfileId } = await uc.ensureLocalProfile());
       if (env.isDev) {
         // 開発ビルドだけ：モックサーバー（F14）とシミュレーターを初期登録
         for (const [p, token] of [
@@ -122,13 +111,8 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
         profiles = profiles.filter((p) => !p.devOnly);
         if (!profiles.some((p) => p.id === activeProfileId)) activeProfileId = profiles[0]?.id ?? null;
       }
-      set({ profiles, activeProfileId, localServer: localServer ?? null, ready: true });
+      set({ profiles, activeProfileId, ready: true });
       restartWatch();
-      if (env.isTauri && localServer?.autoStart) {
-        get()
-          .startLocal()
-          .catch((e) => console.warn("[local-server] 自動起動に失敗しました", e));
-      }
     },
 
     async select(profileId) {
@@ -152,28 +136,6 @@ export const useConnectionStore = create<ConnectionStore>((set, get) => {
 
     checkNow() {
       watch?.checkNow();
-    },
-
-    async saveLocal(config) {
-      const s = await getServices().uc.saveLocalServerConfig.execute(config);
-      set({ localServer: s.localServer ?? null });
-    },
-
-    async startLocal() {
-      if (get().localStarting) return;
-      set({ localStarting: true });
-      try {
-        const s = await getServices().uc.startLocalServer.execute({ profileName: ja.connection.local.profileName });
-        set({ profiles: s.profiles, activeProfileId: s.activeProfileId });
-        restartWatch();
-      } finally {
-        set({ localStarting: false });
-      }
-    },
-
-    async stopLocal() {
-      await getServices().uc.stopLocalServer.execute();
-      if (get().activeProfileId === LOCAL_PROFILE_ID) watch?.checkNow();
     },
   };
 });

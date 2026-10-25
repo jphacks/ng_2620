@@ -5,7 +5,7 @@ import { AppRoot } from "./presentation/app/AppRoot";
 import { detectRuntime } from "./infrastructure/platform";
 import { createServices } from "./presentation/app/container";
 
-// 開発ビルドだけ：VITE_START_ROUTE=/dev/editor?fixture=v0 pnpm tauri dev で、その画面から始める
+// 開発ビルドだけ：VITE_START_ROUTE=/dev/editor?fixture=v0 pnpm dev で、その画面から始める
 // （起動ごとに 1 回だけ。HMR の再読み込みでは戻さない）
 if (import.meta.env.DEV && import.meta.env.VITE_START_ROUTE && !sessionStorage.getItem("vvlog.startRoute")) {
   sessionStorage.setItem("vvlog.startRoute", "1");

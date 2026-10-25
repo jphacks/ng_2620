@@ -4,18 +4,18 @@ import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { ComputeBackendFactory } from "@/application/ports/compute";
 import type { EditorMediaPort } from "@/application/ports/editor";
-import type { LocalServerStatus } from "@/application/ports/localServer";
 import type { LocalFilePort } from "@/application/ports/media";
 import type { ProjectRepositoryPort } from "@/application/ports/project";
 import type { SettingsPort } from "@/application/ports/settings";
 import type { ClockPort, DialogPort, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
 import type * as UC from "@/application/usecases";
+import type { ComputeProfile } from "@/domain/connection";
 import type { Project } from "@/domain/project";
 
 export type BackendMode = "mock" | "http" | "memory";
 
-/** tauri：現行のデスクトップ版（#29・#40 で消える）／full：ローカルアプリサーバー／restricted：Pages 単体（features/mode-matrix.md） */
-export type RuntimeMode = "tauri" | "full" | "restricted";
+/** full：ローカルアプリサーバーが画面を配信している／restricted：Pages 単体（features/mode-matrix.md） */
+export type RuntimeMode = "full" | "restricted";
 
 export interface Diagnostics {
   webgl2: boolean;
@@ -23,7 +23,7 @@ export interface Diagnostics {
 }
 
 export interface Services {
-  env: { isTauri: boolean; mode: RuntimeMode; isDev: boolean; backendMode: BackendMode; version: string };
+  env: { mode: RuntimeMode; isDev: boolean; backendMode: BackendMode; version: string };
   platform: {
     files: LocalFilePort;
     dialog: DialogPort;
@@ -58,10 +58,8 @@ export interface Services {
     selectActiveProfile: UC.SelectActiveProfile;
     testConnection: UC.TestConnection;
     watchConnection: UC.WatchConnection;
-    saveLocalServerConfig: UC.SaveLocalServerConfig;
-    startLocalServer: UC.StartLocalServer;
-    stopLocalServer: UC.StopLocalServer;
-    localServerStatus: () => Promise<LocalServerStatus>;
+    /** フルモードだけ：画面を配信しているローカルサーバーを接続「この PC」として用意する */
+    ensureLocalProfile?: () => Promise<{ profiles: ComputeProfile[]; activeProfileId: string | null }>;
     submitJob: UC.SubmitJob;
     subscribeJob: UC.SubscribeJob;
     fetchArtifact: UC.FetchArtifact;

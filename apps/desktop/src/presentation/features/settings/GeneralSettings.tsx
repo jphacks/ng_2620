@@ -87,7 +87,7 @@ export function GeneralSettings() {
         ) : (
           <dl className="grid grid-cols-[12rem_1fr] gap-y-2 text-sm">
             <dt className="text-muted">{T.runtime}</dt>
-            <dd>{env.isTauri ? T.runtimeTauri : env.mode === "full" ? T.runtimeFull : T.runtimeBrowser}</dd>
+            <dd>{env.mode === "full" ? T.runtimeFull : T.runtimeBrowser}</dd>
             <dt className="text-muted">{T.backendMode}</dt>
             <dd className="font-mono">{env.backendMode}</dd>
             <dt className="text-muted">{T.webgl2}</dt>

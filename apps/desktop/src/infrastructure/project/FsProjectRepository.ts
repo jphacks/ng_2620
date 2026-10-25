@@ -1,4 +1,4 @@
-// ProjectRepositoryPort のファイル版（ADR-0007）。Tauri では Rust の write_atomic / move_to_trash を使う（TauriProjectRepository）
+// ProjectRepositoryPort のファイル版（ADR-0007）。書き込みは FileSystem.writeTextAtomic（一時ファイル → rename）、削除はゴミ箱
 //   <名前>.vvlog/ project.json, overrides.json, cache/<jobId>/, exports/
 //   最近の一覧はアプリデータの recent.json
 

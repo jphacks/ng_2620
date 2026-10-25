@@ -66,3 +66,10 @@ export function validateProfile(p: Pick<ComputeProfile, "name" | "baseUrl">): Pr
   if (!/^(https?|memory):\/\/[^\s]+$/i.test(p.baseUrl.trim())) out.push("url_invalid");
   return out;
 }
+
+/** フルモードで、この画面を配信しているローカルサーバー自身につなぐプロファイルの ID（トークンも同じキーで保存） */
+export const LOCAL_PROFILE_ID = "local-gpu";
+
+export function localProfile(baseUrl: string, name: string): ComputeProfile {
+  return { id: LOCAL_PROFILE_ID, name, kind: "local", baseUrl, tokenRef: LOCAL_PROFILE_ID };
+}

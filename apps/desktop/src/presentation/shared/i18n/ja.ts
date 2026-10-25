@@ -2,7 +2,6 @@
 
 import type { LicenseBadge } from "@/domain/avatar";
 import type { ProfileProblem } from "@/domain/connection";
-import type { LocalServerProblem } from "@/domain/localServer";
 import type { JobStatus, JobType, StageName, StageStatus } from "@/domain/job";
 import type { ProjectPhase } from "@/domain/project";
 import { IS_MAC } from "../commands/useCommands";
@@ -348,41 +347,9 @@ export const ja = {
     empty: "接続プロファイルがありません。GPU サーバーの URL とトークンを登録してください。",
     selectHint: "左の一覧から接続を選んで編集するか、追加してください。",
     local: {
-      title: "この PC の GPU サーバー",
       profileName: "この PC",
-      intro:
-        "services/gpu_server をこのアプリから起動・停止します。トークンは自動で作られ、接続「この PC」が登録されて既定になります。",
-      useThisPc: "この PC の GPU を使う",
-      serverDir: "サーバーのフォルダ",
-      serverDirHint: "C:\\…\\ng_2620\\services\\gpu_server",
-      serverDirNote: "フォルダの中に .venv（run_local.ps1 を一度実行すると作られます）が必要です。",
-      python: "推論用の Python",
-      pythonHint: "C:\\…\\pipeline\\.venv\\Scripts\\python.exe",
-      pythonNote: "torch と pipeline の依存が入った Python（VVLOG_PYTHON）。",
-      port: "ポート",
-      autoStart: "アプリの起動時に自動で起動する",
-      browse: "参照…",
-      start: "起動",
-      starting: "起動しています…",
-      stop: "停止",
-      saved: "この PC の GPU サーバーの設定を保存しました",
-      started: "この PC の GPU サーバーを起動しました",
-      stopped: "この PC の GPU サーバーを停止しました",
-      stopTitle: "GPU サーバーを停止しますか？",
-      stopBody: "実行中のジョブは中断され、次に起動したときに失敗として扱われます。",
-      status: {
-        running: (pid: number | null) => `動いています${pid ? `（PID ${pid}）` : ""}`,
-        stopped: "停止しています",
-        exited: (code: number | null) => `終了しました（終了コード ${code ?? "—"}）`,
-      },
-      log: "サーバーのログ",
-      logEmpty: "まだ出力はありません",
-      browserOnly: "ブラウザ版ではサーバーを起動できません。デスクトップアプリで開いてください。",
-      problems: {
-        server_dir_required: "サーバーのフォルダを選んでください",
-        python_required: "推論用の Python を選んでください",
-        port_invalid: "ポートは 1〜65535 の数で指定してください",
-      } satisfies Record<LocalServerProblem, string>,
+      autoNote:
+        "この画面を配信しているローカルアプリに自動でつながります。宛先とトークンはアプリの起動ごとに自動で設定されるため、編集できません。",
     },
   },
   general: {
@@ -401,7 +368,6 @@ export const ja = {
     no: "使えません",
     notChecked: "未確認",
     runtime: "実行環境",
-    runtimeTauri: "デスクトップ（Tauri）",
     runtimeBrowser: "ブラウザ（制限モード。ファイルはメモリ上にだけ保存）",
     runtimeFull: "ローカルアプリ（ブラウザ＋この PC のサーバー）",
     notifications: "完了の通知",

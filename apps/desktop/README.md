@@ -5,19 +5,16 @@
 
 ## 起動
 
-前提：Node 26（`nvm use` / `fnm use` はリポジトリ直下の `.nvmrc`・`.node-version` を読む。mise は idiomatic version file を有効にすると読む）、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。Tauri で動かすときだけ Rust（stable）も必要。
+前提：Node 26（`nvm use` / `fnm use` はリポジトリ直下の `.nvmrc`・`.node-version` を読む。mise は idiomatic version file を有効にすると読む）、pnpm 10（`npm i -g pnpm@10`。Node 25 以降は corepack が同梱されない）。
 
 初めては、リポジトリのルートで `make doctor`（足りないものの一覧）→ `make setup`（入れる。[SETUP.md](../../SETUP.md)）。Windows は make / sh の対象外なので、下の pnpm のコマンドをそのまま使う。
 
 ```sh
 pnpm install                         # リポジトリのルートで（make install）
 
-# Tauri なし（ブラウザで http://localhost:1420）。ファイルはメモリ上にだけ置かれ、再読み込みで消える
+# ブラウザで http://localhost:1420（ローカルサーバーなし＝制限モード。ファイルは IndexedDB に残る）
 pnpm --filter @vvlog/desktop dev          # 既定の接続 = 登録した接続（開発用モック・シミュレーターも一覧に出る。モックは `pnpm mock` で起動）
 pnpm --filter @vvlog/desktop dev:memory   # 既定の接続 = シミュレーター（サーバー不要。ウィザードを端から端まで流せる）
-
-# デスクトップアプリ
-pnpm tauri dev                       # macOS / Windows
 
 pnpm test        # Vitest（domain / application / SSE / VRM / 画面の通しテスト）
 pnpm lint        # ESLint（層の依存規則を含む）
@@ -49,11 +46,9 @@ VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # 
 - 画面上部に案内バナー（閉じられる）。File System Access API は Safari 非対応のため使わない。
 - 外部 GPU への接続は、設定 > 接続で URL とトークンを登録する（#44 で導線を整える）。
 
-### この PC の GPU サーバーを使う（Windows）
+### この PC の GPU サーバー（フルモード）
 
-設定 > 接続 >「この PC の GPU サーバー」で、`services/gpu_server` のフォルダと推論用の Python（`VVLOG_PYTHON`）を選んで［起動］。
-アプリがサーバーを子プロセスとして起動し（`src-tauri/src/commands/server.rs`）、トークンを作って接続「この PC」（`http://127.0.0.1:<ポート>`）を既定にする。
-アプリを閉じるとサーバーも止まる。`services/gpu_server/.venv` は事前に要る（`run_local.ps1` を一度実行すると作られる）。
+フルモードでは、画面を配信しているローカルアプリサーバー自身が接続「この PC」として**自動で登録され、既定**になる（トークンは起動ごとに自動。設定 > 接続では編集できない）。別の GPU サーバーを既定にしている場合は、その選択を尊重する。
 シミュレーターの速さと失敗の再現は `.env.memory` の `VITE_SIM_SPEED` / `VITE_SIM_FAIL=track:NO_PERSON_FOUND`。
 
 ## 構成

@@ -1,6 +1,5 @@
-// FileHasherPort の実装。Tauri は Rust（sha2）／フルモードはローカルサーバー（進捗は SSE）／制限モードは WebCrypto
+// FileHasherPort の実装。フルモードはローカルサーバー（進捗は SSE）／制限モードは WebCrypto
 
-import { Channel, invoke } from "@tauri-apps/api/core";
 import type { FileHasherPort } from "@/application/ports/media";
 import type { FileSystem } from "../fs/FileSystem";
 import { SseParser } from "../compute/sse";
@@ -9,14 +8,6 @@ import type { LocalApi } from "../local/localApi";
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export class TauriFileHasher implements FileHasherPort {
-  async sha256(path: string, onProgress?: (ratio: number) => void): Promise<string> {
-    const ch = new Channel<number>();
-    if (onProgress) ch.onmessage = onProgress;
-    return invoke<string>("hash_sha256", { path, onProgress: ch });
-  }
 }
 
 export class WebCryptoFileHasher implements FileHasherPort {

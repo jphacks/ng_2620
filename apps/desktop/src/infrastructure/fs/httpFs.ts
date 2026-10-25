@@ -1,4 +1,4 @@
-// FileSystem のフルモード実装。ローカルアプリサーバーの /v1/local/fs を呼ぶ（Tauri の fs_* コマンドの置き換え、#23・#26）。
+// FileSystem のフルモード実装。ローカルアプリサーバーの /v1/local/fs を呼ぶ（#23・#26）。
 // サーバーは許可されたフォルダの外を拒否する（PATH_NOT_ALLOWED）
 
 import type { FileStat } from "@/application/ports/media";

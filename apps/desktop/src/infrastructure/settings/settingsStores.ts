@@ -1,11 +1,9 @@
 // SettingsPort / SecretStorePort の実装。
-// Tauri：アプリ設定フォルダの settings.json / secrets.json（権限 600。P1 で OS のキーチェーンへ）（TauriSettings）
-// ブラウザ：localStorage
+// フルモード：ローカルサーバーの設定フォルダの settings.json / secrets.json（権限 600。P1 で OS のキーチェーンへ）
+// 制限モード：localStorage
 
 import type { AppSettings, SecretStorePort, SettingsPort } from "@/application/ports/settings";
 import { defaultSettings } from "@/application/ports/settings";
-import type { LocalServerConfig } from "@/domain/localServer";
-import { defaultLocalServerConfig } from "@/domain/localServer";
 import type { FileSystem } from "../fs/FileSystem";
 
 export function normalizeSettings(raw: unknown): AppSettings {
@@ -20,19 +18,6 @@ export function normalizeSettings(raw: unknown): AppSettings {
     activeProfileId: typeof r.activeProfileId === "string" ? r.activeProfileId : null,
     panelLayouts: r.panelLayouts && typeof r.panelLayouts === "object" ? r.panelLayouts : {},
     projectsDir: typeof r.projectsDir === "string" ? r.projectsDir : undefined,
-    localServer: normalizeLocalServer(r.localServer),
-  };
-}
-
-function normalizeLocalServer(raw: unknown): LocalServerConfig | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const r = raw as Partial<LocalServerConfig>;
-  const d = defaultLocalServerConfig();
-  return {
-    serverDir: typeof r.serverDir === "string" ? r.serverDir : d.serverDir,
-    pythonPath: typeof r.pythonPath === "string" ? r.pythonPath : d.pythonPath,
-    port: typeof r.port === "number" ? r.port : d.port,
-    autoStart: r.autoStart === true,
   };
 }
 

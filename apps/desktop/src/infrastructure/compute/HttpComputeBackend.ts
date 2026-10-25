@@ -1,5 +1,5 @@
 // ComputeBackendPort の HTTP 実装（ローカル・リモート・モックサーバー共通、contracts §2）。
-// HTTP は Tauri では tauri-plugin-http（CORS と任意 URL の許可を回避）、ブラウザでは window.fetch
+// HTTP は window.fetch（外部 GPU には CORS・HTTPS・トークンが要る。ADR-0015）
 
 import type { ChunkBody, ComputeBackendPort, CreateUploadReq, DownloadProgress } from "@/application/ports/compute";
 import type { ApiErrorBody } from "@/domain/errors";
@@ -20,9 +20,9 @@ import { resilientSse } from "./sse";
 
 export interface HttpTransport {
   fetch: typeof fetch;
-  /** 成果物をディスクに保存（Tauri は Rust 側で Range 再開） */
+  /** 成果物を dest に保存（fetchTransport は <dest>.part に追記し、Range で再開する） */
   download(url: string, headers: Record<string, string>, dest: string, onProgress?: DownloadProgress): Promise<void>;
-  /** ファイルの範囲をそのまま PUT する（Tauri は Rust 側。無ければ readChunk → fetch） */
+  /** ファイルの範囲をそのまま PUT する実装があれば使う。無ければ readChunk → fetch */
   uploadFile?(
     url: string,
     headers: Record<string, string>,

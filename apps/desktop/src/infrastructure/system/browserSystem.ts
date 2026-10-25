@@ -1,4 +1,4 @@
-// ブラウザ版の OS 機能（Tauri なしの開発用）。選んだ・落としたファイルは MemoryFs に登録してパスで扱う
+// 制限モードのブラウザ側の OS 機能。選んだ・落としたファイルは MemoryFs に登録して（仮想）パスで扱う
 
 import type { FileExchangePort } from "@/application/ports/archive";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";

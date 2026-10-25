@@ -4,6 +4,7 @@ import type { ComputeProfile, ConnectionState } from "@/domain/connection";
 import {
   HEALTH_INTERVAL_MS,
   initialConnection,
+  localProfile,
   nextConnectionState,
   normalizeBaseUrl,
   SUPPORTED_API_VERSION,
@@ -15,9 +16,9 @@ import type { ClockPort } from "../ports/system";
 
 export class ListProfiles {
   constructor(private readonly d: { settings: SettingsPort }) {}
-  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId" | "localServer">> {
+  async execute(): Promise<Pick<AppSettings, "profiles" | "activeProfileId">> {
     const s = await this.d.settings.load();
-    return { profiles: s.profiles, activeProfileId: s.activeProfileId, localServer: s.localServer };
+    return { profiles: s.profiles, activeProfileId: s.activeProfileId };
   }
 }
 
@@ -149,5 +150,27 @@ export class WatchConnection {
       },
       checkNow: () => waker.abort(),
     };
+  }
+}
+
+/**
+ * フルモード：この画面を配信しているローカルサーバーを接続「この PC」として用意する。
+ * トークンは起動のたびに変わるので毎回書き直す。既定の接続が無い（または消えている）ときだけ「この PC」を既定にする
+ */
+export class EnsureLocalProfile {
+  constructor(private readonly d: { settings: SettingsPort; secrets: SecretStorePort }) {}
+
+  async execute(input: { baseUrl: string; token: string; name: string }): Promise<AppSettings> {
+    const { settings, secrets } = this.d;
+    const profile = localProfile(input.baseUrl, input.name);
+    await secrets.set(profile.tokenRef, input.token);
+    const s = await settings.load();
+    const profiles = s.profiles.some((p) => p.id === profile.id)
+      ? s.profiles.map((p) => (p.id === profile.id ? { ...p, baseUrl: profile.baseUrl, kind: "local" as const } : p))
+      : [profile, ...s.profiles];
+    const active = profiles.some((p) => p.id === s.activeProfileId && !p.devOnly) ? s.activeProfileId : profile.id;
+    const next: AppSettings = { ...s, profiles, activeProfileId: active };
+    await settings.save(next);
+    return next;
   }
 }

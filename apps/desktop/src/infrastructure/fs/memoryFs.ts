@@ -1,4 +1,4 @@
-// ブラウザ版（`pnpm dev` を Tauri なしで開いたとき）：メモリ上のファイル。再読み込みで消える
+// 制限モード（と `pnpm dev` を単体で開いたとき）のメモリ上のファイル。再読み込みで消える。永続化は PersistentFs
 
 import type { FileStat } from "@/application/ports/media";
 import type { FileSystem } from "./FileSystem";

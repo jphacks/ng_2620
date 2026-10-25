@@ -85,7 +85,7 @@ describe("useDropZone と prepare", () => {
     expect(onDrop).not.toHaveBeenCalled();
   });
 
-  it("prepare が無い従来のドロップ（Tauri・制限モード）はそのまま渡す", async () => {
+  it("prepare が無い従来のドロップ（制限モード）はそのまま渡す", async () => {
     const { emit, onDrop } = setup();
     await emit({ type: "drop", x: 1, y: 1, paths: ["/mem/drops/1/a.mp4"] });
     expect(onDrop).toHaveBeenCalledWith(["/mem/drops/1/a.mp4"]);

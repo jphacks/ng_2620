@@ -8,7 +8,6 @@
   "scripts": {
     "prepare": "lefthook install",
     "dev": "pnpm --filter @vvlog/desktop dev",
-    "tauri": "pnpm --filter @vvlog/desktop tauri",
     "build": "pnpm --filter @vvlog/desktop build",
     "test": "pnpm --filter @vvlog/desktop test",
     "lint": "pnpm --filter @vvlog/desktop lint",

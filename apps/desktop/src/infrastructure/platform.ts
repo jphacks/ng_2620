@@ -4,8 +4,8 @@ import type { LocalInfo } from "./local/localApi";
 import { PersistentFs } from "./fs/persistentFs";
 import { fetchLocalInfo } from "./local/localApi";
 
-/** tauri：現行のデスクトップ版（#29・#40 で消える）／full：ローカルアプリサーバーが画面を配信している／restricted：Pages など、ローカルサーバーなし */
-export type RuntimeMode = "tauri" | "full" | "restricted";
+/** full：ローカルアプリサーバーが画面を配信している／restricted：Pages など、ローカルサーバーなし */
+export type RuntimeMode = "full" | "restricted";
 
 export interface Runtime {
   mode: RuntimeMode;
@@ -13,10 +13,6 @@ export interface Runtime {
   local?: LocalInfo;
   /** restricted のとき：IndexedDB に残る保存領域。使えない環境（プライベートモードなど）では無い＝メモリだけ */
   storage?: PersistentFs;
-}
-
-export function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 export function isMac(): boolean {
@@ -38,7 +34,6 @@ export async function openRestrictedStorage(): Promise<PersistentFs | undefined>
 
 /** 起動時に 1 回。同一オリジンの GET /v1/local/info が答えれば full、それ以外は restricted（features/mode-matrix.md） */
 export async function detectRuntime(): Promise<Runtime> {
-  if (isTauri()) return { mode: "tauri" };
   const local = await fetchLocalInfo();
   return local ? { mode: "full", local } : { mode: "restricted", storage: await openRestrictedStorage() };
 }

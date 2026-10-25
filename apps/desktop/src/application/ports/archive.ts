@@ -7,7 +7,7 @@ export interface ProjectArchivePort {
   unpack(zip: Uint8Array, destPath: string): Promise<void>;
 }
 
-/** ブラウザとのファイルのやり取り（ダウンロードさせる／ファイルを選ばせる）。フルモード・Tauri では提供しない */
+/** ブラウザとのファイルのやり取り（ダウンロードさせる／ファイルを選ばせる）。フルモードでは提供しない */
 export interface FileExchangePort {
   download(filename: string, bytes: Uint8Array, mime?: string): Promise<void>;
   /** 選ばれなければ null */

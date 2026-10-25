@@ -1,4 +1,4 @@
-// infrastructure 内で共有するファイル操作の抽象。Tauri（Rust コマンド）とブラウザ（メモリ）の 2 実装
+// infrastructure 内で共有するファイル操作の抽象。フルモード（ローカルサーバー）と制限モード（IndexedDB／メモリ）の実装
 
 import type { FileStat } from "@/application/ports/media";
 

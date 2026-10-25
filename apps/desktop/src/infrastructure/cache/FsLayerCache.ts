@@ -1,4 +1,4 @@
-// LayerCachePort の実装（F05）。FileSystem 越しなので Tauri／フルモード／制限モードで共通。
+// LayerCachePort の実装（F05）。FileSystem 越しなのでフルモード／制限モードで共通。
 // 取得済みの印は cache/<jobId>/.fetched/<name>.json（sha256 を記録）
 
 import type { LayerCachePort } from "@/application/ports/cache";

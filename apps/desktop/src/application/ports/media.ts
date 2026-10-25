@@ -25,7 +25,7 @@ export interface LocalFilePort {
   readBytes(path: string): Promise<Uint8Array>;
   readChunk(path: string, offset: number, length: number): Promise<Uint8Array>;
   writeBytes(path: string, bytes: Uint8Array): Promise<void>;
-  /** <img> / <video> に渡せる URL（Tauri は asset プロトコル） */
+  /** <img> / <video> に渡せる URL（フルモードはサーバーの /v1/local/fs/raw、制限モードは blob:） */
   toUrl(path: string): string;
   join(base: string, ...parts: string[]): string;
 }

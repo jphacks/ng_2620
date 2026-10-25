@@ -63,7 +63,7 @@ export function AppRoot({ services }: { services: Services }) {
     // 起動時の自己診断（F15）：WebGL2 と fetch のストリーム（SSE）
     void services.diagnose().then((d) =>
       console.info("[self-check]", {
-        runtime: services.env.isTauri ? "tauri" : "browser",
+        mode: services.env.mode,
         backend: services.env.backendMode,
         ...d,
       }),
