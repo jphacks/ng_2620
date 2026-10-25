@@ -10,9 +10,9 @@ footer: © 2026 VirtualTwin / ng_2620
 
 ![w:480 logo](../../designdocs/brand/color/svg/virtualtwin-logo-horizontal.svg)
 
-# なりたい自分で、話そう。
+# どこでも最高のアバター映像を。
 
-JPHACKS 2026 ・ チーム ng_2620
+JPHACKS 2026 ・ SDD(睡眠駆動開発) ng_2620
 
 <!--
 （0 ページ目：タイトル）
@@ -101,7 +101,7 @@ JPHACKS 2026 ・ チーム ng_2620
 
 ![w:720 logo](../../designdocs/brand/color/svg/virtualtwin-logo-horizontal.svg)
 
-# バーチャルツインで解決します
+# VirtualTwin で 解決します
 
 <!--
 （6 ページ目）これ、バーチャルツインの AI モデルで解決します
@@ -180,7 +180,7 @@ JPHACKS 2026 ・ チーム ng_2620
 
 ![w:600 logo](../../designdocs/brand/color/svg/virtualtwin-logo-horizontal.svg)
 
-# なりたい自分で、話そう。
+# どこでも最高のアバター映像を。
 
 <!--
 （10 ページ目）以上、バーチャルツインでした、ありがとうだよ
