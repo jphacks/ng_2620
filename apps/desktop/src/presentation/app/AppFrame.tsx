@@ -15,6 +15,7 @@ import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
+import { DropUploadHost } from "./DropUploadHost";
 import { ToastHost } from "./ToastHost";
 
 /** 開いたプロジェクトの既定のワークスペース：描画済みなら編集、それ以外は取り込み */
@@ -110,6 +111,7 @@ export function AppFrame() {
       <StatusBar />
       <JobDrawer />
       <ToastHost />
+      <DropUploadHost />
       <GlobalCommands />
     </div>
   );

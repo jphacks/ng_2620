@@ -32,6 +32,8 @@ export interface Services {
     notifier: NotifierPort;
     clock: ClockPort;
   };
+  /** 起動後に 1 回、裏で行う掃除など（失敗しても無視してよい）。無ければ何もしない */
+  maintenance?: () => Promise<void>;
   compute: ComputeBackendFactory;
   /** プロジェクト内のパスの解決だけ（読み書きはユースケース経由） */
   paths: Pick<ProjectRepositoryPort, "resolve" | "cacheDir" | "pathOf" | "exportsDir" | "defaultDir">;

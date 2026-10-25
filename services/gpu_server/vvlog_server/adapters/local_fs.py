@@ -7,6 +7,7 @@ so `..`, symlinks and Windows case differences cannot step outside a root.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import stat as stat_mod
@@ -31,27 +32,71 @@ def _within(path: str, root: str) -> bool:
 
 
 class LocalRoots:
-    def __init__(self, roots=()):
+    """What /v1/local/* may touch. Fixed roots come from the settings; the user widens them only by picking something in
+    a native dialog (grant_user), which is remembered across restarts in `store` (outside every root, so the browser
+    cannot edit it through the file API)."""
+
+    MAX_FILES = 500
+
+    def __init__(self, roots=(), store: Path | None = None):
         self._roots: list[str] = []
+        self._user_dirs: list[str] = []
+        self._user_files: list[str] = []
+        self._store = store
         for r in roots:
             self.grant(r)
+        self._load()
 
     def grant(self, path: str | Path) -> None:
         r = _norm(str(path))
         if r not in self._roots:
             self._roots.append(r)
 
+    def grant_user(self, path: str | Path, *, is_dir: bool) -> None:
+        """The user picked this in a native dialog: a folder becomes a root, a file is allowed on its own."""
+        r = _norm(str(path))
+        bucket = self._user_dirs if is_dir else self._user_files
+        if r in bucket:
+            bucket.remove(r)
+        bucket.append(r)
+        del self._user_files[: -self.MAX_FILES]
+        self._save()
+
     def list(self) -> list[str]:
-        return list(self._roots)
+        return [*self._roots, *self._user_dirs]
+
+    def _load(self) -> None:
+        if not self._store or not self._store.is_file():
+            return
+        try:
+            d = json.loads(self._store.read_text(encoding="utf-8"))
+            self._user_dirs = [_norm(p) for p in d.get("dirs", []) if isinstance(p, str)]
+            self._user_files = [_norm(p) for p in d.get("files", []) if isinstance(p, str)][-self.MAX_FILES:]
+        except (OSError, ValueError):
+            pass  # a broken grants file just means nothing is remembered
+
+    def _save(self) -> None:
+        if not self._store:
+            return
+        w = AtomicWriter(self._store, private=True)
+        try:
+            w.write(json.dumps({"dirs": self._user_dirs, "files": self._user_files}, ensure_ascii=False).encode())
+            w.commit()
+        except BaseException:
+            w.abort()
+            raise
 
     def resolve(self, raw: str, *, forbid_root: bool = False) -> Path:
         """The real path of `raw`, or PATH_NOT_ALLOWED. forbid_root: the root folders themselves are off limits too."""
         if not raw or "\x00" in raw or not os.path.isabs(raw):
             raise VvlogError("PATH_NOT_ALLOWED", "絶対パスを指定してください", {"path": raw})
         real = _norm(raw)
-        if not any(_within(real, r) for r in self._roots):
+        if real in self._user_files:  # picked by the user: that very file, nothing around it
+            return Path(os.path.realpath(raw))
+        roots = self.list()
+        if not any(_within(real, r) for r in roots):
             raise VvlogError("PATH_NOT_ALLOWED", "許可されていない場所です", {"path": raw})
-        if forbid_root and any(real == r or _within(r, real) for r in self._roots):
+        if forbid_root and any(real == r or _within(r, real) for r in roots):
             raise VvlogError("PATH_NOT_ALLOWED", "許可フォルダそのものは操作できません", {"path": raw})
         return Path(os.path.realpath(raw))
 

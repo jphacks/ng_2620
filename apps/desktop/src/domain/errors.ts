@@ -22,6 +22,10 @@ export const API_ERROR_CODES = [
   "FS_CONFLICT",
   "FS_FAILED",
   "FFPROBE_UNAVAILABLE",
+  "DIALOG_LOCAL_ONLY", // ネイティブダイアログはローカルアプリからだけ
+  "DIALOG_BUSY",
+  "DIALOG_UNAVAILABLE",
+  "DIALOG_FAILED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

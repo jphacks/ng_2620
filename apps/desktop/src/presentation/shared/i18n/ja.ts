@@ -21,6 +21,13 @@ export function formatSeconds(sec: number): string {
 export const ja = {
   app: { name: "vvlog" },
   workspace: { import: "取り込み", edit: "編集", export: "書き出し" },
+  dropUpload: {
+    uploading: (name: string) => `${name} を取り込み中`,
+    done: (name: string) => `${name} を取り込みました`,
+    failed: (name: string) => `${name} を取り込めませんでした`,
+    canceled: (name: string) => `${name} の取り込みを中止しました`,
+    cancel: "中止",
+  },
   common: {
     cancel: "キャンセル",
     close: "閉じる",
@@ -525,6 +532,22 @@ export const ja = {
     FS_FAILED: {
       title: "ファイルを操作できません",
       body: (d: { message?: string }) => d.message || "ディスクの空き容量や権限を確認してください。",
+    },
+    DIALOG_LOCAL_ONLY: {
+      title: "この操作はローカルアプリだけです",
+      body: () => "ファイルやフォルダの選択は、この PC のローカルアプリに接続しているときだけ使えます。",
+    },
+    DIALOG_BUSY: {
+      title: "ダイアログが開いています",
+      body: () => "開いているダイアログを閉じてからやり直してください。",
+    },
+    DIALOG_UNAVAILABLE: {
+      title: "ここでは選択ダイアログを開けません",
+      body: () => "ネイティブのダイアログは Windows 版のローカルアプリでだけ使えます。",
+    },
+    DIALOG_FAILED: {
+      title: "ダイアログを開けません",
+      body: (d: { message?: string }) => d.message || "もう一度試してください。",
     },
     FFPROBE_UNAVAILABLE: {
       title: "動画の詳細を調べられません",
