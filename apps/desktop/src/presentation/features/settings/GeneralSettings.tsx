@@ -10,10 +10,20 @@ import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { Badge, Button, ConfirmDialog, Label, Select, Spinner } from "@/presentation/shared/ui";
 
+import { WeightsSection } from "./WeightsSection";
+
 const T = ja.general;
 
 export function GeneralSettings() {
-  const { uc, paths, env, diagnose } = useServices();
+  const { uc, paths, env, diagnose, platform } = useServices();
+  const { notifier } = platform;
+  const [notify, setNotify] = useState(notifier.permission());
+  const notifyText = {
+    granted: T.notifyGranted,
+    denied: T.notifyDenied,
+    default: T.notifyDefault,
+    unsupported: T.notifyUnsupported,
+  };
   const project = useProjectStore((s) => s.current?.project);
   const [confirm, setConfirm] = useState(false);
   const diag = useQuery({ queryKey: ["diagnostics"], queryFn: diagnose, staleTime: Infinity });
@@ -26,6 +36,18 @@ export function GeneralSettings() {
       // 取得済みの印も消えたので、表示中の成果物の状態を作り直す
       useJobsStore.setState({ artifacts: {} });
       toast({ kind: "success", title: T.cacheCleared });
+    } catch (e) {
+      const t = errorText(e);
+      toast({ kind: "error", title: t.title, body: t.body });
+    }
+  };
+
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  const [quit, setQuit] = useState(false);
+  const doQuit = async () => {
+    try {
+      await platform.appQuit?.quit();
+      setQuit(true);
     } catch (e) {
       const t = errorText(e);
       toast({ kind: "error", title: t.title, body: t.body });
@@ -55,6 +77,20 @@ export function GeneralSettings() {
         </Button>
       </section>
 
+      <WeightsSection />
+
+      <section>
+        <h3 className="mb-3 font-semibold">{T.notifications}</h3>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted">{notifyText[notify]}</span>
+          {notify === "default" && (
+            <Button size="sm" onClick={() => void notifier.requestPermission().then(setNotify)}>
+              {T.notifyAsk}
+            </Button>
+          )}
+        </div>
+      </section>
+
       <section>
         <h3 className="mb-3 font-semibold">{T.language}</h3>
         <Select value="ja" onChange={() => {}} options={[{ value: "ja", label: T.japanese }]} aria-label={T.language} />
@@ -67,7 +103,7 @@ export function GeneralSettings() {
         ) : (
           <dl className="grid grid-cols-[12rem_1fr] gap-y-2 text-sm">
             <dt className="text-muted">{T.runtime}</dt>
-            <dd>{env.isTauri ? T.runtimeTauri : T.runtimeBrowser}</dd>
+            <dd>{env.mode === "full" ? T.runtimeFull : T.runtimeBrowser}</dd>
             <dt className="text-muted">{T.backendMode}</dt>
             <dd className="font-mono">{env.backendMode}</dd>
             <dt className="text-muted">{T.webgl2}</dt>
@@ -79,6 +115,30 @@ export function GeneralSettings() {
           </dl>
         )}
       </section>
+
+      {platform.appQuit && (
+        <section>
+          <h3 className="mb-3 font-semibold">{T.app}</h3>
+          {quit ? (
+            <div className="text-sm">
+              <div className="font-medium">{T.quitDone}</div>
+              <div className="text-muted">{T.quitDoneBody}</div>
+            </div>
+          ) : (
+            <Button onClick={() => setConfirmQuit(true)}>{T.quit}</Button>
+          )}
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={confirmQuit}
+        onOpenChange={setConfirmQuit}
+        title={T.quit}
+        body={T.quitBody}
+        confirmLabel={T.quit}
+        danger
+        onConfirm={() => void doQuit()}
+      />
 
       <ConfirmDialog
         open={confirm}

@@ -137,7 +137,7 @@ brand/
 - **デスクトップアイコン用の複数サイズ**: `color/png/mark-sizes/virtualtwin-mark-<サイズ>.png`（16 / 32 / 48 / 64 / 128 / 256 / 512 / 1024px 角、正方形マークのカラー版のみ）。
   - 角は丸めた状態で透過になっている。OS が自分で角を丸める用途（iOS など）には、そのままでは使えない（§9）。
   - 16px は細部が潰れて、白と黄色の丸が並んでいるのが分かる程度になる。
-  - Tauri（`apps/desktop/src-tauri/icons/`）に使うときの対応: `32x32.png` = 32、`128x128.png` = 128、`128x128@2x.png` = 256、`icon.png` = 512 または 1024。`icon.ico`（Windows）は `color/icon/virtualtwin.ico`、`icon.icns`（macOS）は `color/icon/virtualtwin.icns` を、名前を `icon.ico` / `icon.icns` に変えて使う。
+  - アプリ（`apps/desktop/assets/icons/`、ブラウザの favicon は `apps/desktop/public/favicon.png`）に使うときの対応: `32x32.png` = 32、`128x128.png` = 128、`128x128@2x.png` = 256、`icon.png` = 512 または 1024。`icon.ico`（Windows）は `color/icon/virtualtwin.ico`、`icon.icns`（macOS）は `color/icon/virtualtwin.icns` を、名前を `icon.ico` / `icon.icns` に変えて使う。
   - `virtualtwin.ico`: 16 / 32 / 48 / 64 / 128 / 256px の 6 サイズ入り（各サイズ PNG 形式で格納）。
   - `virtualtwin.icns`: 16〜1024px（標準の `@2x` 込み 10 枚）入り。macOS の `iconutil` で、`mark-sizes/` の PNG から作成。
 - SVG には、グラデーション、マスク、クリップが入っている。3・4 の SVG は、文字ロゴと丸だけを入れ子で組んでいる。

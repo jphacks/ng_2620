@@ -1,4 +1,4 @@
-// EditorMediaPort の実装。画像は toUrl（Tauri は asset プロトコル）→ fetch → createImageBitmap、
+// EditorMediaPort の実装。画像は toUrl → fetch → createImageBitmap、
 // 16bit の units は readBytes → fast-png でデコード（createImageBitmap だと 8bit に丸められる）
 
 import { decode } from "fast-png";

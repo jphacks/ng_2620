@@ -1,63 +1,66 @@
 # 開発環境と起動（vvlog）
 
-> **この手順は現行の Tauri 版（`develop` / `main`）のもの。** `refactor/web-first-windows-local-server` で Tauri を廃止して
-> ブラウザ UI + Windows ローカルサーバーにする計画があり（[#18](https://github.com/jphacks/ng_2620/issues/18)）、実装が入ると Rust・Xcode CLT・`pnpm tauri` は不要になる。
-> そのときこのファイルも書き換える（[#42](https://github.com/jphacks/ng_2620/issues/42)）。技術スタックの違いは [README](README.md#技術スタックの-2-つの系統) を参照。
-
-このリポジトリは 3 つの部品でできている。どれを動かすかで、必要なものが違う。
+vvlog は、**ブラウザで操作する画面**と、**Windows の GPU 機で動くローカルアプリサーバー**でできている（[ADR-0015](designdocs/adr/0015-web-first-windows-local-server.md)。以前の Tauri のデスクトップアプリは廃止した）。
 
 | 部品 | 場所 | 何をする | 動く機械 |
 |---|---|---|---|
-| デスクトップアプリ | `apps/desktop` | Tauri 2 + React。取り込み・キャスト・編集・書き出しの画面 | Mac / Windows |
-| GPU サーバー | `services/gpu_server` | ジョブを受けて推論を回し、成果物を返す API | どこでも（推論は NVIDIA GPU 機だけ） |
+| 画面（Web） | `apps/desktop` | React。取り込み・キャスト・編集・書き出し。ローカルサーバーが配信するほか、GitHub Pages にも公開する | ブラウザ（Chrome / Edge / Safari） |
+| GPU サーバー（ローカルアプリ） | `services/gpu_server` | 画面の配信・ファイル／ダイアログ API・ジョブの実行（推論）。`VVLOG_LOCAL=1` でローカルアプリになる | どこでも（推論は NVIDIA GPU 機だけ。Windows が本命） |
 | モックサーバー | `services/mock_server` | GPU なしで本物と同じ API を返す（中身は仮） | どこでも |
 | 推論パイプライン | `pipeline` | SAM-Body4D ＋ アバター置換。サーバーが別プロセスで呼ぶ | NVIDIA GPU 機 |
 
-設計は [designdocs/](designdocs/README.md)、アプリとサーバーの約束（API）は [packages/contracts/CLIENT_GUIDE.md](packages/contracts/CLIENT_GUIDE.md)。
+設計は [designdocs/](designdocs/README.md)、画面とサーバーの約束（API）は [packages/contracts/CLIENT_GUIDE.md](packages/contracts/CLIENT_GUIDE.md)。
 
-## まず：make setup（macOS / Linux）
+## 使う人（Windows の GPU 機）
+インストーラー（Python・重みは初回に自動で取得）は準備中（#34）。できるまでは「GPU 機で動かす」の手順（`services/gpu_server/README.md`）で、開発者向けに起動する。
+GPU の無い人は、ブラウザで GitHub Pages の画面を開き、**自分で用意した GPU サーバー**（クラウドの GPU など。[DEPLOY.md §5](services/gpu_server/DEPLOY.md)）に接続して使う（機能は一部制限される。`designdocs/features/mode-matrix.md`）。
+
+## 開発する人
+
+### まず：make setup（macOS / Linux）
 
 ```sh
 make doctor     # 何も入れずに、足りないもの（NG）と版を一覧にする。足りなければ失敗で終わる
-make setup      # 足りないものを入れる：Node（.nvmrc）・pnpm・Rust・Xcode CLT・Python 環境・ffmpeg、最後に pnpm install
+make setup      # 足りないものを入れる：Node（.nvmrc）・pnpm・Python 環境・ffmpeg、最後に pnpm install
 make help       # ほかのコマンド（make dev / make mock / make test …）
 ```
 
-`make setup`（= `scripts/setup.sh`）は、ネットのスクリプトを実行するもの（rustup、uv）とシステムに入れるもの（`brew install ffmpeg`、Xcode CLT）を
-実行する前に y/N で聞く（`make setup ARGS=--yes` で聞かない。アプリだけなら `ARGS=--app-only`）。Node は nvm か fnm で入れるので、
-どちらも無ければ案内して止まる。`pipeline/` の環境 B（GPU 機だけ）は作らない。
-終わったら、今のシェルで `nvm use`（Node を切り替えたとき）と、新しいターミナル（Rust を入れたとき）。
+`make setup`（= `scripts/setup.sh`）は、ネットのスクリプトを実行するもの（uv）とシステムに入れるもの（`brew install ffmpeg`）を
+実行する前に y/N で聞く（`make setup ARGS=--yes` で聞かない。画面だけなら `ARGS=--app-only`）。Node は nvm か fnm で入れるので、
+どちらも無ければ案内して止まる。`pipeline/` の環境 B（GPU 機だけ）は作らない。**Rust は要らない**（Tauri を廃止した）。
+終わったら、今のシェルで `nvm use`（Node を切り替えたとき）。
 
-**Windows は make / sh の対象外**。下の表のツールを手で入れて、`pnpm install` → `pnpm tauri dev`。
+**Windows は make / sh の対象外**。下の表のツールを手で入れて、`pnpm install` → `pnpm dev`。
 
-## 前提のツール
+### 前提のツール
 
 | ツール | 版 | 何に要る | 入れ方（macOS） |
 |---|---|---|---|
-| Node.js | 26 | アプリ | `brew install node@26`（nvm・fnm はリポジトリ直下の `.nvmrc`・`.node-version` を読むので `nvm install && nvm use` / `fnm use` でよい。mise は `mise settings add idiomatic_version_file_enable_tools node` で読むようになる） |
-| pnpm | 10 | アプリ | `npm i -g pnpm@10`（Node 25 以降は corepack が同梱されない。pnpm 10 以降なら `package.json` の `packageManager` の版に自動で切り替わる） |
-| Rust（stable） | 1.80 以上 | アプリ（Tauri のネイティブ部分） | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` → 新しいターミナルを開く |
-| Xcode Command Line Tools | — | アプリ（macOS） | `xcode-select --install` |
-| Python | 3.10 以上 | サーバー・モック | `brew install python@3.11` |
+| Node.js | 26 | 画面 | `brew install node@26`（nvm・fnm はリポジトリ直下の `.nvmrc`・`.node-version` を読むので `nvm install && nvm use` / `fnm use` でよい。mise は `mise settings add idiomatic_version_file_enable_tools node` で読むようになる） |
+| pnpm | 10 | 画面 | `npm i -g pnpm@10`（Node 25 以降は corepack が同梱されない。pnpm 10 以降なら `package.json` の `packageManager` の版に自動で切り替わる） |
+| Python | 3.11 以上 | サーバー・モック | `brew install python@3.11` |
 | uv | 推奨 | サーバー・モックの環境づくり | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | ffmpeg | 6 以上 | サーバー・モック（動画の検証と変換） | `brew install ffmpeg` |
 
-Windows：Node 26・pnpm・Rust（rustup、MSVC ビルドツール）・Python・ffmpeg（`winget install Gyan.FFmpeg`）・WebView2（Windows 11 は標準）。
+Windows：Node 26・pnpm・Python・ffmpeg（`winget install Gyan.FFmpeg`）。
 
-## いちばん早い確認：Mac でアプリ ＋ モック（GPU なし）
+### いちばん早い確認：Mac で画面 ＋ モック（GPU なし）
 
 ```sh
 # ターミナル 1：モックサーバー（初回は環境づくりで 1 分ほど）
 pnpm mock                                      # = sh services/mock_server/run.sh（Windows は pnpm mock:win）。http://127.0.0.1:8766、トークン mock
 
-# ターミナル 2：アプリ
+# ターミナル 2：画面（http://localhost:1420）
 pnpm install
-pnpm tauri dev                                 # 初回は Rust のコンパイルで 1〜2 分
+pnpm dev
 ```
 
-アプリの「設定（右上の歯車）> 接続」で「開発用モック」を選んで「既定にする」（開発ビルドには最初から登録されている。起動時に選ばせたいなら
-`VITE_BACKEND=mock pnpm tauri dev`）。ステータスバー左のランプが緑になれば接続できている。
+画面の「設定（右上の歯車）> 接続」で「開発用モック」を選んで「既定にする」（開発ビルドには最初から登録されている。起動時に選ばせたいなら
+`VITE_BACKEND=mock pnpm dev`）。ステータスバー左のランプが緑になれば接続できている。
 サーバーなしで画面だけ見るなら `pnpm --filter @vvlog/desktop dev:memory`（ブラウザ、シミュレーター）。詳しくは `apps/desktop/README.md`。
+画面の UI・操作感のデバッグ用に `pnpm dev:web`（制限モード）／`pnpm dev:web:app`（フルモード。サーバーも一緒に起動）／`pnpm dev:web:app:fresh`（初回起動の状態）／`pnpm dev:web:app:dist`（ビルドして配信）がある。詳しくは `apps/desktop/README.md`。
+この画面はローカルサーバーが無いので**制限モード**（ファイルはブラウザの IndexedDB）。**フルモード**（ローカルサーバー越しのファイル・ダイアログ）を `pnpm dev` で試すには `apps/desktop/README.md` の「フルモード（ローカルアプリサーバー）で試す」。
+**Mac での開発は、モックサーバー ＋ ブラウザ（`pnpm dev`）で続ける**（Windows の GPU 機が無くてもよい）。
 
 ## 本物の推論：GPU 機でサーバー ＋ Mac のアプリ
 
@@ -73,19 +76,19 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 |---|---|---|---|
 | 開発用シミュレーター | `memory://sim` | — | アプリの中だけで動く（サーバー不要、成果物は合成画像）。開発ビルドに最初から入っている |
 | 開発用モック | `http://127.0.0.1:8766` | `mock` | `pnpm mock`。開発ビルドに最初から入っている |
-| この PC（アプリが起動） | `http://127.0.0.1:<ポート>` | アプリが自動で作る | 設定 > 接続 >「この PC の GPU サーバー」で `services/gpu_server` のフォルダと推論用 Python を選んで［起動］。接続「この PC」が自動で登録・既定になる（Windows で確認済み。事前に `services/gpu_server/.venv` が要る：README §1） |
+| この PC（ローカルアプリ） | 画面を配信しているサーバー自身 | 起動ごとに自動 | ローカルアプリ（`VVLOG_LOCAL=1`、`services/gpu_server/README.md`）で画面を開くと、接続「この PC」が**自動で登録・既定**になる（編集不可） |
 | GPU サーバー（同じ PC、手で起動） | `http://127.0.0.1:8765` | サーバーの `VVLOG_API_TOKEN` | `services/gpu_server/README.md` §4 で起動して、プロファイルを追加 |
 | GPU サーバー（別の PC） | `https://<機名>.<tailnet>.ts.net` | 同上 | GPU 機で起動 ＋ Tailscale（`DEPLOY.md` §4）して、プロファイルを追加 |
 
 **アプリでの操作**：右上の歯車（設定）→「接続」→「プロファイルを追加」→ 名前・種別（ローカル / リモート）・URL・トークンを入れる →
 「接続テスト」（GPU 名・VRAM・API 版が出れば OK）→「既定にする」。ステータスバー左のランプが緑になれば、その接続先を使っている。
-「開発用」と付いた 2 つは開発ビルド（`pnpm tauri dev`）にだけ出る。
+「開発用」と付いた 2 つは開発ビルド（`pnpm dev`）にだけ出る。
 
 **起動時の既定**は `apps/desktop/.env.*` の `VITE_BACKEND` で決まる：
 
 | モード | ファイル | `VITE_BACKEND` | 既定の接続 |
 |---|---|---|---|
-| `pnpm tauri dev` / `pnpm dev` | `.env.development` | `http` | 登録した接続（開発用の 2 つも一覧に出る。`VITE_BACKEND=mock` を付けると開発用モックを既定に） |
+| `pnpm dev` | `.env.development` | `http` | 登録した接続（開発用の 2 つも一覧に出る。`VITE_BACKEND=mock` を付けると開発用モックを既定に） |
 | `pnpm --filter @vvlog/desktop dev:memory` | `.env.memory` | `memory` | 開発用シミュレーター |
 | 製品ビルド | `.env.production` | `http` | 登録したプロファイルだけ（開発用の 2 つは出ない） |
 
@@ -103,6 +106,7 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 | サーバー | `cd services/gpu_server && .venv/bin/python -m pytest -q` | 不要（推論は偽物で代用） |
 | モック | `cd services/mock_server && ../gpu_server/.venv/bin/python -m pytest -q` | 不要 |
 | パイプラインの単体 | `uv run --no-project --with pytest --with numpy --with opencv-python-headless --with scipy python -m pytest -q pipeline/scripts/occlusion/test_units.py pipeline/scripts/avatar/test_overrides.py` | 不要 |
+| 画面の E2E（実ブラウザ。モックサーバー） | `pnpm --filter @vvlog/desktop e2e`（初回は `exec playwright install chromium webkit`。`apps/desktop/README.md`） | 不要 |
 | 通し（実サーバー） | `services/gpu_server/.venv/bin/python services/gpu_server/scripts/smoke_e2e.py --url ... --token ... --video ... --vrm ...` | 要 |
 | 速度の再現 | `pipeline/scripts/eval/e2e.py`（`pipeline/UPSTREAM.md`） | 要 |
 
@@ -110,7 +114,6 @@ pnpm tauri dev                                 # 初回は Rust のコンパイ�
 
 | 症状 | 対処 |
 |---|---|
-| `pnpm tauri dev` が `failed to run 'cargo metadata' command ... No such file or directory (os error 2)`（または `cargo: command not found`）で止まる | Rust が入っていないか、PATH に無い。`make doctor` で確かめ、無ければ `make setup`。入れたあとは新しいターミナルを開く（または `source ~/.cargo/env`。VS Code の中なら VS Code ごと起動し直す） |
 | アプリで動画を入れると「動画として読めません」 | サーバー（モック）側の ffprobe が PATH に無い。`brew install ffmpeg` してモックを再起動 |
 | モックが `ModuleNotFoundError: fastapi` | `python -m mock_server` を素の Python で起動している。`sh services/mock_server/run.sh` を使う |
 | `pnpm` が `WARN Unsupported engine: wanted: {"node":">=26"}` と出す | Node が 26 より古い（止まりはしない）。`nvm use`（`.nvmrc` を読む）などで 26 に切り替える |

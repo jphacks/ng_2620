@@ -1,10 +1,10 @@
-// 設定 > 接続（S6、F03）：プロファイルの追加・編集・削除・既定の選択、接続テスト、この PC の GPU サーバー（Tauri のみ）
+// 設定 > 接続（S6、F03）：プロファイルの追加・編集・削除・既定の選択、接続テスト。「この PC」はフルモードで自動登録される
 
-import { CheckCircle2, Cpu, Plus, Server, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { useState } from "react";
 import type { TestResult } from "@/application/usecases";
 import type { ComputeProfile, ProfileKind } from "@/domain/connection";
-import { isInsecureRemote, normalizeBaseUrl, validateProfile } from "@/domain/connection";
+import { isInsecureRemote, LOCAL_PROFILE_ID, normalizeBaseUrl, validateProfile } from "@/domain/connection";
 import { errorText } from "@/presentation/shared/errors";
 import { formatVram } from "@/presentation/shared/format";
 import { ja } from "@/presentation/shared/i18n/ja";
@@ -23,7 +23,6 @@ import {
   StatusDot,
   TextInput,
 } from "@/presentation/shared/ui";
-import { LocalServerPanel } from "./LocalServerPanel";
 
 const T = ja.connection;
 
@@ -32,21 +31,13 @@ function newProfile(id: string): ComputeProfile {
 }
 
 export function ConnectionSettings() {
-  const { platform, env } = useServices();
+  const { platform } = useServices();
   const profiles = useConnectionStore((s) => s.profiles);
   const activeProfileId = useConnectionStore((s) => s.activeProfileId);
   const status = useConnectionStore((s) => s.state.status);
   const [editing, setEditing] = useState<{ profile: ComputeProfile; isNew: boolean } | null>(null);
-  const [showLocal, setShowLocal] = useState(false);
 
-  const edit = (next: { profile: ComputeProfile; isNew: boolean } | null) => {
-    setShowLocal(false);
-    setEditing(next);
-  };
-  const openLocal = () => {
-    setEditing(null);
-    setShowLocal(true);
-  };
+  const edit = (next: { profile: ComputeProfile; isNew: boolean } | null) => setEditing(next);
 
   const startNew = () => {
     const id = `prof_${platform.clock.now().getTime().toString(36)}`;
@@ -56,21 +47,6 @@ export function ConnectionSettings() {
   return (
     <div className="flex h-full min-h-0">
       <div className="flex w-72 shrink-0 flex-col border-r border-border">
-        {env.isTauri && (
-          <div className="border-b border-border p-2">
-            <button
-              type="button"
-              onClick={openLocal}
-              className={cx(
-                "flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-raised",
-                showLocal && "bg-raised",
-              )}
-            >
-              <Cpu size={14} className="shrink-0 text-muted" />
-              <span className="truncate font-medium">{T.local.title}</span>
-            </button>
-          </div>
-        )}
         <div className="flex items-center justify-between px-4 py-3">
           <div className="font-semibold">{T.profiles}</div>
           <Button size="sm" icon={<Plus size={14} />} onClick={startNew}>
@@ -108,9 +84,7 @@ export function ConnectionSettings() {
         </ul>
       </div>
       <div className="min-w-0 flex-1 overflow-auto p-6">
-        {showLocal ? (
-          <LocalServerPanel />
-        ) : editing ? (
+        {editing ? (
           <ProfileEditor
             key={editing.profile.id}
             initial={editing.profile}
@@ -122,11 +96,6 @@ export function ConnectionSettings() {
             <Button variant="primary" icon={<Plus size={14} />} onClick={startNew}>
               {T.add}
             </Button>
-            {env.isTauri && (
-              <Button icon={<Cpu size={14} />} onClick={openLocal}>
-                {T.local.useThisPc}
-              </Button>
-            )}
           </EmptyState>
         ) : (
           <div className="text-muted">{T.selectHint}</div>
@@ -152,6 +121,8 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
   const problems = validateProfile(p);
   const insecure = isInsecureRemote(p);
   const isActive = activeProfileId === p.id;
+  // 「この PC」はフルモードで毎回自動登録される：宛先とトークンは編集できず、消しても次の起動で戻る
+  const auto = p.id === LOCAL_PROFILE_ID;
 
   const onTest = async () => {
     setTesting(true);
@@ -182,12 +153,13 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
           value={p.name}
           onChange={(e) => setP({ ...p, name: e.target.value })}
           placeholder="remote-win"
+          disabled={auto}
         />
         <Label>{T.kind}</Label>
         <Select<ProfileKind>
           aria-label={T.kind}
           value={p.kind}
-          onChange={(kind) => setP({ ...p, kind })}
+          onChange={(kind) => !auto && setP({ ...p, kind })}
           options={[
             { value: "local", label: T.kinds.local },
             { value: "remote", label: T.kinds.remote },
@@ -200,26 +172,35 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
           onChange={(e) => setP({ ...p, baseUrl: e.target.value })}
           placeholder={T.urlHint[p.kind]}
           spellCheck={false}
+          disabled={auto}
         />
-        <Label htmlFor="pf-token">{T.token}</Label>
-        <TextInput
-          id="pf-token"
-          type="password"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder={isNew ? "" : T.tokenKeep}
-          autoComplete="off"
-          spellCheck={false}
-        />
+        {!auto && (
+          <>
+            <Label htmlFor="pf-token">{T.token}</Label>
+            <TextInput
+              id="pf-token"
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={isNew ? "" : T.tokenKeep}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </>
+        )}
       </div>
+      {auto && <div className="text-sm text-muted">{T.local.autoNote}</div>}
+      {!auto && <div className="text-xs text-faint">{T.storageNote}</div>}
 
       {touched && problems.length > 0 && <ErrorNotice title={problems.map((x) => T.problems[x]).join(" / ")} />}
       {insecure && <ErrorNotice tone="warning" title={T.insecure} />}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" onClick={() => void onSave()}>
-          {ja.common.save}
-        </Button>
+        {!auto && (
+          <Button variant="primary" onClick={() => void onSave()}>
+            {ja.common.save}
+          </Button>
+        )}
         <Button
           onClick={() => void onTest()}
           disabled={testing || problems.length > 0}
@@ -228,7 +209,7 @@ function ProfileEditor({ initial, isNew, onDone }: { initial: ComputeProfile; is
           {testing ? T.testing : T.test}
         </Button>
         {!isNew && !isActive && <Button onClick={() => void select(p.id)}>{T.setDefault}</Button>}
-        {!isNew && (
+        {!isNew && !auto && (
           <Button
             variant="ghost"
             className="ml-auto text-danger"
@@ -288,7 +269,15 @@ export function TestResultView({ result }: { result: TestResult }) {
         <XCircle size={16} className="text-danger" />
         {T.testFailed[result.failedStep]}
       </div>
-      <div className="mt-1 text-sm text-muted">{result.failedStep === "auth" ? e.body : result.error.message}</div>
+      <div className="mt-1 text-sm text-muted">
+        {result.failedStep === "auth"
+          ? e.body
+          : result.failedStep === "reach" && result.reason
+            ? result.reason === "cors"
+              ? T.reachReason.cors(result.pageOrigin ?? window.location.origin)
+              : T.reachReason[result.reason]
+            : result.error.message}
+      </div>
     </div>
   );
 }

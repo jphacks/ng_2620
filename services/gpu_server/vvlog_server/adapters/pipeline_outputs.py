@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from .h264 import video_args
+
 THUMB = 256
 
 
@@ -89,7 +91,7 @@ def to_h264(src: Path, dest: Path, crf: int = 23, size: tuple[int, int] | None =
     if not shutil.which("ffmpeg"):
         shutil.copyfile(src, dest)
         return dest
-    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", str(src), "-c:v", "libx264", "-crf", str(crf),
+    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", str(src), *video_args(crf),
                     "-pix_fmt", "yuv420p", "-vf", f"scale={size[0]}:{size[1]}" if size else "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                     "-movflags", "+faststart",
                     str(dest)], check=True, capture_output=True)
@@ -114,7 +116,7 @@ def frames_to_h264(frames_dir: Path, fps: float, dest: Path, crf: int = 20) -> P
                    encoding="utf-8")
     try:
         subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
-                        "-r", str(fps), "-frames:v", str(len(files)), "-c:v", "libx264", "-crf", str(crf), "-pix_fmt", "yuv420p",
+                        "-r", str(fps), "-frames:v", str(len(files)), *video_args(crf), "-pix_fmt", "yuv420p",
                         "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-movflags", "+faststart", str(dest)],
                        check=True, capture_output=True)
     finally:

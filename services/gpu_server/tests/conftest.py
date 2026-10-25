@@ -5,6 +5,7 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
+from vvlog_server.adapters.h264 import video_args
 from vvlog_server.config import Settings
 from vvlog_server.main import create_app
 
@@ -19,7 +20,7 @@ def sample_video(tmp_path_factory):
         pytest.skip("ffmpeg is required")
     out = tmp_path_factory.mktemp("media") / "sample.mp4"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30:duration=2",
-                    "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-f", "lavfi", "-i", "sine=frequency=440:duration=2", *video_args(23), "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-shortest", str(out)], check=True)
     return out
 

@@ -17,6 +17,17 @@ from ..application.deps import Deps
 from ..application.usecases import avatars, jobs, projects, uploads
 from ..domain.errors import VvlogError
 from . import schemas as S
+from ..adapters.local_fs import LocalFs, LocalRoots
+from ..adapters.local_media import LocalMedia
+from ..adapters.local_bootstrap import BootstrapManager
+from ..adapters.local_weights import WeightsManager
+from ..adapters.native_dialog import NativeDialog
+from .local import LocalGuard, mount_local, self_origins
+from .local_bootstrap import mount_local_bootstrap
+from .local_dialog import mount_local_dialog
+from .local_fs import mount_local_fs
+from .local_media import mount_local_media
+from .local_weights import mount_local_weights
 from .ranges import range_response
 
 HEARTBEAT_S = 15
@@ -29,8 +40,13 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
     app = FastAPI(title="vvlog GPU server", version=__version__, lifespan=lifespan,
                   description="designdocs/architecture/contracts.md")
     app.state.deps = deps
-    app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
-                       expose_headers=["Content-Range", "Accept-Ranges"])
+    st = deps.settings
+    # local app server: only itself and the configured Pages origin may call it (Tauri origins are gone, ADR-0015)
+    origins = [*self_origins(st.port), *st.allowed_origins] if st.local else [*CORS_ORIGINS, *st.allowed_origins]
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"],
+                       expose_headers=["Content-Range", "Accept-Ranges"], max_age=600)
+    if st.local:  # added last = outermost: a rejected request never reaches CORS or a route
+        app.add_middleware(LocalGuard, port=st.port, allowed_origins=st.allowed_origins)
 
     @app.exception_handler(VvlogError)
     async def _vvlog_error(_req, e: VvlogError):
@@ -164,6 +180,17 @@ def build_app(deps: Deps, lifespan=None) -> FastAPI:
         raise VvlogError("NOT_IMPLEMENTED", "ユーザー管理はスコープ外です（ADR-0010）")
 
     app.include_router(r)
+    if st.local:  # after the /v1 routes: the SPA catch-all must not shadow them
+        roots = LocalRoots([*st.local_dirs.values(), *st.local_roots], store=st.data_root / "local" / "grants.json")
+        mount_local_fs(app, LocalFs(roots), auth, st.api_token)
+        app.state.native_dialog = NativeDialog()  # tests swap .backend
+        mount_local_dialog(app, app.state.native_dialog, roots, auth, st.port)
+        mount_local_media(app, LocalMedia(st.ffprobe), auth)
+        app.state.weights = WeightsManager(st.weights_manifest, st.ckpt_root, hf_base=st.weights_hf_base)
+        mount_local_weights(app, app.state.weights, auth, st.port)
+        app.state.bootstrap = BootstrapManager(st.bootstrap_spec, st.env_b_dir, st.pipeline_root, uv=st.uv)
+        mount_local_bootstrap(app, app.state.bootstrap, auth, st.port)
+        mount_local(app, port=st.port, token=st.api_token, spa_dir=st.spa_dir, dirs=st.local_dirs, auth=auth)
     return app
 
 

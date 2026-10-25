@@ -67,6 +67,11 @@ class FsJobRepository:
             self._cache[job_id] = job
             return job
 
+    def delete(self, job_id: str) -> None:
+        with _lock:
+            self._cache.pop(job_id, None)
+            shutil.rmtree(self.root / job_id, ignore_errors=True)
+
     def list(self, project_id: str | None = None) -> list[Job]:
         out = []
         for p in sorted(self.root.glob("*/job.json")):
@@ -180,6 +185,18 @@ class FsUploadRepository:
                 h.update(b)
                 out.write(b)
         return h.hexdigest()
+
+    def list(self) -> list[Upload]:
+        out = []
+        for f in self.base.glob("*/upload.json"):
+            try:
+                out.append(Upload(**read_json(f)))
+            except (OSError, ValueError, TypeError):
+                continue
+        return out
+
+    def delete(self, upload_id: str) -> None:
+        shutil.rmtree(self.base / upload_id, ignore_errors=True)
 
     def discard_chunks(self, upload: Upload) -> None:
         shutil.rmtree(self.base / upload.uploadId / "chunks", ignore_errors=True)

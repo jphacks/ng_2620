@@ -33,6 +33,19 @@ export function formatDateTime(iso: string): string {
   return Number.isFinite(d.getTime()) ? d.toLocaleString("ja-JP") : iso;
 }
 
+/** 12.3 MB（1024 区切り） */
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${i === 0 ? v : v.toFixed(v >= 100 ? 0 : 1)} ${units[i]}`;
+}
+
 export function formatPercent(r: number): string {
   return `${Math.round(Math.min(1, Math.max(0, r)) * 100)}%`;
 }

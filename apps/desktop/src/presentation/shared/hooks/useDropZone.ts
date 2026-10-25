@@ -43,7 +43,13 @@ function onEvent(ev: FileDropEvent) {
     return setHovered(id, !zone ? "idle" : ev.paths.length === 0 || zone.accept(ev.paths) ? "active" : "reject");
   }
   setHovered(null, "idle");
-  if (zone && zone.accept(ev.paths)) zone.onDrop(ev.paths);
+  if (!zone || !zone.accept(ev.paths)) return;
+  if (!ev.prepare) return zone.onDrop(ev.paths);
+  // 取り込み（サーバーへの転送）が要る：受け付ける先だけで始め、できたパスを渡す。失敗の表示は prepare 側
+  void ev
+    .prepare()
+    .then((paths) => paths.length > 0 && zone.onDrop(paths))
+    .catch(() => {});
 }
 
 function ensureSubscribed() {

@@ -7,13 +7,11 @@
 
 実写動画に映る人物を、**本人の動きのまま VRM アバターに置き換える**ツール。
 動画から人物の追跡・3D メッシュ復元・遮蔽（人物の前後関係）の判定・人物除去・VRM 描画・合成までを GPU サーバーで自動化し、
-画面（デスクトップアプリ）から取り込み・キャスト（人物へのアバター割り当て）・編集・書き出しを行う。
+画面（ブラウザ）から取り込み・キャスト（人物へのアバター割り当て）・編集・書き出しを行う。
 
 JPHACKS 2026 のチーム ng_2620 の作品（ロゴとブランドのガイドラインは [designdocs/brand](designdocs/brand/README.md)）。
 
-> **このリポジトリには技術スタックが 2 パターンある**（下の「[技術スタックの 2 つの系統](#技術スタックの-2-つの系統)」）。
-> `develop` / `main` は **Tauri 版**（現行）。`refactor/web-first-windows-local-server` は **Tauri を捨ててブラウザ UI + Windows ローカルサーバーにする作り直し**で、
-> 計画の段階（チケット [#18](https://github.com/jphacks/ng_2620/issues/18)）。実装はまだ入っていない。
+> 動かし方は 2 通り。**GPU のある Windows 機**にインストールしてブラウザで使うか、**GPU が無くても**、GitHub Pages の画面から自分で用意した GPU サーバーにつないで使う（機能は一部制限される）。
 
 ## 製品概要
 
@@ -59,6 +57,9 @@ VTuber の 3D ライブには、お金を払って会場まで足を運ぶファ
   </tr>
 </table>
 
+**使い方**：① 動画を取り込む（ファイル選択かドロップ） → ② 映っている人物を解析して追跡 → ③ 人物ごとに VRM アバターを割り当て（キャスト） → ④ 描画 → ⑤ エディタで前後関係を手直し → ⑥ MP4 で書き出し。
+操作はすべてブラウザで行い、重い処理は GPU 機が担う。
+
 手前のノート PC は手前のまま残り、アバターはその後ろに立つ。自動の判定が外れた物は、エディタでクリックして「前」「後ろ」を選ぶとその場で直る。
 
 #### 前後関係の補正（デモ）
@@ -78,10 +79,22 @@ VTuber の 3D ライブには、お金を払って会場まで足を運ぶファ
 公開モデルの組み合わせと VirtualTwin は、3DPW（von Marcard et al., ECCV 2018）の downtown_bar_00 の 120 フレーム（4 秒）を RTX 5060 Ti で処理し、出力 1080x1920、
 追跡から書き出しまでの通しの時間（モデルの読み込みを含む）。
 
-### できること（`develop` の画面）
+### できること
 - 動画の取り込み、解析（人物の追跡）、人物ごとの VRM アバターの割り当て（キャスト）、描画、書き出しの一連の流れ
 - 遮蔽（物体が人物の前か後ろか）の自動判定と、**エディタでの手修正**（編集用レイヤーをクライアントで WebGL2 合成する設計で、修正にサーバー往復を要しない）
-- GPU が無い機械向けに、同じ API を返す**モックサーバー**
+- 解析や描画が終わると、ブラウザの通知で知らせる
+- 大きな動画は分割して送り、途切れても再開できる
+- Windows の GPU 機では、インストーラーで入れて**ブラウザで操作**する（ファイル選択はネイティブダイアログ、動画はドロップでも取り込める）
+- GPU が無い人は、GitHub Pages の画面から**自分で用意した GPU サーバー（BYO）**につなぐ（**制限モード**。プロジェクトはブラウザの IndexedDB に残り、zip で書き出し・読み込みできる。ローカルのファイルを直接開けないので、元の動画は開き直すたびに選び直す）
+- GPU が無い機械の開発向けに、同じ API を返す**モックサーバー**
+
+### 対応環境
+
+| 使い方 | 環境 |
+|---|---|
+| ローカル実行（フルモード） | Windows + NVIDIA GPU（RTX 5060 Ti で動作確認。GPU メモリ 12GB 級以上） |
+| Pages + 自分の GPU サーバー（制限モード） | Chrome / Edge / Safari（Firefox は保証外）。サーバーは Linux でも可（L4 の VM で確認、Docker イメージあり） |
+| 開発 | Mac でも、モックサーバー + ブラウザで画面を動かせる |
 
 ### 入力の制限（既定）
 動画は 30 秒以下、長辺 1920px 以下、mp4 / mov。人物（ターゲット）は最大 4 人（[ADR-0011](designdocs/adr/0011-input-limits-and-resolutions.md)、サーバーの環境変数 `VVLOG_MAX_*` で変更可）。
@@ -91,38 +104,38 @@ VTuber の 3D ライブには、お金を払って会場まで足を運ぶファ
 推論の速度は RTX 5060 Ti で約 0.72 秒/フレーム（2026-10-24 計測、ADR-0011 に記載）。
 
 ### 今後の展望
-- Tauri を廃止し、Windows ローカルサーバー + ブラウザ UI にする（下記）
-- GitHub Pages で同じ画面を公開し、利用者が自分で用意した GPU サーバーにつないで、手元に CUDA 環境がなくても使えるようにする（機能制限あり）
+- Windows 以外のローカル実行（現在は Windows + RTX のみ。Mac などは Pages 版で外部 GPU につなぐ）
+- 初回ブートストラップ（Python・torch・detectron2 の自動構築）の実機検証を進め、固定する版を確定する（[#30](https://github.com/jphacks/ng_2620/issues/30)）
+- インストーラーのコード署名（現在は署名なしで、初回に SmartScreen の警告が出る）
 - 企業向け機能（匿名化、チーム運用、監査）はスコープ外（[ADR-0010](designdocs/adr/0010-out-of-scope-enterprise-and-later.md)）
 
-## 技術スタックの 2 つの系統
+## 技術スタックの概要
 
-| | **現行（`develop` / `main`）** | **作り直し（`refactor/web-first-windows-local-server`、計画段階）** |
-|---|---|---|
-| 状態 | 実装済み | チケット起票と方針決定のみ。コードは未変更 |
-| 画面の入れ物 | **Tauri 2**（Rust）のデスクトップアプリ | **ブラウザ**。UI を持たない Windows アプリが Web サーバーを同梱し、既定ブラウザで操作 |
-| 配布の対象 OS | Windows / macOS（Apple Silicon・Intel）のビルドを CI が作る（未署名） | ローカル実行は **Windows（RTX）のみ**。Mac などは Pages 版（制限モード）で外部 GPU に接続 |
-| ローカルファイル | Rust 側のコマンドで直接読み書き | ローカルサーバー経由。ファイル選択は Windows のネイティブダイアログ、ドロップはサーバーへ取り込み |
-| ローカル推論 | 利用者が指定したフォルダの `.venv` で GPU サーバーを子プロセス起動 | ローカルサーバー自身が推論を呼ぶ。Python・torch・重みは初回起動時に取得（薄いインストーラー + 初回ブートストラップ） |
-| 外部 GPU | URL + Bearer トークンで接続（デモは Tailscale） | 同じ。**利用者が自分で GPU サーバーを用意する（BYO）**。運営ホストなし |
-| 公開 | GitHub Release にインストーラー | ローカルサーバーが画面も配信。同一ビルドを GitHub Pages にも公開 |
-| 対応ブラウザ | （該当なし） | Chrome / Edge と Safari（Mac）を保証。Firefox は保証外 |
-| 実装言語 | TypeScript + Rust + Python | TypeScript + Python（Rust は無くなる） |
+| | |
+|---|---|
+| 画面の入れ物 | **ブラウザ**。UI を持たない Windows アプリ（ランチャー + ローカルサーバー）が画面を配信し、既定ブラウザで操作する |
+| 実行環境 | ローカル実行は **Windows（RTX）のみ**。Mac などは GitHub Pages の画面（制限モード）から外部 GPU に接続 |
+| ローカルファイル | ローカルサーバー経由。ファイル選択は Windows のネイティブダイアログ、ドロップはサーバーへ分割転送して取り込み |
+| ローカル推論 | ローカルサーバー自身が `pipeline/` を呼ぶ。Python・torch・重みは初回起動時に取得（薄いインストーラー + 初回ブートストラップ） |
+| 外部 GPU | URL + Bearer トークンで接続。**利用者が自分で GPU サーバーを用意する（BYO）**。運営ホストなし |
+| 配布 | Windows のインストーラー（Inno Setup）とポータブル zip。同じ画面のビルドを GitHub Pages にも公開 |
+| 対応ブラウザ | Chrome / Edge と Safari（Mac）を保証。Firefox は保証外 |
+| 実装言語 | TypeScript + Python（Rust は使わない） |
 
-作り直しの方針は [#18](https://github.com/jphacks/ng_2620/issues/18) と子チケットに残している
-（外部 GPU は [#35](https://github.com/jphacks/ng_2620/issues/35)、ダイアログとドロップは [#28](https://github.com/jphacks/ng_2620/issues/28)、Windows での環境自動構築の検証は [#30](https://github.com/jphacks/ng_2620/issues/30)）。
-Windows での detectron2 の自動セットアップなど、検証が済んでいない項目がある。確定したら ADR-0015 として `designdocs/adr/` に記録する予定（未作成）。
-どちらの系統も、API の契約（`packages/contracts`）は共通に保つ。
+決定の経緯は [ADR-0015](designdocs/adr/0015-web-first-windows-local-server.md)（親チケット [#18](https://github.com/jphacks/ng_2620/issues/18)）。
+Windows での detectron2 の自動セットアップなど、固定する版が暫定の項目がある（`services/gpu_server/bootstrap-spec.json` の `provisional`）。
+API の契約（`packages/contracts`）は画面とサーバーで共通に保つ。
 
 ## 構成
 
 | 場所 | 中身 |
 |---|---|
-| `apps/desktop` | 画面（React + TypeScript）。現行では Tauri のネイティブ部分（`src-tauri/`、Rust）も含む |
-| `services/gpu_server` | GPU サーバー（FastAPI）。ジョブの受付・アップロード・成果物・進捗（SSE）を担い、推論は `pipeline/` を別プロセスで呼ぶ |
+| `apps/desktop` | 画面（React + TypeScript）。ローカルサーバーが配信するほか、GitHub Pages にも公開する |
+| `services/gpu_server` | GPU サーバー（FastAPI）。ジョブの受付・アップロード・成果物・進捗（SSE）を担い、推論は `pipeline/` を別プロセスで呼ぶ。`VVLOG_LOCAL=1` で、画面の配信・ファイル／ダイアログ API・初回ブートストラップを持つローカルアプリサーバーになる |
 | `services/mock_server` | GPU なしで本物と同じ API・イベント・成果物名を返すモック（中身は `gpu_server` で、ステージだけを再生用に差し替え） |
 | `pipeline` | 推論パイプライン（SAM-Body4D 系 + アバター置換）。出どころは [pipeline/UPSTREAM.md](pipeline/UPSTREAM.md) |
 | `packages/contracts` | API（OpenAPI）・プロジェクトファイル・遮蔽の手修正の JSON Schema。[CLIENT_GUIDE](packages/contracts/CLIENT_GUIDE.md) |
+| `installer` / `scripts` / `deploy` | Windows インストーラー（Inno Setup・`vvlog.cmd`）と配布物の組み立て、開発用スクリプト、外部 GPU 用（BYO）の Docker イメージ |
 | `weights` | 重みの取得スクリプトとマニフェスト（重み自体はコミットしない） |
 | `designdocs` | PRD・ADR・アーキテクチャ・UX・ブランド。入口は [designdocs/README.md](designdocs/README.md) |
 | `docs/slide` | 発表スライド（Marp） |
@@ -135,18 +148,22 @@ Windows での detectron2 の自動セットアップなど、検証が済んで
 
 #### 画面（`apps/desktop`）
 TypeScript ~5.6、React 18、Vite 6、Tailwind CSS 3.4、Radix UI、TanStack Query 5、Zustand 5、react-router-dom 6、react-resizable-panels、lucide-react、fast-png。
-合成は WebGL2 を直接使う（`src/presentation/features/editor/compositor/Compositor.ts`）。テストは Vitest 4（jsdom、Testing Library）。
+合成は WebGL2 を直接使う（`src/presentation/features/editor/compositor/Compositor.ts`）。テストは Vitest 4（jsdom、Testing Library）と Playwright（Chromium / WebKit の E2E）。
+起動時にローカルサーバーを見つけると**フルモード**（ファイル・ハッシュ・ffprobe をサーバー越しに）、見つからなければ**制限モード**（IndexedDB・メモリ上のファイル）で動く。ビルドは相対パス（`base: "./"`）で、ローカルサーバーの `/` でも GitHub Pages でも同じ `dist` が動く。
 構成は domain / application / infrastructure / presentation の層に分け、OS 機能はポートの裏に置いている（[ADR-0003](designdocs/adr/0003-clean-architecture-and-contract-first.md)）。
 なお [ADR-0013](designdocs/adr/0013-frontend-stack.md) に書かれた `openapi-typescript` / `openapi-fetch` / `twgl.js` は `package.json` に入っておらず、現行コードでは使っていない。
 
-#### デスクトップ基盤（現行のみ）
-Tauri 2（Rust、edition 2021）。プラグインは http / dialog / notification / opener。ファイル操作、sha256 の計算、ffprobe による動画情報、大容量の分割転送、
-GPU サーバーの子プロセス管理を Rust 側のコマンドで行う（`src-tauri/src/commands/` に約 800 行）。作り直しでは、これらをローカルサーバー（Python）に移す計画。
+#### ローカルアプリ（Windows、`services/gpu_server` の `VVLOG_LOCAL=1`）
+UI を持たないランチャー（`vvlog_server.launcher`）がサーバーを起動して既定ブラウザで開く。待受は `127.0.0.1` のみで、起動ごとのトークンで保護する。多重起動防止、トレイアイコン（pystray）つき。
+ファイル選択はサーバーが出す Windows のネイティブダイアログ（PowerShell + System.Windows.Forms）、動画のドロップは `<appData>/imports/` へ分割転送する。
+配布は薄いインストーラー（Inno Setup 6、ユーザー単位・署名なし）で、uv・ffmpeg / ffprobe・コード・画面だけを入れる。初回起動で uv が環境 A を作り、環境 B（Python 3.12・PyTorch CUDA・detectron2）と重みは画面の案内から取得する。
+detectron2 の Windows 用 wheel は GitHub Actions で作る。
 
 #### GPU サーバー（`services/gpu_server`）
-Python 3.11 以上、FastAPI、uvicorn、sse-starlette、pydantic 2、python-multipart、PyYAML、NumPy、Pillow。ffmpeg / ffprobe（動画の検証・変換）が要る。
+Python 3.11 以上、FastAPI、uvicorn、sse-starlette、pydantic 2、python-multipart、PyYAML、NumPy、Pillow、send2trash（Windows は pystray も）。ffmpeg / ffprobe（動画の検証・変換）が要る。
 ジョブは GPU 1 枚につき 1 ワーカーの FIFO で、各ステージをパイプラインのサブプロセスとして実行する（[ADR-0014](designdocs/adr/0014-server-stack.md)）。
-通信は HTTP(S) + SSE、認証は `Authorization: Bearer`（[ADR-0012](designdocs/adr/0012-transport-and-auth.md)）。
+通信は HTTP(S) + SSE、認証は `Authorization: Bearer`（[ADR-0012](designdocs/adr/0012-transport-and-auth.md)）。ブラウザから外部のサーバーを使うために、CORS の許可・サイズ上限・TTL・トークン必須化の設定を持つ。
+外部 GPU 用（BYO）には CUDA 対応の Docker イメージ（`deploy/docker`）がある。
 
 #### 推論パイプライン（`pipeline`）
 Python 3.12 以上、PyTorch（CUDA）。`weights/manifest.json` にある重み：
@@ -169,13 +186,14 @@ Python 3.12 以上、PyTorch（CUDA）。`weights/manifest.json` にある重み
 OpenAPI（`openapi.yaml`）と JSON Schema（プロジェクトファイル、遮蔽の手修正）。
 
 #### 開発・CI
-Node 26、pnpm 10（ワークスペース）、ESLint 9、Prettier、lefthook（pre-push の自動整形）、release-please（CHANGELOG と版管理）、Marp（スライド）。
-GitHub Actions は `ci.yml`（prettier / eslint / rustfmt / clippy）、`release.yml`（main への push で Windows x64・macOS arm64/x64 の未署名ビルドを GitHub Release に添付）、
-`release-please.yml`、`slide-pdf.yml`。Rust 関連のジョブとファイルは、作り直しで Tauri を削除するときに無くなる予定（[#40](https://github.com/jphacks/ng_2620/issues/40)）。
+Node 26、pnpm 10（ワークスペース）、uv、ESLint 9、Prettier、lefthook（pre-push の自動整形）、release-please（CHANGELOG と版管理）、Marp（スライド）。
+GitHub Actions：`ci.yml`（prettier / eslint、画面の型チェック・vitest・ビルド、サーバーの pytest、画面 ⇄ ローカルサーバーの通しテスト）、`e2e.yml`（Playwright。手動実行）、
+`pages.yml`（GitHub Pages へ公開）、`build-windows.yml`（インストーラーと zip）、`detectron2-wheel.yml`（Windows 用 wheel）、
+`release.yml`（`main` への push で Windows 配布物をつけた draft Release を作る。公開は手動）、`release-please.yml`、`slide-pdf.yml`。Rust 関連のジョブは無い。
 
 #### デバイス
 - 推論：NVIDIA GPU。Windows の RTX 5060 Ti 機と、Linux の L4 の VM で動作を確認している（[services/gpu_server/README.md](services/gpu_server/README.md)）
-- 画面：開発とデモは MacBook（Apple Silicon）。サーバーはチームの Windows GPU 機に Tailscale 越しでつなぐ構成（[ADR-0012](designdocs/adr/0012-transport-and-auth.md)）
+- 画面：Windows（ローカルアプリ）か、Chrome / Edge / Safari で開く GitHub Pages。開発は MacBook（Apple Silicon）で、モックサーバー + ブラウザで続ける。デモでは Mac のブラウザから Windows GPU 機に Tailscale 越しでつなぐ（[ADR-0012](designdocs/adr/0012-transport-and-auth.md)）
 
 ### 独自技術
 
@@ -201,6 +219,7 @@ GitHub Actions は `ci.yml`（prettier / eslint / rustfmt / clippy）、`release
 - GPU サーバー：ジョブキュー、分割アップロード（8MB、再開可）、成果物の Range 配信、SSE による段階的な進捗（[services/gpu_server/vvlog_server/](services/gpu_server/vvlog_server)）
 - モックサーバー：実機なしで同じ API を再生（[services/mock_server/](services/mock_server)）
 - 画面：取り込みから書き出しまでの流れと、遮蔽の手修正を行うエディタ（[apps/desktop/src/](apps/desktop/src)）
+- Web 化：ローカルアプリサーバー（ランチャー、ネイティブダイアログ、ファイル API、初回ブートストラップ、重みの取得）と、Pages 向けの制限モード・外部 GPU への接続（[services/gpu_server/vvlog_server/](services/gpu_server/vvlog_server)、[installer/](installer)）
 
 ## ライセンス
 
@@ -229,10 +248,9 @@ EdgeTAM（Apache-2.0）は実験用の選択肢で、既定では使わない。
 | 部分 | 確認した範囲 | ライセンス |
 |---|---|---|
 | 画面（`apps/desktop`） | 実行時に入る npm パッケージ 53 個 | MIT 46、MIT OR Apache-2.0 5、ISC 1（lucide-react）、MIT AND Zlib 1（pako）。React・Radix UI・TanStack Query・Zustand・react-router・Tailwind CSS・Vite は MIT、TypeScript は Apache-2.0 |
-| デスクトップ基盤（`src-tauri`） | Rust のクレート 530 個 | ほぼ MIT / Apache-2.0。ほかに MPL-2.0（cssparser・selectors など 5 個、ファイル単位のコピーレフト）、Unicode-3.0、CDLA-Permissive-2.0（webpki-roots）。Tauri は Apache-2.0 OR MIT |
 | GPU サーバー（`services/gpu_server`） | 直接の依存 | FastAPI・pydantic・PyYAML は MIT、uvicorn・sse-starlette は BSD-3-Clause、python-multipart は Apache-2.0、NumPy は BSD-3-Clause ほか、Pillow は MIT-CMU |
 | 推論パイプライン（`pipeline`） | 直接の依存 | PyTorch は BSD 系（同梱の部品に Apache-2.0 などを含む）、torchvision は BSD、detectron2・diffusers・transformers・accelerate・OpenCV・decord・fvcore・gradio・pytorch-lightning は Apache-2.0、pyrender・moderngl・einops・triton は MIT、imageio・imageio-ffmpeg は BSD-2-Clause、matplotlib は PSF 系、MoGe のコードは MIT |
-| 外部コマンド | ffmpeg / ffprobe | ビルドにより LGPL-2.1 または GPL。このリポジトリには同梱しない |
+| 外部コマンド | ffmpeg / ffprobe | Windows の配布物に BtbN の LGPL ビルドを同梱 |
 
 ### データとアバター
 
