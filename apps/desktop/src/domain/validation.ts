@@ -39,7 +39,11 @@ function roundSec(sec: number): number {
   return Math.round(sec * 100) / 100;
 }
 
-export function validateMedia(path: string, info: LocalMediaInfo | null, limits: MediaLimits = DEFAULT_LIMITS): Violation[] {
+export function validateMedia(
+  path: string,
+  info: LocalMediaInfo | null,
+  limits: MediaLimits = DEFAULT_LIMITS,
+): Violation[] {
   const out: Violation[] = [];
   const ext = extensionOf(path);
   if (!(ACCEPTED_EXTENSIONS as readonly string[]).includes(ext)) {

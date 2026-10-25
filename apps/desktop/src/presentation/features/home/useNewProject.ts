@@ -9,7 +9,8 @@ import { useServices } from "@/presentation/shared/services";
 import { useConnectionStore } from "@/presentation/shared/stores/connectionStore";
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 
-export type NewProjectState = { kind: "idle" } | { kind: "probing" } | { kind: "creating" } | { kind: "rejected"; error: ErrorText };
+export type NewProjectState =
+  { kind: "idle" } | { kind: "probing" } | { kind: "creating" } | { kind: "rejected"; error: ErrorText };
 
 export function useNewProject(onCreated: (p: Project) => void) {
   const { uc, platform } = useServices();
@@ -22,7 +23,10 @@ export function useNewProject(onCreated: (p: Project) => void) {
     try {
       const { info, violations } = await uc.probeMedia.execute(path, mergeLimits(DEFAULT_LIMITS, limits));
       if (violations.length || !info) {
-        setState({ kind: "rejected", error: violationText(violations[0] ?? { code: "MEDIA_UNSUPPORTED", reason: "extension", value: path }) });
+        setState({
+          kind: "rejected",
+          error: violationText(violations[0] ?? { code: "MEDIA_UNSUPPORTED", reason: "extension", value: path }),
+        });
         return;
       }
       setState({ kind: "creating" });
@@ -35,7 +39,10 @@ export function useNewProject(onCreated: (p: Project) => void) {
   };
 
   const pick = async () => {
-    const [path] = await platform.dialog.pickFiles({ multiple: false, filters: [{ name: "Video", extensions: [...ACCEPTED_EXTENSIONS] }] });
+    const [path] = await platform.dialog.pickFiles({
+      multiple: false,
+      filters: [{ name: "Video", extensions: [...ACCEPTED_EXTENSIONS] }],
+    });
     if (path) await fromPath(path);
   };
 

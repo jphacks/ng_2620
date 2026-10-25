@@ -1,0 +1,13 @@
+node_modules
+dist
+target
+gen
+pnpm-lock.yaml
+apps/desktop/src-tauri
+apps/desktop/src/**/*.css
+pipeline
+services
+weights
+fixtures
+designdocs
+*.md

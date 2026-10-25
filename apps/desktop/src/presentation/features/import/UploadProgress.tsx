@@ -35,7 +35,11 @@ export function UploadProgress({ onOpenConnection }: { onOpenConnection(): void 
   return (
     <div className="grid grid-cols-[7.5rem_1fr_12rem] items-center gap-2">
       <span>{ja.upload.label}</span>
-      <ProgressBar value={ratio} tone={uploaded ? "success" : "accent"} indeterminate={!uploaded && p?.phase === "hashing"} />
+      <ProgressBar
+        value={ratio}
+        tone={uploaded ? "success" : "accent"}
+        indeterminate={!uploaded && p?.phase === "hashing"}
+      />
       <span className="flex items-center justify-end gap-1 text-sm text-muted">
         {uploaded ? (
           <>
@@ -43,7 +47,8 @@ export function UploadProgress({ onOpenConnection }: { onOpenConnection(): void 
           </>
         ) : p ? (
           <>
-            {ja.upload.phase[p.phase]} {Math.round(ratio * 100)}%{p.bytesPerSec ? `・${ja.upload.speed(p.bytesPerSec)}` : ""}
+            {ja.upload.phase[p.phase]} {Math.round(ratio * 100)}%
+            {p.bytesPerSec ? `・${ja.upload.speed(p.bytesPerSec)}` : ""}
           </>
         ) : project.compute.upload ? (
           ja.importStep.resumeTitle

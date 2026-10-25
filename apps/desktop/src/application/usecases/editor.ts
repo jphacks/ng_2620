@@ -48,7 +48,10 @@ export class LoadEditorData {
     const rd = projects.cacheDir(project, render);
     const layersJson = files.join(rd, "layers.json");
     if (!(await files.exists(layersJson))) throw new AppError("LAYERS_MISSING", "レイヤーをまだ取得していません");
-    const layers = JSON.parse(await files.readText(layersJson)) as { persons?: number[]; order?: Record<string, number[]> };
+    const layers = JSON.parse(await files.readText(layersJson)) as {
+      persons?: number[];
+      order?: Record<string, number[]>;
+    };
     const unitsJson = files.join(an, "units.json");
     const units = (await files.exists(unitsJson)) ? parseUnits(JSON.parse(await files.readText(unitsJson))) : [];
     const hasUnits = await files.exists(files.join(an, "units", frameFile(0, "png")));

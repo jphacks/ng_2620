@@ -44,6 +44,22 @@ import fusion  # noqa: E402
 import shared_cache  # noqa: E402
 
 
+def _preimport_depth():
+    """Import transformers' depth classes on a thread while prep runs: the import is 2.5 of the ~4.5 s before the
+    GPU stage's first depth frame (the model itself loads in 0.3 s); gpu_stage_fast.hf_depth_load then finds it
+    imported. Only the import: nothing that the GPU stage's order of process-wide state depends on (SAM3's TF32 /
+    autocast, transformers' empty-weights context in from_pretrained) moves."""
+    import threading
+    if gpu_stage_fast.DEPTH == "moge":
+        return None
+
+    def imp():
+        from transformers import AutoImageProcessor, AutoModelForDepthEstimation  # noqa: F401
+    t = threading.Thread(target=imp, daemon=True)
+    t.start()
+    return t
+
+
 def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, points="kf_lite", compile_decoder=True,
                keyframe=False, render=True):
     """-> dict(run, ev, dec, cache, hide={(i, pid): hide mask}). points / compile_decoder / keyframe:
@@ -56,7 +72,10 @@ def run_fusion(pipeline_out, out_dir, name=None, save=True, reference=False, poi
     run = Run(pipeline_out, name)
     cache = os.path.join(out_dir, "_r3cache", run.name)
     os.makedirs(cache, exist_ok=True)
+    pre = None if reference else _preimport_depth()
     (prep if reference else prep_fast).prep(run, cache)   # prep_fast: same mesh.npz, arrays on disk
+    if pre is not None:
+        pre.join()
     t1 = time.time()
     if reference:
         gs.run_gpu(run, cache, owner="fusion_v2")

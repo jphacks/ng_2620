@@ -1,0 +1,23 @@
+# develop に積まれた Conventional Commits から、次のバージョンと CHANGELOG を決める Release PR（develop 向け）を作る。
+# この PR を develop にマージすると version が 4 ファイルに入る。タグと GitHub Release は release.yml が main で作る。
+name: Release PR
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # PAT / GitHub App のトークン推奨：GITHUB_TOKEN で作った PR では CI が走らない
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: develop
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

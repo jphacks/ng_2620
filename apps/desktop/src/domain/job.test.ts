@@ -3,9 +3,16 @@ import type { Job, JobEvent } from "./job";
 import { applyEvent, currentStage, newJob, overallProgress, orderedStages } from "./job";
 
 const base = (): Job =>
-  newJob({ jobId: "job_1", projectId: "prj_1", type: "analyze", params: { mediaId: "med_1" }, createdAt: "2026-10-24T00:00:00Z" });
+  newJob({
+    jobId: "job_1",
+    projectId: "prj_1",
+    type: "analyze",
+    params: { mediaId: "med_1" },
+    createdAt: "2026-10-24T00:00:00Z",
+  });
 
-const replay = (events: JobEvent[], start = base()) => events.reduce((j, e) => applyEvent(j, e, "2026-10-24T00:01:00Z"), start);
+const replay = (events: JobEvent[], start = base()) =>
+  events.reduce((j, e) => applyEvent(j, e, "2026-10-24T00:01:00Z"), start);
 
 const artifact = (name: string) => ({
   name,
@@ -42,7 +49,10 @@ describe("applyEvent", () => {
 
   it("snapshot は全置換", () => {
     const snap: Job = { ...base(), status: "running", artifacts: ["meta"] };
-    const j = replay([{ type: "progress", data: { stage: "ingest", progress: 0.3 } }, { type: "snapshot", data: snap }]);
+    const j = replay([
+      { type: "progress", data: { stage: "ingest", progress: 0.3 } },
+      { type: "snapshot", data: snap },
+    ]);
     expect(j).toBe(snap);
   });
 
@@ -63,7 +73,10 @@ describe("applyEvent", () => {
 
   it("終了したジョブは後から来た進捗で running に戻らない", () => {
     const j = replay([
-      { type: "job_failed", data: { stage: "track", error: { code: "NO_PERSON_FOUND", message: "x" }, logTail: "..." } },
+      {
+        type: "job_failed",
+        data: { stage: "track", error: { code: "NO_PERSON_FOUND", message: "x" }, logTail: "..." },
+      },
       { type: "progress", data: { stage: "track", progress: 0.5 } },
     ]);
     expect(j.status).toBe("failed");

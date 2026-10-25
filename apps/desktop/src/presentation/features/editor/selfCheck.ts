@@ -40,7 +40,11 @@ export async function runCompositeCheck(
     {
       frame: b.frame,
       clean: b.clean,
-      persons: order.map((p) => ({ row: data.persons.indexOf(p), avatar: b.avatars.get(p)!, hide: b.hides.get(p) ?? null })),
+      persons: order.map((p) => ({
+        row: data.persons.indexOf(p),
+        avatar: b.avatars.get(p)!,
+        hide: b.hides.get(p) ?? null,
+      })),
       units: b.units,
       mask: null,
     },
@@ -52,7 +56,17 @@ export async function runCompositeCheck(
   for (const c of cases) {
     const t = buildModeTable(data.persons, maxUnit, (p, u) => c.modes[modeKey(p, u)] ?? null);
     comp.uploadModes(t.table, t.width, t.height);
-    comp.render({ view: "composite", split: 0.5, showAvatar: true, showUnits: false, showHide: false, showMask: false, hoverUnit: 0, selectedUnit: 0, highlightHover: false });
+    comp.render({
+      view: "composite",
+      split: 0.5,
+      showAvatar: true,
+      showUnits: false,
+      showHide: false,
+      showMask: false,
+      hoverUnit: 0,
+      selectedUnit: 0,
+      highlightHover: false,
+    });
     const got = comp.readPixels();
     const want = await pixelsOf(media, c.expected, data.width, data.height);
     const ratio = diffRatio(got, want);

@@ -133,9 +133,18 @@ export const useEditorStore = create<EditorState>((set, get) => {
     open(projectId, data, overrides) {
       history = new History(overrides);
       set({
-        projectId, data, loadError: null, overrides, canUndo: false, canRedo: false, saving: "saved",
+        projectId,
+        data,
+        loadError: null,
+        overrides,
+        canUndo: false,
+        canRedo: false,
+        saving: "saved",
         playhead: Math.min(get().projectId === projectId ? get().playhead : 0, data.frameCount - 1),
-        playing: false, hoverUnit: 0, selectedUnit: 0, selectedPerson: data.persons[0] ?? null,
+        playing: false,
+        hoverUnit: 0,
+        selectedUnit: 0,
+        selectedPerson: data.persons[0] ?? null,
       });
     },
     fail(e) {
@@ -179,7 +188,11 @@ export const useEditorStore = create<EditorState>((set, get) => {
       const cur = get().overrides;
       const list = units(cur);
       const next = mode
-        ? upsertOverride(list, { id: newId(), kind: "unit", personId, unitId, range, mode, createdAt: new Date().toISOString() }, newId)
+        ? upsertOverride(
+            list,
+            { id: newId(), kind: "unit", personId, unitId, range, mode, createdAt: new Date().toISOString() },
+            newId,
+          )
         : removeRange(list, personId, unitId, range, newId);
       commit([...others(cur), ...next]);
     },

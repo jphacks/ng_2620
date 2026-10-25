@@ -14,7 +14,10 @@ export class SaveLocalServerConfig {
   constructor(private readonly d: { settings: SettingsPort }) {}
   async execute(config: LocalServerConfig): Promise<AppSettings> {
     const s = await this.d.settings.load();
-    const next: AppSettings = { ...s, localServer: { ...config, serverDir: config.serverDir.trim(), pythonPath: config.pythonPath.trim() } };
+    const next: AppSettings = {
+      ...s,
+      localServer: { ...config, serverDir: config.serverDir.trim(), pythonPath: config.pythonPath.trim() },
+    };
     await this.d.settings.save(next);
     return next;
   }
@@ -36,7 +39,8 @@ export class StartLocalServer {
   async execute(input: { profileName: string; timeoutMs?: number }): Promise<AppSettings> {
     const { settings, secrets, server, compute, clock } = this.d;
     const config = (await settings.load()).localServer;
-    if (!config || validateLocalServer(config).length) throw new AppError("LOCAL_SERVER_FAILED", "サーバーのフォルダと推論用の Python を設定してください");
+    if (!config || validateLocalServer(config).length)
+      throw new AppError("LOCAL_SERVER_FAILED", "サーバーのフォルダと推論用の Python を設定してください");
 
     const profile = localProfile(config.port, input.profileName);
     const token = (await secrets.get(profile.tokenRef)) || this.d.newToken();
@@ -50,7 +54,11 @@ export class StartLocalServer {
 
     if (!(await server.status()).running) {
       // 手で起動したサーバーが同じポートにいると、こちらのトークンでは通らない
-      if (await alive()) throw new AppError("LOCAL_SERVER_FAILED", `ポート ${config.port} は別のサーバーが使っています。そのサーバーを止めるか、ポートを変えてください`);
+      if (await alive())
+        throw new AppError(
+          "LOCAL_SERVER_FAILED",
+          `ポート ${config.port} は別のサーバーが使っています。そのサーバーを止めるか、ポートを変えてください`,
+        );
       try {
         await server.start({ serverDir: config.serverDir, pythonPath: config.pythonPath, port: config.port, token });
       } catch (e) {
@@ -61,14 +69,21 @@ export class StartLocalServer {
     const deadline = clock.now().getTime() + (input.timeoutMs ?? LOCAL_START_TIMEOUT_MS);
     while (!(await alive())) {
       const st = await server.status();
-      if (!st.running) throw new AppError("LOCAL_SERVER_FAILED", `サーバーが終了しました（終了コード ${st.exitCode ?? "—"}）。ログを確認してください`);
-      if (clock.now().getTime() >= deadline) throw new AppError("LOCAL_SERVER_FAILED", "サーバーが応答しません。ログを確認してください");
+      if (!st.running)
+        throw new AppError(
+          "LOCAL_SERVER_FAILED",
+          `サーバーが終了しました（終了コード ${st.exitCode ?? "—"}）。ログを確認してください`,
+        );
+      if (clock.now().getTime() >= deadline)
+        throw new AppError("LOCAL_SERVER_FAILED", "サーバーが応答しません。ログを確認してください");
       await clock.sleep(POLL_MS);
     }
 
     // 待っている間に他の設定が変わっているかもしれないので読み直す
     const s = await settings.load();
-    const profiles = s.profiles.some((p) => p.id === profile.id) ? s.profiles.map((p) => (p.id === profile.id ? profile : p)) : [...s.profiles, profile];
+    const profiles = s.profiles.some((p) => p.id === profile.id)
+      ? s.profiles.map((p) => (p.id === profile.id ? profile : p))
+      : [...s.profiles, profile];
     const next: AppSettings = { ...s, profiles, activeProfileId: profile.id };
     await settings.save(next);
     return next;

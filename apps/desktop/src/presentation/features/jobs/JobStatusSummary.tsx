@@ -11,7 +11,9 @@ export function JobStatusSummary() {
   const jobsMap = useJobsStore((s) => s.jobs);
   const active = Object.values(jobsMap)
     .filter((j) => !isTerminal(j.status))
-    .sort((a, b) => (a.status === "running" ? -1 : b.status === "running" ? 1 : a.createdAt.localeCompare(b.createdAt)));
+    .sort((a, b) =>
+      a.status === "running" ? -1 : b.status === "running" ? 1 : a.createdAt.localeCompare(b.createdAt),
+    );
   const top = active[0];
   const queue = useServerQueue();
   const queueLen = queue.data?.filter((q) => q.status === "queued").length ?? 0;
@@ -28,7 +30,12 @@ export function JobStatusSummary() {
 
   return (
     <>
-      <button type="button" onClick={toggle} title={ja.status.openJobs} className="min-w-0 truncate px-2 hover:bg-raised">
+      <button
+        type="button"
+        onClick={toggle}
+        title={ja.status.openJobs}
+        className="min-w-0 truncate px-2 hover:bg-raised"
+      >
         {label}
         {active.length > 1 && ` +${active.length - 1}`}
       </button>

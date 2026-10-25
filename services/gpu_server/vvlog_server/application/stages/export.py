@@ -44,7 +44,7 @@ class CompositeStage:
         cmd = pipeline_cmd(ctx.settings, "scripts/avatar_app.py", "--pipeline_out", an / "pout", "--out", ex,
                            "--name", ctx.job.jobId, "--gpu_removal", "--fps", meta["fps"],
                            "--fusion_state", an / "occ" / "fusion_state.pkl", "--overrides", ex / "overrides.json",
-                           *hq, *avatar_args(ctx, self.avatars))
+                           "--no_compare", "--no_frames", *hq, *avatar_args(ctx, self.avatars))
         log = ctx.work / "composite.log"
         code = await ctx.runner.run(cmd, pipeline_env(ctx), ctx.settings.pipeline_root, on_line, log)
         raise_for_exit(code, log, "avatar_app.py")

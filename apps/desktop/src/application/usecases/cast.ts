@@ -19,7 +19,12 @@ export class LoadAnalysisResult {
   constructor(private readonly d: { projects: ProjectRepositoryPort; files: LocalFilePort }) {}
 
   /** analyze の meta / persons（取得済み）をプロジェクトに取り込む。ユーザーが付けた人物名は残す */
-  async execute(input: { project: Project; jobId: string; name: "meta" | "persons"; defaultLabel: (personId: number) => string }): Promise<ProjectMutation> {
+  async execute(input: {
+    project: Project;
+    jobId: string;
+    name: "meta" | "persons";
+    defaultLabel: (personId: number) => string;
+  }): Promise<ProjectMutation> {
     const { projects, files } = this.d;
     const dir = projects.cacheDir(input.project, input.jobId);
     if (input.name === "meta") {
@@ -29,7 +34,11 @@ export class LoadAnalysisResult {
     const raw: unknown = JSON.parse(await files.readText(files.join(dir, "persons.json")));
     return (p) => ({
       ...p,
-      persons: parsePersons(raw, { previous: p.persons, defaultLabel: input.defaultLabel, thumbRel: (t) => cacheRel(input.jobId, t) }),
+      persons: parsePersons(raw, {
+        previous: p.persons,
+        defaultLabel: input.defaultLabel,
+        thumbRel: (t) => cacheRel(input.jobId, t),
+      }),
     });
   }
 }
@@ -59,10 +68,18 @@ export class StartRender {
   constructor(private readonly d: { avatars: AvatarLibraryPort; submit: SubmitJob }) {}
 
   /** 未登録の VRM をサーバーに登録してから render を投入（analyze の完了はサーバーが待つ） */
-  async execute(input: { project: Project; backend: ComputeBackendPort; draft?: readonly CastDraftRow[]; maxTargets?: number }): Promise<{ job: Job; apply: ProjectMutation }> {
+  async execute(input: {
+    project: Project;
+    backend: ComputeBackendPort;
+    draft?: readonly CastDraftRow[];
+    maxTargets?: number;
+  }): Promise<{ job: Job; apply: ProjectMutation }> {
     const { avatars, submit } = this.d;
     const { backend } = input;
-    const check = canRender(input.draft ?? draftFromCast(input.project.persons, input.project.cast), input.maxTargets ?? MAX_TARGETS);
+    const check = canRender(
+      input.draft ?? draftFromCast(input.project.persons, input.project.cast),
+      input.maxTargets ?? MAX_TARGETS,
+    );
     if (!check.ok) throw new AppError("VALIDATION_FAILED", "キャストが確定していません", { detail: { ...check } });
     const analyzeJobId = input.project.jobs.analyze?.jobId;
     if (!analyzeJobId) throw new AppError("DEPENDENCY_NOT_READY", "解析がまだ始まっていません");
@@ -70,7 +87,10 @@ export class StartRender {
     for (const avatarId of new Set(check.cast.map((c) => c.avatarId))) {
       if (await backend.hasAvatar(avatarId)) continue;
       const avatar = await avatars.get(avatarId);
-      if (!avatar) throw new AppError("AVATAR_INVALID", "アバターがライブラリにありません。取り込み直してください", { detail: { avatarId } });
+      if (!avatar)
+        throw new AppError("AVATAR_INVALID", "アバターがライブラリにありません。取り込み直してください", {
+          detail: { avatarId },
+        });
       const bytes = await avatars.readBytes(avatarId);
       await backend.registerAvatar({ name: `${avatar.meta.name || avatarId}.vrm`, bytes });
     }

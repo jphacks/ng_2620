@@ -8,7 +8,12 @@ import { defaultSettings } from "../ports/settings";
 import { FakeBackend, FakeClock } from "../testing/fakes";
 import { StartLocalServer } from "./localServer";
 
-const CONFIG: LocalServerConfig = { serverDir: "C:/repo/services/gpu_server", pythonPath: "C:/py/python.exe", port: 8765, autoStart: false };
+const CONFIG: LocalServerConfig = {
+  serverDir: "C:/repo/services/gpu_server",
+  pythonPath: "C:/py/python.exe",
+  port: 8765,
+  autoStart: false,
+};
 
 class MemSettings implements SettingsPort {
   constructor(public s: AppSettings = defaultSettings()) {}
@@ -50,10 +55,16 @@ class FakeServer implements LocalServerPort {
     this.running = false;
   }
   async status(): Promise<LocalServerStatus> {
-    return { running: this.running, pid: this.running ? 42 : null, exitCode: this.exitAfterStart && this.started ? 1 : null, log: [] };
+    return {
+      running: this.running,
+      pid: this.running ? 42 : null,
+      exitCode: this.exitAfterStart && this.started ? 1 : null,
+      log: [],
+    };
   }
   health() {
-    if (this.foreign || (this.running && --this.readyAfter < 0)) return Promise.resolve({ status: "ok" as const, version: "t", apiVersion: 1 });
+    if (this.foreign || (this.running && --this.readyAfter < 0))
+      return Promise.resolve({ status: "ok" as const, version: "t", apiVersion: 1 });
     return Promise.reject(new AppError("NETWORK", "refused"));
   }
 }
@@ -62,8 +73,18 @@ function setup(opts: { config?: LocalServerConfig } = {}) {
   const settings = new MemSettings({ ...defaultSettings(), localServer: opts.config ?? CONFIG });
   const secrets = new MemSecrets();
   const server = new FakeServer();
-  const compute = { forProfile: () => Object.assign(new FakeBackend(), { health: () => server.health() }), offline: () => new FakeBackend() };
-  const uc = new StartLocalServer({ settings, secrets, server, compute, clock: new FakeClock(), newToken: () => "tok_new" });
+  const compute = {
+    forProfile: () => Object.assign(new FakeBackend(), { health: () => server.health() }),
+    offline: () => new FakeBackend(),
+  };
+  const uc = new StartLocalServer({
+    settings,
+    secrets,
+    server,
+    compute,
+    clock: new FakeClock(),
+    newToken: () => "tok_new",
+  });
   return { settings, secrets, server, uc };
 }
 
@@ -74,7 +95,9 @@ describe("StartLocalServer", () => {
     expect(server.started).toEqual({ token: "tok_new" });
     expect(await secrets.get(LOCAL_PROFILE_ID)).toBe("tok_new");
     expect(s.activeProfileId).toBe(LOCAL_PROFILE_ID);
-    expect(settings.s.profiles).toEqual([expect.objectContaining({ id: LOCAL_PROFILE_ID, kind: "local", baseUrl: "http://127.0.0.1:8765" })]);
+    expect(settings.s.profiles).toEqual([
+      expect.objectContaining({ id: LOCAL_PROFILE_ID, kind: "local", baseUrl: "http://127.0.0.1:8765" }),
+    ]);
   });
 
   it("保存済みのトークンを使い回す", async () => {
@@ -100,13 +123,18 @@ describe("StartLocalServer", () => {
   it("応答する前に終了したら失敗にして、接続は登録しない", async () => {
     const { settings, server, uc } = setup();
     server.exitAfterStart = true;
-    await expect(uc.execute({ profileName: "この PC" })).rejects.toMatchObject({ code: "LOCAL_SERVER_FAILED", message: expect.stringContaining("終了コード 1") });
+    await expect(uc.execute({ profileName: "この PC" })).rejects.toMatchObject({
+      code: "LOCAL_SERVER_FAILED",
+      message: expect.stringContaining("終了コード 1"),
+    });
     expect(settings.s.profiles).toEqual([]);
   });
 
   it("時間内に応答しなければ失敗にする", async () => {
     const { server, uc } = setup();
     server.readyAfter = Infinity;
-    await expect(uc.execute({ profileName: "この PC", timeoutMs: 5000 })).rejects.toMatchObject({ code: "LOCAL_SERVER_FAILED" });
+    await expect(uc.execute({ profileName: "この PC", timeoutMs: 5000 })).rejects.toMatchObject({
+      code: "LOCAL_SERVER_FAILED",
+    });
   });
 });

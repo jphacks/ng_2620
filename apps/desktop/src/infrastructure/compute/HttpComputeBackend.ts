@@ -1,18 +1,20 @@
 // ComputeBackendPort の HTTP 実装（ローカル・リモート・モックサーバー共通、contracts §2）。
 // HTTP は Tauri では tauri-plugin-http（CORS と任意 URL の許可を回避）、ブラウザでは window.fetch
 
-import type {
-  ChunkBody,
-  ComputeBackendPort,
-  CreateUploadReq,
-  DownloadProgress,
-} from "@/application/ports/compute";
+import type { ChunkBody, ComputeBackendPort, CreateUploadReq, DownloadProgress } from "@/application/ports/compute";
 import type { ApiErrorBody } from "@/domain/errors";
 import { AppError, fromApiError, isAppError } from "@/domain/errors";
 import type { Artifact, JobEvent, JobParams, JobType } from "@/domain/job";
 import { JOB_EVENT_TYPES } from "@/domain/job";
 import type { MediaMeta } from "@/domain/media";
-import { normalizeArtifacts, normalizeCapabilities, normalizeHealth, normalizeJob, normalizeQueue, normalizeServerProject } from "./normalize";
+import {
+  normalizeArtifacts,
+  normalizeCapabilities,
+  normalizeHealth,
+  normalizeJob,
+  normalizeQueue,
+  normalizeServerProject,
+} from "./normalize";
 import type { SseMessage } from "./sse";
 import { resilientSse } from "./sse";
 
@@ -21,11 +23,24 @@ export interface HttpTransport {
   /** 成果物をディスクに保存（Tauri は Rust 側で Range 再開） */
   download(url: string, headers: Record<string, string>, dest: string, onProgress?: DownloadProgress): Promise<void>;
   /** ファイルの範囲をそのまま PUT する（Tauri は Rust 側。無ければ readChunk → fetch） */
-  uploadFile?(url: string, headers: Record<string, string>, path: string, offset: number, length: number): Promise<{ status: number; body: string }>;
+  uploadFile?(
+    url: string,
+    headers: Record<string, string>,
+    path: string,
+    offset: number,
+    length: number,
+  ): Promise<{ status: number; body: string }>;
   readChunk(path: string, offset: number, length: number): Promise<Uint8Array>;
 }
 
-const STATUS_CODES: Record<number, AppError["code"]> = { 401: "UNAUTHORIZED", 403: "UNAUTHORIZED", 404: "NOT_FOUND", 409: "UPLOAD_INCOMPLETE", 422: "VALIDATION_FAILED", 501: "NOT_IMPLEMENTED" };
+const STATUS_CODES: Record<number, AppError["code"]> = {
+  401: "UNAUTHORIZED",
+  403: "UNAUTHORIZED",
+  404: "NOT_FOUND",
+  409: "UPLOAD_INCOMPLETE",
+  422: "VALIDATION_FAILED",
+  501: "NOT_IMPLEMENTED",
+};
 
 export function errorFromBody(status: number, text: string): AppError {
   try {
@@ -132,9 +147,11 @@ export class HttpComputeBackend implements ComputeBackendPort {
     }
     const { transport } = this.d;
     if (transport.uploadFile) {
-      const res = await transport.uploadFile(`${this.base}${path}`, await this.headers(true, contentType), body.path, body.offset, body.length).catch((e: unknown) => {
-        throw new AppError("NETWORK", e instanceof Error ? e.message : String(e));
-      });
+      const res = await transport
+        .uploadFile(`${this.base}${path}`, await this.headers(true, contentType), body.path, body.offset, body.length)
+        .catch((e: unknown) => {
+          throw new AppError("NETWORK", e instanceof Error ? e.message : String(e));
+        });
       if (res.status < 200 || res.status >= 300) throw errorFromBody(res.status, res.body);
       return;
     }
@@ -167,7 +184,9 @@ export class HttpComputeBackend implements ComputeBackendPort {
   }
 
   async submitJob(projectId: string, type: JobType, params: JobParams) {
-    return normalizeJob(await this.json("POST", `/projects/${encodeURIComponent(projectId)}/jobs`, { json: { type, params } }));
+    return normalizeJob(
+      await this.json("POST", `/projects/${encodeURIComponent(projectId)}/jobs`, { json: { type, params } }),
+    );
   }
 
   async getJob(jobId: string) {
@@ -194,7 +213,10 @@ export class HttpComputeBackend implements ComputeBackendPort {
       signal: opts.signal,
       isTerminal: (m) => TERMINAL_EVENTS.has(m.event),
       open: async (lastId, signal) => {
-        const headers = await this.headers(true, { Accept: "text/event-stream", ...(lastId ? { "Last-Event-ID": lastId } : {}) });
+        const headers = await this.headers(true, {
+          Accept: "text/event-stream",
+          ...(lastId ? { "Last-Event-ID": lastId } : {}),
+        });
         return this.d.transport.fetch(url, { method: "GET", headers, signal });
       },
       toError: async (res) => errorFromBody(res.status, await res.text().catch(() => "")),

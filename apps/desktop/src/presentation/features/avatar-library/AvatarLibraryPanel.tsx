@@ -28,7 +28,12 @@ export function AvatarLibraryPanel() {
     <div className="flex h-full min-h-0 flex-col p-6" {...drop.props}>
       <div className="mb-4 flex items-center gap-3">
         <div className="text-sm text-muted">{T.dropHint}</div>
-        <Button className="ml-auto" variant="primary" icon={<Plus size={14} />} onClick={() => void pickAndImport(true)}>
+        <Button
+          className="ml-auto"
+          variant="primary"
+          icon={<Plus size={14} />}
+          onClick={() => void pickAndImport(true)}
+        >
           {T.add}
         </Button>
       </div>
@@ -36,7 +41,12 @@ export function AvatarLibraryPanel() {
       {avatars.data?.length === 0 && <EmptyState icon={<UserRound size={32} />} title={T.empty} />}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 overflow-auto">
         {avatars.data?.map((a) => (
-          <button key={a.avatarId} type="button" onClick={() => setDetail(a)} className="flex flex-col items-center gap-2 rounded border border-border bg-panel-2 p-3 text-center hover:border-accent">
+          <button
+            key={a.avatarId}
+            type="button"
+            onClick={() => setDetail(a)}
+            className="flex flex-col items-center gap-2 rounded border border-border bg-panel-2 p-3 text-center hover:border-accent"
+          >
             <AvatarThumb avatar={a} size={96} />
             <div className="w-full truncate font-medium">{a.meta.name}</div>
             <div className="w-full truncate text-xs text-muted">{a.meta.authors.join("、") || T.noAuthor}</div>
@@ -79,7 +89,12 @@ export function AvatarDetailDialog({ avatar, onClose }: { avatar: Avatar; onClos
       width="w-[560px]"
       footer={
         <>
-          <Button variant="ghost" className="mr-auto text-danger" icon={<Trash2 size={14} />} onClick={() => setConfirm(true)}>
+          <Button
+            variant="ghost"
+            className="mr-auto text-danger"
+            icon={<Trash2 size={14} />}
+            onClick={() => setConfirm(true)}
+          >
             {T.remove}
           </Button>
           <Button onClick={onClose}>{ja.common.close}</Button>
@@ -98,7 +113,12 @@ export function AvatarDetailDialog({ avatar, onClose }: { avatar: Avatar; onClos
         </dl>
       </div>
       {lic.url && (
-        <Button className="mt-4" size="sm" icon={<ExternalLink size={14} />} onClick={() => void platform.shell.openUrl(lic.url!)}>
+        <Button
+          className="mt-4"
+          size="sm"
+          icon={<ExternalLink size={14} />}
+          onClick={() => void platform.shell.openUrl(lic.url!)}
+        >
           {T.licenseUrl}
         </Button>
       )}

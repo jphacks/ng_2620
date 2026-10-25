@@ -43,7 +43,9 @@ export function parseOverrides(raw: unknown): OverridesDoc {
     schemaVersion: 1,
     items: items.filter(
       (x): x is OcclusionOverride =>
-        !!x && typeof x === "object" && ((x as { kind?: unknown }).kind === "unit" || (x as { kind?: unknown }).kind === "brush"),
+        !!x &&
+        typeof x === "object" &&
+        ((x as { kind?: unknown }).kind === "unit" || (x as { kind?: unknown }).kind === "brush"),
     ),
   };
 }

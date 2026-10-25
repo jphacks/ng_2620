@@ -31,7 +31,13 @@ export function TitleBar() {
   const exportDirty = project && overrides.data ? needsExport(project, overridesHash(overrides.data)) : false;
 
   return (
-    <header data-tauri-drag-region className={cx("flex h-titlebar shrink-0 items-center gap-3 border-b border-border bg-panel pr-2", trafficLights ? "pl-[78px]" : "pl-3")}>
+    <header
+      data-tauri-drag-region
+      className={cx(
+        "flex h-titlebar shrink-0 items-center gap-3 border-b border-border bg-panel pr-2",
+        trafficLights ? "pl-[78px]" : "pl-3",
+      )}
+    >
       <button type="button" onClick={() => navigate("/")} className="font-semibold tracking-wide text-fg">
         {ja.app.name}
       </button>
@@ -44,14 +50,29 @@ export function TitleBar() {
         {project && (
           <nav className="flex rounded border border-border bg-bg p-0.5" aria-label="workspace">
             {WORKSPACES.map((w, i) => (
-              <Tooltip key={w} content={<span>{ja.workspace[w]} <Kbd>{`${MOD}${i + 1}`}</Kbd></span>}>
+              <Tooltip
+                key={w}
+                content={
+                  <span>
+                    {ja.workspace[w]} <Kbd>{`${MOD}${i + 1}`}</Kbd>
+                  </span>
+                }
+              >
                 <NavLink
                   to={`/project/${project.id}/${w}`}
-                  className={({ isActive }) => cx("relative rounded-sm px-4 py-1 text-base", isActive ? "bg-raised text-fg" : "text-muted hover:text-fg")}
+                  className={({ isActive }) =>
+                    cx(
+                      "relative rounded-sm px-4 py-1 text-base",
+                      isActive ? "bg-raised text-fg" : "text-muted hover:text-fg",
+                    )
+                  }
                 >
                   {ja.workspace[w]}
                   {((w === "export" && (exportDirty || stale)) || (w === "edit" && stale)) && (
-                    <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-warning" aria-label={stale ? ja.cast.needsRender : ja.export.needsExport} />
+                    <span
+                      className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-warning"
+                      aria-label={stale ? ja.cast.needsRender : ja.export.needsExport}
+                    />
                   )}
                 </NavLink>
               </Tooltip>
@@ -60,7 +81,11 @@ export function TitleBar() {
         )}
       </div>
       <IconButton label={`${ja.jobsPanel.title}（⌃J）`} icon={<ListChecks size={16} />} onClick={toggleJobs} />
-      <IconButton label={`${ja.settings.title}（${MOD},）`} icon={<Settings size={16} />} onClick={() => navigate("/settings")} />
+      <IconButton
+        label={`${ja.settings.title}（${MOD},）`}
+        icon={<Settings size={16} />}
+        onClick={() => navigate("/settings")}
+      />
     </header>
   );
 }

@@ -15,7 +15,7 @@ import time
 
 import numpy as np
 
-REPO = "C:/VScodeFiles/sam-body4d"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, f"{REPO}/scripts/occlusion")
 sys.path.insert(0, f"{REPO}/scripts/occlusion/fusion_v2")

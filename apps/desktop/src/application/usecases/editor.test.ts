@@ -13,7 +13,9 @@ const files = {
   readText: async (p: string) => readFileSync(p, "utf8"),
   join: (b: string, ...parts: string[]) => join(b, ...parts),
 } as unknown as LocalFilePort;
-const projects = { cacheDir: (_p: Project, jobId: string) => join(ROOT, "cache", jobId) } as unknown as ProjectRepositoryPort;
+const projects = {
+  cacheDir: (_p: Project, jobId: string) => join(ROOT, "cache", jobId),
+} as unknown as ProjectRepositoryPort;
 const project = JSON.parse(readFileSync(join(ROOT, "project.json"), "utf8")) as Project;
 
 describe("LoadEditorData（フィクスチャ v0）", () => {

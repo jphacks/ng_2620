@@ -78,7 +78,7 @@ class RenderStage:
         cmd = pipeline_cmd(ctx.settings, "scripts/avatar_app.py", "--pipeline_out", an / "pout", "--out", av,
                            "--name", ctx.job.jobId, "--gpu_removal", "--fps", meta["fps"],
                            "--fusion_state", an / "occ" / "fusion_state.pkl", "--export_layers", av / "layers",
-                           *avatar_args(ctx, self.avatars))
+                           "--no_compare", *avatar_args(ctx, self.avatars))
         log = ctx.work / "render.log"
         code = await ctx.runner.run(cmd, pipeline_env(ctx), ctx.settings.pipeline_root, on_line, log)
         raise_for_exit(code, log, "avatar_app.py")

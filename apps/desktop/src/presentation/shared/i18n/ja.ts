@@ -127,8 +127,10 @@ export const ja = {
   upload: {
     label: "アップロード",
     phase: { creating: "準備中", hashing: "確認中", uploading: "アップロード", finalizing: "検証中" },
-    speed: (bps: number) => (bps > 1024 * 1024 ? `${(bps / 1024 / 1024).toFixed(1)} MB/秒` : `${Math.round(bps / 1024)} KB/秒`),
-    bytes: (sent: number, total: number) => `${(sent / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MB`,
+    speed: (bps: number) =>
+      bps > 1024 * 1024 ? `${(bps / 1024 / 1024).toFixed(1)} MB/秒` : `${Math.round(bps / 1024)} KB/秒`,
+    bytes: (sent: number, total: number) =>
+      `${(sent / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MB`,
     done: "完了",
   },
   stage: {
@@ -142,9 +144,18 @@ export const ja = {
     composite: "合成",
     encode: "エンコード",
   } satisfies Record<StageName, string>,
-  stageStatus: { pending: "待機中", running: "実行中", done: "完了", failed: "失敗", skipped: "省略" } satisfies Record<StageStatus, string>,
+  stageStatus: { pending: "待機中", running: "実行中", done: "完了", failed: "失敗", skipped: "省略" } satisfies Record<
+    StageStatus,
+    string
+  >,
   jobType: { analyze: "解析", render: "描画", export: "書き出し" } satisfies Record<JobType, string>,
-  jobStatus: { queued: "待機中", running: "実行中", succeeded: "完了", failed: "失敗", canceled: "取り消し" } satisfies Record<JobStatus, string>,
+  jobStatus: {
+    queued: "待機中",
+    running: "実行中",
+    succeeded: "完了",
+    failed: "失敗",
+    canceled: "取り消し",
+  } satisfies Record<JobStatus, string>,
   job: {
     queuePosition: (n: number) => (n === 0 ? "次に実行します" : `キューの ${n + 1} 番目で待っています`),
     waitingDependency: "解析の完了を待っています",
@@ -194,7 +205,10 @@ export const ja = {
     openEditor: "エディタを開く",
   },
   avatar: {
-    badge: { commercial_ok: "商用可", commercial_ng: "商用不可", unknown: "商用 不明" } satisfies Record<LicenseBadge, string>,
+    badge: { commercial_ok: "商用可", commercial_ng: "商用不可", unknown: "商用 不明" } satisfies Record<
+      LicenseBadge,
+      string
+    >,
     modification: (v: boolean | null) => (v === true ? "改変可" : v === false ? "改変不可" : "改変 不明"),
     authors: "作者",
     noAuthor: "作者不明",
@@ -295,14 +309,22 @@ export const ja = {
     queueLength: "キュー",
     apiVersion: "API 版",
     serverVersion: "サーバーの版",
-    testFailed: { reach: "サーバーに届きません", auth: "トークンが違います", api_version: "API 版が合いません", other: "接続できませんでした" },
+    testFailed: {
+      reach: "サーバーに届きません",
+      auth: "トークンが違います",
+      api_version: "API 版が合いません",
+      other: "接続できませんでした",
+    },
     removeTitle: (name: string) => `接続「${name}」を削除しますか？`,
     switchTitle: "接続先の切り替え",
     switchBody: (name: string) => `このプロジェクトは ${name} で解析されています。切り替えますか？`,
     switchUnknown: "このプロジェクトは別の接続で解析されています（このアプリには登録されていません）。",
     switch: "切り替える",
     keep: "このまま",
-    problems: { name_required: "名前を入力してください", url_invalid: "URL が正しくありません（http:// か https:// で始めてください）" } satisfies Record<ProfileProblem, string>,
+    problems: {
+      name_required: "名前を入力してください",
+      url_invalid: "URL が正しくありません（http:// か https:// で始めてください）",
+    } satisfies Record<ProfileProblem, string>,
     devMock: "開発用モック",
     devSim: "開発用シミュレーター",
     empty: "接続プロファイルがありません。GPU サーバーの URL とトークンを登録してください。",
@@ -310,7 +332,8 @@ export const ja = {
     local: {
       title: "この PC の GPU サーバー",
       profileName: "この PC",
-      intro: "services/gpu_server をこのアプリから起動・停止します。トークンは自動で作られ、接続「この PC」が登録されて既定になります。",
+      intro:
+        "services/gpu_server をこのアプリから起動・停止します。トークンは自動で作られ、接続「この PC」が登録されて既定になります。",
       useThisPc: "この PC の GPU を使う",
       serverDir: "サーバーのフォルダ",
       serverDirHint: "C:\\…\\ng_2620\\services\\gpu_server",
@@ -418,9 +441,18 @@ export const ja = {
   },
   /** エラー文言（ux/interaction §5）：見出し（何が起きたか）＋本文（なぜ／どうすれば） */
   errors: {
-    UNAUTHORIZED: { title: "サーバーに接続できません", body: () => "トークンが正しくないようです。接続設定を確認してください。" },
-    NETWORK: { title: "サーバーとの接続が切れました", body: () => "処理はサーバーで続いています。再接続を試みています…" },
-    OFFLINE: { title: "GPU サーバーに接続していません", body: () => "設定の「接続」から GPU サーバーを登録してください。サンプルはこのまま開けます。" },
+    UNAUTHORIZED: {
+      title: "サーバーに接続できません",
+      body: () => "トークンが正しくないようです。接続設定を確認してください。",
+    },
+    NETWORK: {
+      title: "サーバーとの接続が切れました",
+      body: () => "処理はサーバーで続いています。再接続を試みています…",
+    },
+    OFFLINE: {
+      title: "GPU サーバーに接続していません",
+      body: () => "設定の「接続」から GPU サーバーを登録してください。サンプルはこのまま開けます。",
+    },
     MEDIA_TOO_LONG: {
       title: "動画が長すぎます",
       body: (d: { durationSec?: number; limitSec?: number }) =>
@@ -428,29 +460,64 @@ export const ja = {
     },
     MEDIA_TOO_LARGE: {
       title: "解像度が大きすぎます",
-      body: (d: { width?: number; height?: number; limitPx?: number }) => `${d.width ?? "—"}x${d.height ?? "—"} です。長辺 ${d.limitPx ?? 1920}px 以下に縮小してください。`,
+      body: (d: { width?: number; height?: number; limitPx?: number }) =>
+        `${d.width ?? "—"}x${d.height ?? "—"} です。長辺 ${d.limitPx ?? 1920}px 以下に縮小してください。`,
     },
-    MEDIA_UNSUPPORTED: { title: "この形式は読み込めません", body: () => "mp4 / mov（H.264 / HEVC）の動画を選んでください。" },
-    NO_PERSON_FOUND: { title: "人物が見つかりませんでした", body: () => "人物が大きく、はっきり映っている動画でお試しください。" },
-    GPU_OOM: { title: "GPU のメモリが足りませんでした", body: () => "他の処理が終わってから再試行するか、短い動画でお試しください。" },
+    MEDIA_UNSUPPORTED: {
+      title: "この形式は読み込めません",
+      body: () => "mp4 / mov（H.264 / HEVC）の動画を選んでください。",
+    },
+    NO_PERSON_FOUND: {
+      title: "人物が見つかりませんでした",
+      body: () => "人物が大きく、はっきり映っている動画でお試しください。",
+    },
+    GPU_OOM: {
+      title: "GPU のメモリが足りませんでした",
+      body: () => "他の処理が終わってから再試行するか、短い動画でお試しください。",
+    },
     PIPELINE_FAILED: {
       title: "処理中にエラーが起きました",
-      body: (d: { stage?: string }) => `${d.stage ?? "いずれか"}の段階で失敗しました。再試行しても直らない場合はログを共有してください。`,
+      body: (d: { stage?: string }) =>
+        `${d.stage ?? "いずれか"}の段階で失敗しました。再試行しても直らない場合はログを共有してください。`,
     },
     INTERRUPTED: { title: "処理が中断されました", body: () => "サーバーが再起動しました。もう一度実行してください。" },
-    AVATAR_INVALID: { title: "この VRM は使えません", body: () => "VRM として読み込めないか、必要なボーンがありません。別の VRM を選んでください。" },
-    SAVE_FAILED: { title: "プロジェクトを保存できません", body: () => "ディスクの空き容量と、フォルダへの書き込み権限を確認してください。" },
-    NOT_FOUND: { title: "サーバーにデータが見つかりません", body: () => "サーバーのデータが消えた可能性があります。もう一度アップロード・実行してください。" },
-    VALIDATION_FAILED: { title: "リクエストが正しくありません", body: () => "アプリの不具合の可能性があります。ログを添えて報告してください。" },
+    AVATAR_INVALID: {
+      title: "この VRM は使えません",
+      body: () => "VRM として読み込めないか、必要なボーンがありません。別の VRM を選んでください。",
+    },
+    SAVE_FAILED: {
+      title: "プロジェクトを保存できません",
+      body: () => "ディスクの空き容量と、フォルダへの書き込み権限を確認してください。",
+    },
+    NOT_FOUND: {
+      title: "サーバーにデータが見つかりません",
+      body: () => "サーバーのデータが消えた可能性があります。もう一度アップロード・実行してください。",
+    },
+    VALIDATION_FAILED: {
+      title: "リクエストが正しくありません",
+      body: () => "アプリの不具合の可能性があります。ログを添えて報告してください。",
+    },
     UPLOAD_INCOMPLETE: { title: "アップロードが完了していません", body: () => "欠けた部分を送り直してください。" },
-    CHECKSUM_MISMATCH: { title: "データが壊れています", body: () => "通信中に壊れた可能性があります。もう一度送り直してください。" },
-    DEPENDENCY_NOT_READY: { title: "前の処理が終わっていません", body: () => "依存するジョブ（解析・描画）の状態を確認してください。" },
+    CHECKSUM_MISMATCH: {
+      title: "データが壊れています",
+      body: () => "通信中に壊れた可能性があります。もう一度送り直してください。",
+    },
+    DEPENDENCY_NOT_READY: {
+      title: "前の処理が終わっていません",
+      body: () => "依存するジョブ（解析・描画）の状態を確認してください。",
+    },
     NOT_IMPLEMENTED: { title: "今後対応します", body: () => "この機能はまだ使えません。" },
     API_VERSION_MISMATCH: { title: "API 版が合いません", body: () => "サーバーとアプリの版を揃えてください。" },
     PROJECT_TOO_NEW: { title: "新しい版のアプリで作られています", body: () => "アプリを更新してから開いてください。" },
     PROJECT_INVALID: { title: "プロジェクトを開けません", body: () => "project.json が壊れているか、形式が違います。" },
-    LOCAL_SERVER_FAILED: { title: "この PC の GPU サーバーを起動できません", body: (d: { message?: string }) => d.message ?? "" },
-    LAYERS_MISSING: { title: "レイヤーがまだありません", body: () => "描画が終わってレイヤーを取得すると編集できます。" },
+    LOCAL_SERVER_FAILED: {
+      title: "この PC の GPU サーバーを起動できません",
+      body: (d: { message?: string }) => d.message ?? "",
+    },
+    LAYERS_MISSING: {
+      title: "レイヤーがまだありません",
+      body: () => "描画が終わってレイヤーを取得すると編集できます。",
+    },
     CANCELED: { title: "取り消しました", body: () => "" },
     UNKNOWN: { title: "エラーが起きました", body: (d: { message?: string }) => d.message ?? "" },
   },

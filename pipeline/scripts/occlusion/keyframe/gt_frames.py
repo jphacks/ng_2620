@@ -7,7 +7,8 @@ import sys
 import cv2
 import numpy as np
 
-GT = "C:/VScodeFiles/sam-body4d/testdata/2026-10-11/occ_research/_gt/gt_audit"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))).replace("\\", "/")
+GT = f"{REPO}/testdata/2026-10-11/occ_research/_gt/gt_audit"
 clip, roots = sys.argv[1], sys.argv[2:]
 for f in sorted(glob.glob(f"{GT}/{clip}/*/*.png")):
     pid = int(os.path.basename(os.path.dirname(f)))

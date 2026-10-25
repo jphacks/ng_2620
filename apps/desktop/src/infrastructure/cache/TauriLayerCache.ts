@@ -38,7 +38,13 @@ export class FsLayerCache implements LayerCachePort {
     }
   }
 
-  fetch(backend: ComputeBackendPort, cacheDir: string, jobId: string, artifact: Artifact, onProgress?: DownloadProgress) {
+  fetch(
+    backend: ComputeBackendPort,
+    cacheDir: string,
+    jobId: string,
+    artifact: Artifact,
+    onProgress?: DownloadProgress,
+  ) {
     const key = `${cacheDir}|${artifact.name}`;
     const running = this.inflight.get(key);
     if (running) return running;
@@ -52,11 +58,19 @@ export class FsLayerCache implements LayerCachePort {
     const got = await this.hasher.sha256(path);
     if (got.toLowerCase() !== artifact.sha256.toLowerCase()) {
       await this.fs.remove(path);
-      throw new AppError("CHECKSUM_MISMATCH", `成果物 ${artifact.name} が壊れています`, { detail: { expected: artifact.sha256, got } });
+      throw new AppError("CHECKSUM_MISMATCH", `成果物 ${artifact.name} が壊れています`, {
+        detail: { expected: artifact.sha256, got },
+      });
     }
   }
 
-  private async doFetch(backend: ComputeBackendPort, cacheDir: string, jobId: string, artifact: Artifact, onProgress?: DownloadProgress) {
+  private async doFetch(
+    backend: ComputeBackendPort,
+    cacheDir: string,
+    jobId: string,
+    artifact: Artifact,
+    onProgress?: DownloadProgress,
+  ) {
     const local = this.localPath(cacheDir, artifact);
     if (await this.has(cacheDir, artifact)) return local;
     await this.fs.ensureDir(cacheDir);
@@ -70,7 +84,10 @@ export class FsLayerCache implements LayerCachePort {
       await backend.downloadArtifact(jobId, artifact.name, local, onProgress);
       await this.verify(local, artifact);
     }
-    await this.fs.writeTextAtomic(this.marker(cacheDir, artifact.name), JSON.stringify({ sha256: artifact.sha256, size: artifact.size }));
+    await this.fs.writeTextAtomic(
+      this.marker(cacheDir, artifact.name),
+      JSON.stringify({ sha256: artifact.sha256, size: artifact.size }),
+    );
     return local;
   }
 }

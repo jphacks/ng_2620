@@ -80,7 +80,12 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
   }
 
   async capabilities() {
-    return { gpuName: "シミュレーター", vramMb: null, limits: {}, queueLength: this.queueOrder.length + (this.running ? 1 : 0) };
+    return {
+      gpuName: "シミュレーター",
+      vramMb: null,
+      limits: {},
+      queueLength: this.queueOrder.length + (this.running ? 1 : 0),
+    };
   }
 
   async createProject(name: string) {
@@ -125,7 +130,8 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
   async completeUpload(uploadId: string) {
     const u = this.uploads.get(uploadId);
     if (!u) throw new AppError("NOT_FOUND", "アップロードがありません", { status: 404 });
-    if (u.chunks.size < chunkCount(u.size, DEFAULT_CHUNK_SIZE)) throw new AppError("UPLOAD_INCOMPLETE", "断片が足りません", { status: 409 });
+    if (u.chunks.size < chunkCount(u.size, DEFAULT_CHUNK_SIZE))
+      throw new AppError("UPLOAD_INCOMPLETE", "断片が足りません", { status: 409 });
     const mediaId = this.id("med");
     const p = this.projects.get(u.projectId);
     p?.mediaIds.push(mediaId);
@@ -149,8 +155,16 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
 
   async submitJob(projectId: string, type: JobType, params: JobParams) {
     if (!this.projects.has(projectId)) throw new AppError("NOT_FOUND", "プロジェクトがありません", { status: 404 });
-    const dependsOn = "analyzeJobId" in params ? params.analyzeJobId : "renderJobId" in params ? params.renderJobId : undefined;
-    const job = newJob({ jobId: this.id("job"), projectId, type, params, createdAt: new Date().toISOString(), dependsOn });
+    const dependsOn =
+      "analyzeJobId" in params ? params.analyzeJobId : "renderJobId" in params ? params.renderJobId : undefined;
+    const job = newJob({
+      jobId: this.id("job"),
+      projectId,
+      type,
+      params,
+      createdAt: new Date().toISOString(),
+      dependsOn,
+    });
     this.jobs.set(job.jobId, job);
     this.log.set(job.jobId, []);
     this.logLines.set(job.jobId, [`[sim] ${type} を受け付けました`]);
@@ -178,7 +192,13 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
     }
     this.queueOrder.forEach((id, i) => {
       const j = this.jobs.get(id)!;
-      items.push({ jobId: id, projectId: j.projectId, type: j.type, status: j.status, position: i + (this.running ? 1 : 0) });
+      items.push({
+        jobId: id,
+        projectId: j.projectId,
+        type: j.type,
+        status: j.status,
+        position: i + (this.running ? 1 : 0),
+      });
     });
     return items;
   }
@@ -227,7 +247,12 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
     return [...(this.artifacts.get(jobId)?.values() ?? [])].map((a) => a.artifact);
   }
 
-  async downloadArtifact(jobId: string, name: string, dest: string, onProgress?: (r: number, t: number | null) => void) {
+  async downloadArtifact(
+    jobId: string,
+    name: string,
+    dest: string,
+    onProgress?: (r: number, t: number | null) => void,
+  ) {
     const a = this.artifacts.get(jobId)?.get(name);
     if (!a) throw new AppError("NOT_FOUND", "成果物がありません", { status: 404 });
     onProgress?.(0, a.bytes.length);
@@ -264,7 +289,14 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
       const dep = job.dependsOn ? this.jobs.get(job.dependsOn) : undefined;
       if (dep && (dep.status === "failed" || dep.status === "canceled")) {
         this.queueOrder = this.queueOrder.filter((x) => x !== id);
-        this.emit(id, { type: "job_failed", data: { stage: STAGES[job.type][0]!, error: { code: "DEPENDENCY_NOT_READY", message: "依存するジョブが失敗しました" }, logTail: "" } });
+        this.emit(id, {
+          type: "job_failed",
+          data: {
+            stage: STAGES[job.type][0]!,
+            error: { code: "DEPENDENCY_NOT_READY", message: "依存するジョブが失敗しました" },
+            logTail: "",
+          },
+        });
         return this.pump();
       }
       if (dep && dep.status !== "succeeded") continue;
@@ -300,13 +332,25 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
           const { code } = this.failPending;
           this.failPending = null;
           say(`${stage} で失敗：${code}`);
-          this.emit(job.jobId, { type: "job_failed", data: { stage, error: { code, message: `${stage} で失敗しました（シミュレーター）` }, logTail: (await this.logs(job.jobId, 20)) } });
+          this.emit(job.jobId, {
+            type: "job_failed",
+            data: {
+              stage,
+              error: { code, message: `${stage} で失敗しました（シミュレーター）` },
+              logTail: await this.logs(job.jobId, 20),
+            },
+          });
           return;
         }
         const frames = SIM_META.frameCount;
         this.emit(job.jobId, {
           type: "progress",
-          data: { stage, progress: t / ticks, etaSec: ((ticks - t) * TICK_MS) / 1000 / this.speed, message: `frame ${Math.round((frames * t) / ticks)}/${frames}` },
+          data: {
+            stage,
+            progress: t / ticks,
+            etaSec: ((ticks - t) * TICK_MS) / 1000 / this.speed,
+            message: `frame ${Math.round((frames * t) / ticks)}/${frames}`,
+          },
         });
       }
       for (const a of await this.produce(job, stage)) this.emit(job.jobId, { type: "artifact_ready", data: a });
@@ -316,7 +360,14 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
     this.emit(job.jobId, { type: "job_finished", data: { status: "succeeded" } });
   }
 
-  private async put(job: Job, stage: StageName, name: string, kind: ArtifactKind, contentType: string, bytes: Uint8Array): Promise<Artifact> {
+  private async put(
+    job: Job,
+    stage: StageName,
+    name: string,
+    kind: ArtifactKind,
+    contentType: string,
+    bytes: Uint8Array,
+  ): Promise<Artifact> {
     const artifact: Artifact = {
       name,
       kind,
@@ -334,9 +385,17 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
 
   private async produce(job: Job, stage: StageName): Promise<Artifact[]> {
     const enc = new TextEncoder();
-    const json = (name: string, v: unknown) => this.put(job, stage, name, "json", "application/json", enc.encode(JSON.stringify(v)));
+    const json = (name: string, v: unknown) =>
+      this.put(job, stage, name, "json", "application/json", enc.encode(JSON.stringify(v)));
     const zip = async (name: string, entries: Promise<{ name: string; bytes: Uint8Array }[]> | null) =>
-      this.put(job, stage, name, "zip", "application/zip", writeStoreZip(entries ? await entries : [{ name: `${name}/SIMULATED.txt`, bytes: enc.encode("sim") }]));
+      this.put(
+        job,
+        stage,
+        name,
+        "zip",
+        "application/zip",
+        writeStoreZip(entries ? await entries : [{ name: `${name}/SIMULATED.txt`, bytes: enc.encode("sim") }]),
+      );
     const { synth } = this.o;
     switch (stage) {
       case "ingest":
@@ -345,7 +404,11 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
         return [
           await json(
             "persons",
-            SIM_PERSONS.map(({ color: _c, ...p }) => ({ ...p, bbox: [40, 120, 90, 220], thumb: `person_thumbs/${p.personId}.jpg` })),
+            SIM_PERSONS.map(({ color: _c, ...p }) => ({
+              ...p,
+              bbox: [40, 120, 90, 220],
+              thumb: `person_thumbs/${p.personId}.jpg`,
+            })),
           ),
           await zip("person_thumbs", synth?.thumbs() ?? null),
           await zip("track_masks", synth?.masks(SIM_META) ?? null),
@@ -354,20 +417,32 @@ export class InMemoryComputeBackend implements ComputeBackendPort {
         return [
           await json("units_index", {
             units: [
-              { unitId: 1, frames: [0, 59], label: "object", tracks: [1], areaPx: 4000, perPerson: { "1": { auto: "behind", why: "S-", confidence: 0.4, overlapFrames: [5, 55] } } },
+              {
+                unitId: 1,
+                frames: [0, 59],
+                label: "object",
+                tracks: [1],
+                areaPx: 4000,
+                perPerson: { "1": { auto: "behind", why: "S-", confidence: 0.4, overlapFrames: [5, 55] } },
+              },
             ],
           }),
         ];
       case "layers": {
         const cast = "cast" in job.params ? job.params.cast : [];
         return [
-          await json("layers_index", { persons: cast.map((c) => c.personId), order: {}, avatarIds: Object.fromEntries(cast.map((c) => [String(c.personId), c.avatarId])) }),
+          await json("layers_index", {
+            persons: cast.map((c) => c.personId),
+            order: {},
+            avatarIds: Object.fromEntries(cast.map((c) => [String(c.personId), c.avatarId])),
+          }),
           await zip("layers", null),
         ];
       }
       case "encode": {
         const render = this.jobs.get("renderJobId" in job.params ? job.params.renderJobId : "");
-        const analyze = render && "analyzeJobId" in render.params ? this.jobs.get(render.params.analyzeJobId) : undefined;
+        const analyze =
+          render && "analyzeJobId" in render.params ? this.jobs.get(render.params.analyzeJobId) : undefined;
         const mediaId = analyze && "mediaId" in analyze.params ? analyze.params.mediaId : undefined;
         const source = mediaId ? this.projects.get(job.projectId)?.sources.get(mediaId) : undefined;
         // 書き出しの代わりに元の動画をそのまま返す（モックの mp4）

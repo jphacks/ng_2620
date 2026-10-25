@@ -33,7 +33,9 @@ export class FsProjectRepository implements ProjectRepositoryPort {
   async allocate(name: string, dir?: string) {
     const base = dir ?? (await this.dirs.projectsDir());
     await this.fs.ensureDir(base);
-    const taken = (await this.fs.listDir(base)).filter((n) => n.toLowerCase().endsWith(PROJECT_EXT)).map((n) => n.slice(0, -PROJECT_EXT.length));
+    const taken = (await this.fs.listDir(base))
+      .filter((n) => n.toLowerCase().endsWith(PROJECT_EXT))
+      .map((n) => n.slice(0, -PROJECT_EXT.length));
     const unique = uniqueName(name, taken);
     return { name: unique, path: joinPath(base, `${unique}${PROJECT_EXT}`) };
   }
@@ -108,7 +110,10 @@ export class FsProjectRepository implements ProjectRepositoryPort {
   }
 
   private async writeRecent(items: RecentEntry[]) {
-    await this.fs.writeTextAtomic(await this.recentFile(), JSON.stringify({ schemaVersion: 1, items: items.slice(0, RECENT_LIMIT) }, null, 2));
+    await this.fs.writeTextAtomic(
+      await this.recentFile(),
+      JSON.stringify({ schemaVersion: 1, items: items.slice(0, RECENT_LIMIT) }, null, 2),
+    );
   }
 
   async touchRecent(entry: RecentEntry) {

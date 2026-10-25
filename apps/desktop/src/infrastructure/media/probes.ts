@@ -7,7 +7,10 @@ import { normalizeCodec } from "@/domain/media";
 import type { FileSystem } from "../fs/FileSystem";
 
 /** <video> で長さと寸法だけ読む。コーデック・音声・回転はわからない（サーバーの ingest に任せる） */
-export function probeWithVideoElement(url: string, timeoutMs = 5000): Promise<Pick<LocalMediaInfo, "durationSec" | "width" | "height">> {
+export function probeWithVideoElement(
+  url: string,
+  timeoutMs = 5000,
+): Promise<Pick<LocalMediaInfo, "durationSec" | "width" | "height">> {
   return new Promise((resolve, reject) => {
     const v = document.createElement("video");
     const done = (fn: () => void) => {
@@ -16,7 +19,10 @@ export function probeWithVideoElement(url: string, timeoutMs = 5000): Promise<Pi
       v.load();
       fn();
     };
-    const timer = setTimeout(() => done(() => reject(new Error("動画のメタ情報を読めませんでした（時間切れ）"))), timeoutMs);
+    const timer = setTimeout(
+      () => done(() => reject(new Error("動画のメタ情報を読めませんでした（時間切れ）"))),
+      timeoutMs,
+    );
     v.preload = "metadata";
     v.muted = true;
     v.onloadedmetadata = () => {

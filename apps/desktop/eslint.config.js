@@ -7,7 +7,18 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const features = ["home", "import", "connection", "jobs", "cast", "avatar-library", "export", "settings", "editor", "occlusion-edit"];
+const features = [
+  "home",
+  "import",
+  "connection",
+  "jobs",
+  "cast",
+  "avatar-library",
+  "export",
+  "settings",
+  "editor",
+  "occlusion-edit",
+];
 
 // 層の依存規則（architecture/overview §3）
 //   presentation → application → domain の一方向。infrastructure は application のポートを実装する。
@@ -17,9 +28,17 @@ const layerZones = [
   { target: "./src/domain", from: "./src/application", message: "domain は外側の層に依存しない" },
   { target: "./src/domain", from: "./src/infrastructure", message: "domain は外側の層に依存しない" },
   { target: "./src/domain", from: "./src/presentation", message: "domain は外側の層に依存しない" },
-  { target: "./src/application", from: "./src/infrastructure", message: "application はポート越しにだけ infrastructure を使う" },
+  {
+    target: "./src/application",
+    from: "./src/infrastructure",
+    message: "application はポート越しにだけ infrastructure を使う",
+  },
   { target: "./src/application", from: "./src/presentation", message: "application は presentation に依存しない" },
-  { target: "./src/infrastructure", from: "./src/presentation", message: "infrastructure は presentation に依存しない" },
+  {
+    target: "./src/infrastructure",
+    from: "./src/presentation",
+    message: "infrastructure は presentation に依存しない",
+  },
   {
     target: "./src/presentation",
     from: "./src/infrastructure",

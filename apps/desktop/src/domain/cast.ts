@@ -92,7 +92,11 @@ const num = (v: unknown, d = 0): number => (typeof v === "number" && Number.isFi
  */
 export function parsePersons(
   raw: unknown,
-  opts: { previous?: readonly Person[]; defaultLabel: (personId: number) => string; thumbRel?: (thumb: string) => string },
+  opts: {
+    previous?: readonly Person[];
+    defaultLabel: (personId: number) => string;
+    thumbRel?: (thumb: string) => string;
+  },
 ): Person[] {
   if (!Array.isArray(raw)) return [];
   const out: Person[] = [];
@@ -100,7 +104,8 @@ export function parsePersons(
     const personId = num(r?.personId, NaN);
     if (!Number.isInteger(personId)) continue;
     const prev = opts.previous?.find((p) => p.personId === personId);
-    const bbox = Array.isArray(r.bbox) && r.bbox.length === 4 ? (r.bbox.map((v) => num(v)) as Person["bbox"]) : undefined;
+    const bbox =
+      Array.isArray(r.bbox) && r.bbox.length === 4 ? (r.bbox.map((v) => num(v)) as Person["bbox"]) : undefined;
     out.push({
       personId,
       label: prev?.label ?? opts.defaultLabel(personId),

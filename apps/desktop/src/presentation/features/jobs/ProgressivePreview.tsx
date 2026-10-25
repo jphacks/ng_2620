@@ -15,7 +15,15 @@ type Mode = "frames" | "masks" | "mesh";
 
 const PREVIEW_FPS = 10;
 
-export function ProgressivePreview({ highlightPersonId, prefer, className }: { highlightPersonId?: number | null; prefer?: Mode; className?: string }) {
+export function ProgressivePreview({
+  highlightPersonId,
+  prefer,
+  className,
+}: {
+  highlightPersonId?: number | null;
+  prefer?: Mode;
+  className?: string;
+}) {
   const job = useProjectJob("analyze");
   const meta = useProjectStore((s) => s.current?.project.meta ?? null);
   const frames = useArtifactState(job?.jobId, "proxy_frames");
@@ -29,7 +37,12 @@ export function ProgressivePreview({ highlightPersonId, prefer, className }: { h
 
   const [chosen, setChosen] = useState<Mode | null>(null);
   // 既定は届いた中で一番新しい段階。キャストの強調中はマスク
-  const auto = highlightPersonId && available.includes("masks") ? "masks" : prefer && available.includes(prefer) ? prefer : available.at(-1);
+  const auto =
+    highlightPersonId && available.includes("masks")
+      ? "masks"
+      : prefer && available.includes(prefer)
+        ? prefer
+        : available.at(-1);
   const mode = chosen && available.includes(chosen) ? chosen : auto;
   const downloading = [frames, masks, mesh].find((a) => a?.status === "downloading");
 
@@ -43,9 +56,16 @@ export function ProgressivePreview({ highlightPersonId, prefer, className }: { h
             type="button"
             disabled={!available.includes(m)}
             onClick={() => setChosen(m)}
-            className={cx("rounded-sm px-2 py-0.5 disabled:text-faint", mode === m ? "bg-accent text-accent-fg" : "hover:bg-raised")}
+            className={cx(
+              "rounded-sm px-2 py-0.5 disabled:text-faint",
+              mode === m ? "bg-accent text-accent-fg" : "hover:bg-raised",
+            )}
           >
-            {m === "frames" ? ja.analysis.previewFrames : m === "masks" ? ja.analysis.previewMasks : ja.analysis.previewMesh}
+            {m === "frames"
+              ? ja.analysis.previewFrames
+              : m === "masks"
+                ? ja.analysis.previewMasks
+                : ja.analysis.previewMesh}
           </button>
         ))}
       </div>
@@ -53,11 +73,20 @@ export function ProgressivePreview({ highlightPersonId, prefer, className }: { h
         {!mode && <div className="p-6 text-sm text-faint">{ja.analysis.previewEmpty}</div>}
         {mode === "mesh" && mesh?.path && <MeshVideo path={mesh.path} />}
         {(mode === "frames" || mode === "masks") && frames?.path && meta && (
-          <FramePlayer framesDir={frames.path} masksDir={mode === "masks" ? masks?.path : undefined} meta={meta} highlightPersonId={highlightPersonId ?? null} />
+          <FramePlayer
+            framesDir={frames.path}
+            masksDir={mode === "masks" ? masks?.path : undefined}
+            meta={meta}
+            highlightPersonId={highlightPersonId ?? null}
+          />
         )}
         {downloading && (
           <div className="absolute inset-x-0 top-0">
-            <ProgressBar value={downloading.total ? downloading.received / downloading.total : 0} indeterminate={!downloading.total} className="!h-0.5 !rounded-none" />
+            <ProgressBar
+              value={downloading.total ? downloading.received / downloading.total : 0}
+              indeterminate={!downloading.total}
+              className="!h-0.5 !rounded-none"
+            />
           </div>
         )}
       </div>
@@ -70,7 +99,17 @@ function MeshVideo({ path }: { path: string }) {
   return <video className="max-h-full max-w-full" src={platform.files.toUrl(path)} autoPlay loop muted playsInline />;
 }
 
-function FramePlayer({ framesDir, masksDir, meta, highlightPersonId }: { framesDir: string; masksDir?: string; meta: MediaMeta; highlightPersonId: number | null }) {
+function FramePlayer({
+  framesDir,
+  masksDir,
+  meta,
+  highlightPersonId,
+}: {
+  framesDir: string;
+  masksDir?: string;
+  meta: MediaMeta;
+  highlightPersonId: number | null;
+}) {
   const { platform } = useServices();
   const { files } = platform;
   const [f, setF] = useState(0);
@@ -127,7 +166,10 @@ function FramePlayer({ framesDir, masksDir, meta, highlightPersonId }: { framesD
   const src = files.toUrl(files.join(framesDir, frameFile(f, "jpg")));
   return (
     <div className="relative flex h-full w-full items-center justify-center">
-      <div className="relative max-h-full max-w-full" style={{ aspectRatio: `${meta.proxy.width} / ${meta.proxy.height}`, height: "100%" }}>
+      <div
+        className="relative max-h-full max-w-full"
+        style={{ aspectRatio: `${meta.proxy.width} / ${meta.proxy.height}`, height: "100%" }}
+      >
         <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
         {masksDir && <canvas ref={canvasRef} className="absolute inset-0 h-full w-full object-contain" />}
       </div>

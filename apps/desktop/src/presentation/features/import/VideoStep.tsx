@@ -12,7 +12,15 @@ import { useImportStore } from "./importStore";
 
 const T = ja.importStep;
 
-export function VideoStep({ onCancel, onStarted, onOpenConnection }: { onCancel(): void; onStarted(): void; onOpenConnection(): void }) {
+export function VideoStep({
+  onCancel,
+  onStarted,
+  onOpenConnection,
+}: {
+  onCancel(): void;
+  onStarted(): void;
+  onOpenConnection(): void;
+}) {
   const { platform } = useServices();
   const project = useProjectStore((s) => s.current?.project);
   const profile = useConnectionStore(activeProfile);
@@ -37,7 +45,13 @@ export function VideoStep({ onCancel, onStarted, onOpenConnection }: { onCancel(
         {videoError ? (
           <div className="p-6 text-sm text-muted">{T.previewUnavailable}</div>
         ) : (
-          <video className="max-h-full max-w-full" src={platform.files.toUrl(src.path)} controls playsInline onError={() => setVideoError(true)} />
+          <video
+            className="max-h-full max-w-full"
+            src={platform.files.toUrl(src.path)}
+            controls
+            playsInline
+            onError={() => setVideoError(true)}
+          />
         )}
       </div>
       <div className="flex flex-col gap-4">
@@ -51,7 +65,13 @@ export function VideoStep({ onCancel, onStarted, onOpenConnection }: { onCancel(
             </dd>
             <dd>
               {src.fps ? `${T.fps(src.fps)} / ` : ""}
-              {project.meta ? (project.meta.hasAudio ? T.audio.yes : T.audio.no) : src.hasAudio ? T.audio.yes : T.audio.unknown}
+              {project.meta
+                ? project.meta.hasAudio
+                  ? T.audio.yes
+                  : T.audio.no
+                : src.hasAudio
+                  ? T.audio.yes
+                  : T.audio.unknown}
             </dd>
           </dl>
         </div>
@@ -77,7 +97,12 @@ export function VideoStep({ onCancel, onStarted, onOpenConnection }: { onCancel(
         {resumable && <ErrorNotice tone="info" title={T.resumeTitle} body={T.resumeBody} />}
         <div className="mt-auto flex justify-end gap-2">
           <Button onClick={onCancel}>{ja.common.cancel}</Button>
-          <Button variant="primary" disabled={!canStart} onClick={begin} icon={running ? <Spinner /> : <Play size={14} />}>
+          <Button
+            variant="primary"
+            disabled={!canStart}
+            onClick={begin}
+            icon={running ? <Spinner /> : <Play size={14} />}
+          >
             {resumable ? T.resume : T.start}
           </Button>
         </div>

@@ -1,7 +1,13 @@
 // F03 接続プロファイルと疎通確認
 
 import type { ComputeProfile, ConnectionState } from "@/domain/connection";
-import { HEALTH_INTERVAL_MS, initialConnection, nextConnectionState, normalizeBaseUrl, SUPPORTED_API_VERSION } from "@/domain/connection";
+import {
+  HEALTH_INTERVAL_MS,
+  initialConnection,
+  nextConnectionState,
+  normalizeBaseUrl,
+  SUPPORTED_API_VERSION,
+} from "@/domain/connection";
 import { AppError, toAppError } from "@/domain/errors";
 import type { Capabilities, ComputeBackendFactory, ComputeBackendPort, Health } from "../ports/compute";
 import type { AppSettings, SecretStorePort, SettingsPort } from "../ports/settings";
@@ -21,7 +27,11 @@ export class SaveProfile {
   /** 追加・更新。token を渡したときだけトークンを書き換える。既定が無ければこれを既定にする */
   async execute(input: { profile: ComputeProfile; token?: string }): Promise<AppSettings> {
     const { settings, secrets } = this.d;
-    const profile = { ...input.profile, name: input.profile.name.trim(), baseUrl: normalizeBaseUrl(input.profile.baseUrl) };
+    const profile = {
+      ...input.profile,
+      name: input.profile.name.trim(),
+      baseUrl: normalizeBaseUrl(input.profile.baseUrl),
+    };
     if (input.token !== undefined) await secrets.set(profile.tokenRef, input.token);
     const s = await settings.load();
     const i = s.profiles.findIndex((p) => p.id === profile.id);
@@ -80,7 +90,10 @@ export class TestConnection {
         ok: false,
         failedStep: "api_version",
         health,
-        error: new AppError("API_VERSION_MISMATCH", `API 版が合いません（サーバー ${health.apiVersion} / アプリ ${SUPPORTED_API_VERSION}）`),
+        error: new AppError(
+          "API_VERSION_MISMATCH",
+          `API 版が合いません（サーバー ${health.apiVersion} / アプリ ${SUPPORTED_API_VERSION}）`,
+        ),
       };
     }
     try {
@@ -103,7 +116,11 @@ export class WatchConnection {
   constructor(private readonly d: { clock: ClockPort }) {}
 
   /** 定期的に health を確認する（30 秒ごと、失敗 2 回で「再接続中」） */
-  start(input: { backend: ComputeBackendPort; onState: (s: ConnectionState) => void; intervalMs?: number }): ConnectionWatch {
+  start(input: {
+    backend: ComputeBackendPort;
+    onState: (s: ConnectionState) => void;
+    intervalMs?: number;
+  }): ConnectionWatch {
     const { clock } = this.d;
     const interval = input.intervalMs ?? HEALTH_INTERVAL_MS;
     const stopper = new AbortController();

@@ -49,7 +49,13 @@ export class SubscribeJob {
    * SSE を購読して終了まで状態を流す。SSE が使えなければポーリング（GET /v1/jobs/{id}）に落とす。
    * 接続直後の snapshot と終了時に listArtifacts で取りこぼした成果物を補う。
    */
-  async execute(input: { backend: ComputeBackendPort; jobId: string; handlers: SubscribeHandlers; signal?: AbortSignal; pollIntervalMs?: number }): Promise<Job> {
+  async execute(input: {
+    backend: ComputeBackendPort;
+    jobId: string;
+    handlers: SubscribeHandlers;
+    signal?: AbortSignal;
+    pollIntervalMs?: number;
+  }): Promise<Job> {
     const { clock } = this.d;
     const { backend, jobId, handlers, signal } = input;
     const now = () => clock.now().toISOString();
@@ -109,7 +115,13 @@ export class FetchArtifact {
   constructor(private readonly d: { projects: ProjectRepositoryPort; cache: LayerCachePort }) {}
 
   /** cache/<jobId>/ に取得して展開（済みなら何もしない）。ローカルのパスを返す */
-  execute(input: { project: Project; backend: ComputeBackendPort; jobId: string; artifact: Artifact; onProgress?: DownloadProgress }): Promise<string> {
+  execute(input: {
+    project: Project;
+    backend: ComputeBackendPort;
+    jobId: string;
+    artifact: Artifact;
+    onProgress?: DownloadProgress;
+  }): Promise<string> {
     const dir = this.d.projects.cacheDir(input.project, input.jobId);
     return this.d.cache.fetch(input.backend, dir, input.jobId, input.artifact, input.onProgress);
   }
@@ -125,7 +137,11 @@ export class RetryJob {
   constructor(private readonly d: { submit: SubmitJob }) {}
 
   /** 同じパラメータで再投入する。依存先のジョブ ID はプロジェクトの最新のものに差し替える */
-  async execute(input: { project: Project; backend: ComputeBackendPort; job: Job }): Promise<{ job: Job; apply: ProjectMutation }> {
+  async execute(input: {
+    project: Project;
+    backend: ComputeBackendPort;
+    job: Job;
+  }): Promise<{ job: Job; apply: ProjectMutation }> {
     const { project, job } = input;
     let params = job.params;
     const extra: SubmitExtra = {};
@@ -145,7 +161,8 @@ export class RetryJob {
     // 失敗した書き出しの記録は新しいジョブで置き換える
     return {
       job: res.job,
-      apply: (p) => res.apply({ ...p, jobs: { ...p.jobs, exports: p.jobs.exports.filter((e) => e.jobId !== job.jobId) } }),
+      apply: (p) =>
+        res.apply({ ...p, jobs: { ...p.jobs, exports: p.jobs.exports.filter((e) => e.jobId !== job.jobId) } }),
     };
   }
 }

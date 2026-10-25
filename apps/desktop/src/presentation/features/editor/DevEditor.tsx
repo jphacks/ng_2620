@@ -69,7 +69,9 @@ export function DevEditor() {
   if (results) {
     return (
       <div className="mx-auto max-w-lg p-6 text-sm">
-        <h2 className="mb-3 font-semibold">合成の一致確認（フレーム 48、|差| &gt; 24/255 の画素の割合、基準 0.5% 未満）</h2>
+        <h2 className="mb-3 font-semibold">
+          合成の一致確認（フレーム 48、|差| &gt; 24/255 の画素の割合、基準 0.5% 未満）
+        </h2>
         <ul className="space-y-1 font-mono">
           {results.map((r) => (
             <li key={r.name} data-check={r.ok ? "ok" : "ng"}>

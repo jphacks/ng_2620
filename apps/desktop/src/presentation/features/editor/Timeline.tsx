@@ -70,7 +70,9 @@ export function Timeline() {
     {
       key: "unit",
       label: unit ? ja.editor.unitTitle(unit.unitId) : ja.editor.tracks.unit,
-      content: unit ? <Bar from={unit.frames[0]} to={unit.frames[1]} x={xOf} color="rgb(var(--rgb-text-muted))" /> : null,
+      content: unit ? (
+        <Bar from={unit.frames[0]} to={unit.frames[1]} x={xOf} color="rgb(var(--rgb-text-muted))" />
+      ) : null,
     },
     {
       key: "ovr",
@@ -85,26 +87,48 @@ export function Timeline() {
         <div className="shrink-0 border-r border-border" style={{ width: LABEL_W }}>
           <div className="h-6 border-b border-border" />
           {rows.map((r) => (
-            <div key={r.key} className="truncate px-2 leading-[22px] text-muted" style={{ height: ROW_H }} title={r.label}>
+            <div
+              key={r.key}
+              className="truncate px-2 leading-[22px] text-muted"
+              style={{ height: ROW_H }}
+              title={r.label}
+            >
               {r.label}
             </div>
           ))}
         </div>
         <div ref={scrollRef} className="relative min-w-0 flex-1 overflow-x-auto overflow-y-hidden" onWheel={onWheel}>
           <div className="relative" style={{ width: total + 8 }}>
-            <div className="relative h-6 cursor-ew-resize border-b border-border" onPointerDown={scrub} onPointerMove={scrubMove}>
+            <div
+              className="relative h-6 cursor-ew-resize border-b border-border"
+              onPointerDown={scrub}
+              onPointerMove={scrubMove}
+            >
               {Array.from({ length: Math.floor(n / tickEvery) + 1 }, (_, k) => k * tickEvery).map((f) => (
-                <div key={f} className="absolute top-0 h-full border-l border-border pl-1 text-[10px] text-faint" style={{ left: xOf(f) }}>
+                <div
+                  key={f}
+                  className="absolute top-0 h-full border-l border-border pl-1 text-[10px] text-faint"
+                  style={{ left: xOf(f) }}
+                >
                   {Math.floor(f / sec / 60)}:{String(Math.floor(f / sec) % 60).padStart(2, "0")}
                 </div>
               ))}
             </div>
             {rows.map((r) => (
-              <div key={r.key} className="relative border-b border-border/50" style={{ height: ROW_H }} onPointerDown={scrub} onPointerMove={scrubMove}>
+              <div
+                key={r.key}
+                className="relative border-b border-border/50"
+                style={{ height: ROW_H }}
+                onPointerDown={scrub}
+                onPointerMove={scrubMove}
+              >
                 {r.content}
               </div>
             ))}
-            <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-accent" style={{ left: xOf(playhead) + px / 2 }} />
+            <div
+              className="pointer-events-none absolute bottom-0 top-0 w-px bg-accent"
+              style={{ left: xOf(playhead) + px / 2 }}
+            />
           </div>
         </div>
       </div>
@@ -113,7 +137,12 @@ export function Timeline() {
 }
 
 function Bar({ from, to, x, color }: { from: number; to: number; x: (f: number) => number; color: string }) {
-  return <div className="absolute top-1 h-[14px] rounded-sm opacity-70" style={{ left: x(from), width: Math.max(2, x(to + 1) - x(from)), background: color }} />;
+  return (
+    <div
+      className="absolute top-1 h-[14px] rounded-sm opacity-70"
+      style={{ left: x(from), width: Math.max(2, x(to + 1) - x(from)), background: color }}
+    />
+  );
 }
 
 function OverrideBand({ o, x, px, n }: { o: UnitOverride; x: (f: number) => number; px: number; n: number }) {
@@ -127,14 +156,18 @@ function OverrideBand({ o, x, px, n }: { o: UnitOverride; x: (f: number) => numb
     const r0 = o.range;
     const move = (ev: PointerEvent) => {
       const d = Math.round((ev.clientX - x0) / px);
-      const next: [number, number] = edge === 0 ? [Math.min(r0[1], Math.max(0, r0[0] + d)), r0[1]] : [r0[0], Math.max(r0[0], Math.min(n - 1, r0[1] + d))];
+      const next: [number, number] =
+        edge === 0
+          ? [Math.min(r0[1], Math.max(0, r0[0] + d)), r0[1]]
+          : [r0[0], Math.max(r0[0], Math.min(n - 1, r0[1] + d))];
       setDraft(next);
     };
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       const d = Math.round((ev.clientX - x0) / px);
-      if (d !== 0) useEditorStore.getState().setOverrideRange(o.id, edge === 0 ? [r0[0] + d, r0[1]] : [r0[0], r0[1] + d]);
+      if (d !== 0)
+        useEditorStore.getState().setOverrideRange(o.id, edge === 0 ? [r0[0] + d, r0[1]] : [r0[0], r0[1] + d]);
       setDraft(null);
     };
     window.addEventListener("pointermove", move);
@@ -166,5 +199,8 @@ function OverrideBand({ o, x, px, n }: { o: UnitOverride; x: (f: number) => numb
 }
 
 function personLabel(personId: number): string {
-  return useProjectStore.getState().current?.project.persons.find((p) => p.personId === personId)?.label ?? `人物 ${personId}`;
+  return (
+    useProjectStore.getState().current?.project.persons.find((p) => p.personId === personId)?.label ??
+    `人物 ${personId}`
+  );
 }
