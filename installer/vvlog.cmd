@@ -1,6 +1,7 @@
 @echo off
-rem vvlog ローカルアプリを起動する(ブラウザが開く。終了は Ctrl+C か、画面の「アプリを終了」)。
-rem 初回だけ uv でサーバー用の Python 環境(環境 A)を作る。解析用の環境 B は画面のセットアップが作る(#32)。
+rem vvlog launcher. Keep this file ASCII-only and CRLF: cmd.exe reads .cmd files in the console code page
+rem (CP932 on Japanese Windows), so UTF-8 Japanese text here eats newlines / parens and breaks parsing.
+rem First run creates the server Python env (env A) with uv. Env B (analysis) is created from the UI (#32).
 setlocal
 set "HERE=%~dp0"
 if "%HERE:~-1%"=="\" set "HERE=%HERE:~0,-1%"
@@ -9,12 +10,19 @@ set "STATE=%LOCALAPPDATA%\vvlog"
 set "ENVA=%STATE%\envs\server"
 set "UV=%HERE%\bin\uv.exe"
 
-if not exist "%ENVA%\Scripts\python.exe" (
-  echo [vvlog] 初回セットアップ: サーバー用の Python 環境を作ります(数分かかります)...
-  "%UV%" venv "%ENVA%" -p 3.12 || goto :fail
+if not exist "%UV%" (
+  echo [vvlog] uv.exe not found: "%UV%"
+  goto :fail
 )
-rem 版が変わったときも入れ直せるよう毎回走らせる(済んでいれば一瞬で終わる)
-"%UV%" pip install -q -p "%ENVA%\Scripts\python.exe" "%HERE%\server" || goto :fail
+if exist "%ENVA%\Scripts\python.exe" goto :install
+echo [vvlog] First-time setup: creating the server Python environment. This takes a few minutes...
+"%UV%" venv "%ENVA%" -p 3.12
+if errorlevel 1 goto :fail
+
+:install
+rem Run every time so a new version gets reinstalled (instant when nothing changed)
+"%UV%" pip install -q -p "%ENVA%\Scripts\python.exe" "%HERE%\server"
+if errorlevel 1 goto :fail
 
 set "VVLOG_BIN_DIR=%HERE%\bin"
 set "VVLOG_UV=%HERE%\bin\uv.exe"
@@ -28,6 +36,7 @@ exit /b 0
 
 :fail
 echo.
-echo [vvlog] 起動に失敗しました。上のメッセージを確認してください。
+echo [vvlog] Failed to start. See the messages above.
+echo [vvlog] Logs: "%STATE%\logs"
 pause
 exit /b 1

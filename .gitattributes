@@ -5,3 +5,7 @@
 # pipeline/ は上流（SAM-Body4D）をバイト列のまま取り込んでいる（CRLF のファイルがある。b2ea912 を参照）ので、
 # この設定の対象外にして、これまでどおり（core.autocrlf 任せ）にする
 /pipeline/** !text !eol
+
+# cmd.exe は LF だけの .cmd/.bat でラベル探索(goto)を取りこぼすことがあるので CRLF にする
+*.cmd text eol=crlf
+*.bat text eol=crlf
