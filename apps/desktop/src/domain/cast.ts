@@ -60,6 +60,20 @@ export function toCast(draft: readonly CastDraftRow[]): CastEntry[] {
 }
 
 /** 保存済みのキャストと人物一覧から下書きを作る */
+/** 自動仕上げ（取り込み時に既定のアバターを選んだとき）の下書き：映っている割合の大きい順に max 人まで、全員を同じアバターに */
+export function autoDraft(persons: readonly Person[], avatarId: string, max = MAX_TARGETS): CastDraftRow[] {
+  const picked = new Set(
+    [...persons]
+      .sort((a, b) => b.visibleRatio - a.visibleRatio || a.personId - b.personId)
+      .slice(0, max)
+      .map((p) => p.personId),
+  );
+  return persons.map((p) => {
+    const selected = picked.has(p.personId);
+    return { personId: p.personId, selected, avatarId: selected ? avatarId : null };
+  });
+}
+
 export function draftFromCast(persons: readonly Person[], cast: readonly CastEntry[]): CastDraftRow[] {
   return persons.map((p) => {
     const c = cast.find((x) => x.personId === p.personId);

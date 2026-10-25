@@ -26,7 +26,7 @@ footer: © 2026 VirtualTwin / ng_2620
 npx @marp-team/marp-cli --theme-set docs/slide/themes/virtualtwin.css --allow-local-files docs/slide/sample.md -o docs/slide/sample.pdf
 ```
 
-VS Code の Marp 拡張を使う場合は、`markdown.marp.themes` に `docs/slide/themes/virtualtwin.css` を足す。
+VS Code の Marp 拡張（`marp-team.marp-vscode`）では、リポジトリの `.vscode/settings.json` がテーマを登録しているので、`ng_2620` をフォルダとして開けばプレビューにテーマが反映される。親のフォルダを開いている場合は、そのフォルダの `.vscode/settings.json` の `markdown.marp.themes` に、そこからのパス（例 `./ng_2620/docs/slide/themes/virtualtwin.css`）を足す。
 
 - ページ番号は右上、正方形マークは右下、コピーライトは最下部の中央（`footer`）。`lead` では出さない。
 
