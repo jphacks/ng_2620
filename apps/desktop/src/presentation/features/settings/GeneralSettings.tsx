@@ -13,7 +13,15 @@ import { Badge, Button, ConfirmDialog, Label, Select, Spinner } from "@/presenta
 const T = ja.general;
 
 export function GeneralSettings() {
-  const { uc, paths, env, diagnose } = useServices();
+  const { uc, paths, env, diagnose, platform } = useServices();
+  const { notifier } = platform;
+  const [notify, setNotify] = useState(notifier.permission());
+  const notifyText = {
+    granted: T.notifyGranted,
+    denied: T.notifyDenied,
+    default: T.notifyDefault,
+    unsupported: T.notifyUnsupported,
+  };
   const project = useProjectStore((s) => s.current?.project);
   const [confirm, setConfirm] = useState(false);
   const diag = useQuery({ queryKey: ["diagnostics"], queryFn: diagnose, staleTime: Infinity });
@@ -56,6 +64,18 @@ export function GeneralSettings() {
       </section>
 
       <section>
+        <h3 className="mb-3 font-semibold">{T.notifications}</h3>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted">{notifyText[notify]}</span>
+          {notify === "default" && (
+            <Button size="sm" onClick={() => void notifier.requestPermission().then(setNotify)}>
+              {T.notifyAsk}
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <section>
         <h3 className="mb-3 font-semibold">{T.language}</h3>
         <Select value="ja" onChange={() => {}} options={[{ value: "ja", label: T.japanese }]} aria-label={T.language} />
       </section>
@@ -67,7 +87,7 @@ export function GeneralSettings() {
         ) : (
           <dl className="grid grid-cols-[12rem_1fr] gap-y-2 text-sm">
             <dt className="text-muted">{T.runtime}</dt>
-            <dd>{env.isTauri ? T.runtimeTauri : T.runtimeBrowser}</dd>
+            <dd>{env.isTauri ? T.runtimeTauri : env.mode === "full" ? T.runtimeFull : T.runtimeBrowser}</dd>
             <dt className="text-muted">{T.backendMode}</dt>
             <dd className="font-mono">{env.backendMode}</dd>
             <dt className="text-muted">{T.webgl2}</dt>

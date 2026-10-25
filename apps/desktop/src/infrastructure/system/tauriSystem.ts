@@ -4,7 +4,14 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
+import type {
+  DialogPort,
+  FileDropEvent,
+  FileDropPort,
+  NotifierPort,
+  NotifyPermission,
+  ShellPort,
+} from "@/application/ports/system";
 
 export const tauriDialog: DialogPort = {
   async pickFiles({ filters, multiple }) {
@@ -73,4 +80,6 @@ export const tauriNotifier: NotifierPort = {
       console.warn("[notify]", e);
     }
   },
+  permission: (): NotifyPermission => "granted", // プラグインが必要なときに許可を求める（osNotify の中）
+  requestPermission: async (): Promise<NotifyPermission> => "granted",
 };

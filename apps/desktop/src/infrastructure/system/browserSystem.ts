@@ -3,6 +3,7 @@
 import { AppError } from "@/domain/errors";
 import type { DialogPort, FileDropEvent, FileDropPort, NotifierPort, ShellPort } from "@/application/ports/system";
 import type { FileSystem } from "../fs/FileSystem";
+import { createWebNotifier } from "./webNotifier";
 import type { MemoryFs } from "../fs/memoryFs";
 
 export function browserDialog(fs: MemoryFs): DialogPort {
@@ -73,13 +74,7 @@ export function browserFileDrop(fs: MemoryFs): FileDropPort {
   };
 }
 
-export const browserNotifier: NotifierPort = {
-  async osNotify(title, body) {
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission === "default") await Notification.requestPermission();
-    if (Notification.permission === "granted") new Notification(title, { body });
-  },
-};
+export const browserNotifier: NotifierPort = createWebNotifier();
 
 /** フルモードの暫定：サーバー側のネイティブダイアログ（#46）ができるまで、選択系は使えない */
 export const pendingDialog: DialogPort = {

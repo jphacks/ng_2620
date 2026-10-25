@@ -30,9 +30,17 @@ export interface FileDropPort {
   subscribe(listener: (ev: FileDropEvent) => void): () => void;
 }
 
+export type NotifyPermission = "granted" | "denied" | "default" | "unsupported";
+
 export interface NotifierPort {
-  /** OS 通知（アプリが背面のとき）。許可が無ければ何もしない */
+  /**
+   * アプリが背面のときの通知。許可があれば OS の通知、なければ何も出さない（画面内のトーストは呼び出し側が出す）。
+   * ブラウザではタブのタイトルとアイコンにバッジも付ける（前面に戻ると消える）
+   */
   osNotify(title: string, body?: string): Promise<void>;
+  permission(): NotifyPermission;
+  /** 許可を求める。ブラウザはユーザー操作の中でしか許可されない（Safari は必須）ので、ジョブを始めるボタンの中で呼ぶ */
+  requestPermission(): Promise<NotifyPermission>;
 }
 
 export interface ClockPort {

@@ -18,6 +18,7 @@ import { useArtifactState, useJobsStore } from "@/presentation/shared/stores/job
 import { useProjectStore } from "@/presentation/shared/stores/projectStore";
 import { toast } from "@/presentation/shared/stores/toastStore";
 import { Badge, Button, ErrorNotice, Label, ProgressBar, Select, Spinner, Switch } from "@/presentation/shared/ui";
+import { askNotifyPermission } from "@/presentation/shared/notifyPermission";
 
 const T = ja.export;
 
@@ -88,6 +89,7 @@ export function ExportScreen({ onGoImport }: { onGoImport(): void }) {
   };
 
   const submit = async (rerenderFirst: boolean) => {
+    askNotifyPermission();
     setSubmitting(true);
     try {
       let p = project;
