@@ -123,6 +123,10 @@ export const ja = {
     resumeBody: "途中まで送った部分は再利用し、残りだけを送ります。",
     resume: "アップロードを再開",
     previewUnavailable: "この動画はプレビューで再生できません（解析はできます）",
+    autoFinish: "既定のアバターで自動仕上げ",
+    autoFinishHint:
+      "人物の選択を飛ばし、映っている人物を上限までこのアバターに置き換えて描画し、終わったらエディタで再生します",
+    autoFinishNeedsAvatar: "アバターを選んでください",
   },
   upload: {
     label: "アップロード",

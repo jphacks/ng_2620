@@ -2,6 +2,7 @@
 
 import { Play } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { fileNameOf } from "@/domain/validation";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
@@ -16,10 +17,16 @@ export function VideoStep({
   onCancel,
   onStarted,
   onOpenConnection,
+  options,
+  optionsReady = true,
 }: {
   onCancel(): void;
   onStarted(): void;
   onOpenConnection(): void;
+  /** 解析の始め方の選択（自動仕上げ）。ウィザードが組み立てる */
+  options?: ReactNode;
+  /** options の選択が揃っていなければ false（解析を始められない） */
+  optionsReady?: boolean;
 }) {
   const { platform } = useServices();
   const project = useProjectStore((s) => s.current?.project);
@@ -32,7 +39,7 @@ export function VideoStep({
   if (!project) return null;
   const src = project.source;
   const resumable = !!project.compute.upload && !project.compute.mediaId;
-  const canStart = !!profile && status === "connected" && !running;
+  const canStart = !!profile && status === "connected" && !running && optionsReady;
 
   const begin = () => {
     void start();
@@ -95,6 +102,7 @@ export function VideoStep({
           </ErrorNotice>
         )}
         {resumable && <ErrorNotice tone="info" title={T.resumeTitle} body={T.resumeBody} />}
+        {options}
         <div className="mt-auto flex justify-end gap-2">
           <Button onClick={onCancel}>{ja.common.cancel}</Button>
           <Button

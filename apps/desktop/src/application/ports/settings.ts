@@ -13,6 +13,13 @@ export interface AppSettings {
   panelLayouts: Record<string, unknown>;
   /** 新規プロジェクトの保存先（未設定なら ~/Movies/vvlog） */
   projectsDir?: string;
+  /** 取り込み画面の「既定のアバターで自動仕上げ」（解析 → 描画 → エディタで再生）。前回の選択を覚えておく */
+  autoFinish?: AutoFinishSetting;
+}
+
+export interface AutoFinishSetting {
+  enabled: boolean;
+  avatarId: string | null;
 }
 
 export function defaultSettings(): AppSettings {
