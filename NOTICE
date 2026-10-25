@@ -1,0 +1,40 @@
+vvlog
+Copyright (c) 2026 JPHACKS
+
+This distribution includes the following third-party software.
+
+FFmpeg (bin/ffmpeg.exe, bin/ffprobe.exe)
+  Copyright (c) 2000-2026 the FFmpeg developers
+  https://ffmpeg.org/ (build: https://github.com/BtbN/FFmpeg-Builds)
+  License: LGPL-3.0-or-later, licenses/ffmpeg-LICENSE.txt
+
+uv (bin/uv.exe)
+  Copyright (c) 2025 Astral Software Inc.
+  https://github.com/astral-sh/uv
+  License: MIT OR Apache-2.0, licenses/uv-LICENSE-MIT, licenses/uv-LICENSE-APACHE
+
+SAM-Body4D (pipeline/)
+  Copyright (c) 2025 Mingqi Gao
+  https://github.com/gaomingqi/sam-body4d
+  License: MIT, pipeline/LICENSE
+
+SAM 3 (pipeline/models/sam3/)
+  https://github.com/facebookresearch/sam3
+  License: SAM License, pipeline/models/sam3/LICENSE
+
+SAM 3D Body (pipeline/models/sam_3d_body/)
+  https://github.com/facebookresearch/sam-3d-body
+  License: SAM License, pipeline/models/sam_3d_body/LICENSE
+
+DINOv3 (pipeline/models/sam_3d_body/dinov3/)
+  https://github.com/facebookresearch/dinov3
+  License: DINOv3 License, pipeline/models/sam_3d_body/dinov3/LICENSE.md
+
+Diffusion-VAS (pipeline/models/diffusion_vas/)
+  Copyright (c) 2025 Kaihua Chen
+  https://github.com/Kaihua-Chen/diffusion-vas
+  License: MIT, pipeline/models/diffusion_vas/LICENSE
+
+Depth Anything V2 (pipeline/models/diffusion_vas/models/Depth_Anything_V2/)
+  https://github.com/DepthAnything/Depth-Anything-V2
+  License: Apache-2.0, pipeline/models/diffusion_vas/models/Depth_Anything_V2/LICENSE

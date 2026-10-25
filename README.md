@@ -250,7 +250,7 @@ EdgeTAM（Apache-2.0）は実験用の選択肢で、既定では使わない。
 | 画面（`apps/desktop`） | 実行時に入る npm パッケージ 53 個 | MIT 46、MIT OR Apache-2.0 5、ISC 1（lucide-react）、MIT AND Zlib 1（pako）。React・Radix UI・TanStack Query・Zustand・react-router・Tailwind CSS・Vite は MIT、TypeScript は Apache-2.0 |
 | GPU サーバー（`services/gpu_server`） | 直接の依存 | FastAPI・pydantic・PyYAML は MIT、uvicorn・sse-starlette は BSD-3-Clause、python-multipart は Apache-2.0、NumPy は BSD-3-Clause ほか、Pillow は MIT-CMU |
 | 推論パイプライン（`pipeline`） | 直接の依存 | PyTorch は BSD 系（同梱の部品に Apache-2.0 などを含む）、torchvision は BSD、detectron2・diffusers・transformers・accelerate・OpenCV・decord・fvcore・gradio・pytorch-lightning は Apache-2.0、pyrender・moderngl・einops・triton は MIT、imageio・imageio-ffmpeg は BSD-2-Clause、matplotlib は PSF 系、MoGe のコードは MIT |
-| 外部コマンド | ffmpeg / ffprobe | ビルドにより LGPL-2.1 または GPL。このリポジトリには同梱しない |
+| 外部コマンド | ffmpeg / ffprobe | Windows の配布物に BtbN の LGPL ビルドを同梱 |
 
 ### データとアバター
 

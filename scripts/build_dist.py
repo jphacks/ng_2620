@@ -5,17 +5,33 @@
 
 薄い配布物の方針(ADR-0015): uv・ffmpeg/ffprobe・サーバーのコード・pipeline のコード・画面・ランチャーだけ。
 Python・torch・重みは入れない(初回に vvlog.cmd / ブートストラップが取得する)。--uv / --ffmpeg-dir を省くとその分は入らない(中身の検査用)。
+第三者のソフトウェアは NOTICE と licenses/。同梱した ffmpeg の版とソースの場所は、ここで NOTICE の末尾に書き足す。
 """
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info", ".venv", "tests", ".pytest_cache", "*.pt", "*.ckpt", "*.pth", ".git")
+
+
+def ffmpeg_notice(ffmpeg: Path) -> str:
+    """The bundled build's version and source, appended to NOTICE. NOTICE states LGPL-3.0-or-later, so any other
+    build (GPL, nonfree, LGPL-2.1) stops the build."""
+    out = subprocess.run([str(ffmpeg), "-hide_banner", "-version"], capture_output=True, text=True, check=True).stdout
+    version = out.split()[2]                                   # "ffmpeg version <version> Copyright ..."
+    conf = next((line for line in out.splitlines() if line.startswith("configuration:")), "")
+    if "--enable-gpl" in conf or "--enable-nonfree" in conf or "--enable-version3" not in conf:
+        sys.exit(f"NOTICE と違うライセンスの ffmpeg です（LGPL-3.0-or-later のビルドを使う）: {version}")
+    m = re.search(r"-g([0-9a-f]{7,40})", version)
+    source = f"https://github.com/FFmpeg/FFmpeg/tree/{m[1]}" if m else "https://ffmpeg.org/download.html#get-sources"
+    return f"\nFFmpeg build in bin/\n  Version: {version}\n  Source: {source}\n"
 
 
 def build(version: str, out: Path, spa: Path | None, uv: Path | None, ffmpeg_dir: Path | None) -> Path:
@@ -36,12 +52,21 @@ def build(version: str, out: Path, spa: Path | None, uv: Path | None, ffmpeg_dir
         shutil.copytree(spa, stage / "spa")
     if uv:
         shutil.copy2(uv, stage / "bin" / "uv.exe")
+    shutil.copytree(ROOT / "licenses", stage / "licenses")
+    shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
+    shutil.copy2(ROOT / "NOTICE", stage / "NOTICE")
     if ffmpeg_dir:
         for n in ("ffmpeg.exe", "ffprobe.exe"):
             shutil.copy2(ffmpeg_dir / n, stage / "bin" / n)
+        # BtbN's zip: <root>/bin/ffmpeg.exe and <root>/LICENSE.txt
+        lic = next((p for p in (ffmpeg_dir / "LICENSE.txt", ffmpeg_dir.parent / "LICENSE.txt") if p.is_file()), None)
+        if lic is None:
+            sys.exit(f"ffmpeg のライセンス文（LICENSE.txt）がありません: {ffmpeg_dir} とその親")
+        shutil.copy2(lic, stage / "licenses" / "ffmpeg-LICENSE.txt")
+        with open(stage / "NOTICE", "a", encoding="utf-8", newline="\n") as f:
+            f.write(ffmpeg_notice(ffmpeg_dir / "ffmpeg.exe"))
     shutil.copy2(ROOT / "installer" / "vvlog.cmd", stage / "vvlog.cmd")
     shutil.copy2(ROOT / "apps" / "desktop" / "assets" / "icons" / "icon.ico", stage / "vvlog.ico")
-    shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
     (stage / "VERSION").write_text(version + "\n", encoding="utf-8")
     zpath = out / f"vvlog-{version}-windows-portable.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:

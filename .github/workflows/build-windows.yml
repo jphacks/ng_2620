@@ -66,7 +66,9 @@ jobs:
           $setup = Get-ChildItem dist-win -Filter "*-windows-setup.exe" | Select-Object -First 1
           $dir = Join-Path $env:RUNNER_TEMP "vvlog-install"
           Start-Process $setup.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$dir" -Wait
-          foreach ($f in "vvlog.cmd", "bin\uv.exe", "bin\ffmpeg.exe", "bin\ffprobe.exe", "spa\index.html", "server\vvlog_server\launcher.py", "pipeline\models\sam3", "weights\manifest.json", "server\bootstrap-spec.json") {
+          foreach ($f in "vvlog.cmd", "bin\uv.exe", "bin\ffmpeg.exe", "bin\ffprobe.exe", "spa\index.html", "server\vvlog_server\launcher.py", "pipeline\models\sam3", "weights\manifest.json", "server\bootstrap-spec.json",
+                       "LICENSE", "NOTICE", "licenses\ffmpeg-LICENSE.txt", "licenses\uv-LICENSE-MIT", "licenses\uv-LICENSE-APACHE",
+                       "pipeline\models\sam_3d_body\LICENSE") {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "同梱物がありません: $f" }
           }
           Get-ChildItem dist-win | Select-Object Name, @{n = "MB"; e = { [math]::Round($_.Length / 1MB, 1) } }

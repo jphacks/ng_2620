@@ -390,3 +390,9 @@ def test_api_start_refuses_a_foreign_origin(api):
 
 def test_api_rejects_unknown_fields(api):
     assert api.post("/v1/local/weights/start", json={"token": "x"}).status_code == 422
+
+
+def test_api_accepts_a_long_oauth_token(api):
+    """`hf auth login` in the browser leaves an OAuth token of ~800 chars in ~/.cache/huggingface/token."""
+    r = api.post("/v1/local/weights/start", json={"hfToken": "hf_oauth_" + "x" * 816})
+    assert r.status_code == 202

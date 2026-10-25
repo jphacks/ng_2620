@@ -28,7 +28,8 @@ TERMINAL = ("succeeded", "failed", "canceled", "idle")
 
 class StartBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    hfToken: str | None = Field(default=None, repr=False, max_length=512)
+    # `hf auth login` (browser) stores an OAuth access token of ~800 chars, not the ~40-char user access token
+    hfToken: str | None = Field(default=None, repr=False, max_length=8192)
 
 
 def mount_local_weights(app: FastAPI, mgr: WeightsManager, auth: Callable, port: int, poll_s: float = 0.5) -> None:
