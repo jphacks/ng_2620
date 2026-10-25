@@ -1,5 +1,6 @@
 // ビューア（F09）：WebGL 合成、再生、ズーム・パン、分割表示、遮蔽物のホバー・選択（F10 のフック）
 
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EditorData } from "@/application/usecases/editor";
 import type { UnitOverride } from "@/domain/overrides";
@@ -7,7 +8,7 @@ import { resolveModes, modeKey } from "@/domain/occlusion";
 import { errorText } from "@/presentation/shared/errors";
 import { ja } from "@/presentation/shared/i18n/ja";
 import { useServices } from "@/presentation/shared/services";
-import { EmptyState, Spinner } from "@/presentation/shared/ui";
+import { EmptyState, IconButton, Spinner } from "@/presentation/shared/ui";
 import { buildModeTable, Compositor } from "./compositor/Compositor";
 import { useEditorStore } from "@/presentation/shared/stores/editorStore";
 import type { FrameBundle } from "./frames";
@@ -284,7 +285,24 @@ function ViewerCanvas({ data }: { data: EditorData }) {
           <div className="absolute left-2 top-2 rounded bg-overlay px-2 py-0.5 text-xs">{ja.editor.view.original}</div>
         )}
       </div>
-      <div className="flex h-7 shrink-0 items-center gap-3 border-t border-border px-3 font-mono text-xs text-muted">
+      <div className="flex h-8 shrink-0 items-center gap-3 border-t border-border px-2 font-mono text-xs text-muted">
+        <div className="flex items-center">
+          <IconButton
+            label={`${ja.editor.prevFrame}（←）`}
+            icon={<ChevronLeft size={14} />}
+            onClick={() => useEditorStore.getState().step(-1)}
+          />
+          <IconButton
+            label={`${s.playing ? ja.editor.pause : ja.editor.play}（Space）`}
+            icon={s.playing ? <Pause size={14} /> : <Play size={14} />}
+            onClick={() => useEditorStore.getState().setPlaying(!s.playing)}
+          />
+          <IconButton
+            label={`${ja.editor.nextFrame}（→）`}
+            icon={<ChevronRight size={14} />}
+            onClick={() => useEditorStore.getState().step(1)}
+          />
+        </div>
         <span className="text-text">{formatTimecode(s.playhead, data.fps)}</span>
         <span>
           {s.playhead + 1} / {data.frameCount}
