@@ -5,10 +5,10 @@ import { defineConfig } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as { version: string };
 
-// 開発サーバーは固定ポート 1420（フルモードの許可 Origin に使う）。Pages 用は VVLOG_BASE=/<リポジトリ名>/ でビルドする（#37）
+// 開発サーバーは固定ポート 1420（フルモードの許可 Origin に使う）
 export default defineConfig({
-  // GitHub Pages ではリポジトリ名の下に置かれる。ローカルサーバーは / で配信する
-  base: process.env.VVLOG_BASE || "/",
+  // 相対パスでビルドする：同じ dist が、ローカルサーバーの / でも GitHub Pages の /<リポジトリ名>/ でも動く（ルーティングは # なので深いパスは無い）
+  base: process.env.VVLOG_BASE || "./",
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

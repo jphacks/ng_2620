@@ -38,6 +38,10 @@ VVLOG_DEV_SERVER=http://127.0.0.1:8765 pnpm --filter @vvlog/desktop dev       # 
 フルモードのファイル選択は Windows のネイティブダイアログ（サーバー側、#46）、ドロップは `<appData>/imports/<id>/` へ分割転送してからサーバー上のパスで扱う（#47。受け付けない先には送らない／起動時に、プロジェクトから参照されていない 24 時間以上前の取り込みを掃除）。
 `pnpm test` には実サーバーを起動する通しテスト（`localApi.integration.test.ts`）が含まれる（`services/gpu_server/.venv` が無ければ skip）。
 
+### GitHub Pages への公開（#37）
+
+`.github/workflows/pages.yml` が `main` への push で `pnpm --filter @vvlog/desktop build` の `dist/` を Pages に公開する（初回はリポジトリの Settings > Pages で Source を **GitHub Actions** にする）。ビルドは**相対パス**（`base: "./"`）なので、ローカルサーバーの `/` でも Pages の `/<リポジトリ名>/` でも同じ `dist` が動く。ルーティングは `#` 付きなので 404.html のフォールバックは要らない。公開した画面はローカルサーバーが無いので制限モードで動く。
+
 ### 制限モード（Pages 単体、#27）
 
 ローカルサーバーが見つからないとき（GitHub Pages など）は**制限モード**になる。保存先はブラウザの IndexedDB（`vvlog-fs`）で、プロジェクト・キャッシュ・アバター・設定が残る。ドロップ／選択した端末の動画ファイルだけは、ブラウザを閉じると消える（`File` への参照のため。解析済みなら以後は不要）。
